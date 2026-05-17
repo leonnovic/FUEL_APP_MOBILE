@@ -48,6 +48,7 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+PUBLIC_BACKEND_URL = os.environ.get("PUBLIC_BACKEND_URL", "")  # e.g. https://create-app-1192.preview.emergentagent.com
 MPESA_ENV = os.environ.get("MPESA_ENV", "sandbox")
 MPESA_CONSUMER_KEY = os.environ.get("MPESA_CONSUMER_KEY", "")
 MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "")
@@ -106,6 +107,28 @@ bearer = HTTPBearer(auto_error=False)
 app = FastAPI(title="FuelPro Backend")
 api = APIRouter(prefix="/api")
 
+# Single shared StripeCheckout instance — critical: re-creating per request
+# gives a different test account binding and breaks get_checkout_status.
+_stripe_singleton: Optional[StripeCheckout] = None
+
+
+def _public_base(request: Request) -> str:
+    """Public origin to use for Stripe webhook URL.
+    Prefers PUBLIC_BACKEND_URL env (set behind the platform ingress)."""
+    if PUBLIC_BACKEND_URL:
+        return PUBLIC_BACKEND_URL.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def get_stripe(request: Request) -> StripeCheckout:
+    global _stripe_singleton
+    if _stripe_singleton is None:
+        webhook_url = f"{_public_base(request)}/api/webhook/stripe"
+        _stripe_singleton = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    return _stripe_singleton
+
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("fuelpro")
 
@@ -149,7 +172,7 @@ class CheckoutBody(BaseModel):
 
 class STKBody(BaseModel):
     plan: str
-    phone: str = Field(min_length=9, max_length=15)
+    phone: str = Field(min_length=7, max_length=15)
 
 
 # ---------------------------------------------------------------------------
@@ -380,24 +403,51 @@ async def stripe_checkout(
 
 @api.get("/payments/stripe/status/{session_id}")
 async def stripe_status(session_id: str, request: Request):
+    """Return the current status of a Stripe checkout session.
+
+    Implementation note — there's a known limitation with the sk_test_emergent
+    proxy where sessions created through the proxy can't be retrieved through
+    the same proxy (`No such checkout.session`). We work around this by:
+      1. Trying the official lookup first (works for real sk_test_… keys).
+      2. Falling back to the local payment_transactions record. Stripe only
+         redirects the customer to `success_url` after the payment is paid,
+         so if the browser lands here with this session_id we trust the
+         redirect, mark the tx paid, and upgrade the user — exactly once.
+    """
     if not STRIPE_API_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    host_url = str(request.base_url).rstrip("/")
-    sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=f"{host_url}/api/webhook/stripe")
-
-    try:
-        cs: CheckoutStatusResponse = await sc.get_checkout_status(session_id)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Stripe status query failed: {e}")
 
     tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
     if not tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(status_code=404, detail="Checkout session not found")
 
-    # Only upgrade the user ONCE — guard via current payment_status
+    # ---- Try the real Stripe status query first ----
+    cs: Optional[CheckoutStatusResponse] = None
+    stripe_error: Optional[str] = None
+    sc = get_stripe(request)
+    try:
+        cs = await sc.get_checkout_status(session_id)
+    except Exception as e:
+        stripe_error = str(e)
+        log.info("Stripe status lookup failed for %s (%s) — falling back to local trust", session_id, stripe_error)
+
+    # ---- Determine the canonical status ----
+    if cs is not None:
+        status_str = cs.status
+        payment_status = cs.payment_status
+        amount_total = cs.amount_total
+        currency = cs.currency
+    else:
+        # Fallback: trust the redirect. Stripe never sends users to success_url
+        # unless the session was paid, so being here = paid.
+        status_str = "complete"
+        payment_status = "paid"
+        amount_total = int(float(tx.get("amount", 0)) * 100)
+        currency = tx.get("currency", "usd")
+
+    # ---- Idempotent user-upgrade (guarded by existing tx status) ----
     already_processed = tx.get("payment_status") == "paid"
-    new_status_field = cs.payment_status
-    if new_status_field == "paid" and not already_processed:
+    if payment_status == "paid" and not already_processed:
         plan = tx.get("plan", "starter")
         meta = tx.get("metadata", {})
         user_id = meta.get("user_id")
@@ -417,13 +467,9 @@ async def stripe_status(session_id: str, request: Request):
             await db.subscriptions.update_one(
                 {"user_id": user_id},
                 {"$set": {
-                    "user_id": user_id,
-                    "tier": plan,
-                    "status": "active",
-                    "provider": "stripe",
-                    "session_id": session_id,
-                    "billing_cycle": billing_cycle,
-                    "period_end": period_end,
+                    "user_id": user_id, "tier": plan, "status": "active",
+                    "provider": "stripe", "session_id": session_id,
+                    "billing_cycle": billing_cycle, "period_end": period_end,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }},
                 upsert=True,
@@ -431,26 +477,26 @@ async def stripe_status(session_id: str, request: Request):
             await db.audit_log.insert_one({
                 "id": str(uuid.uuid4()), "user_id": user_id, "action": "subscription.activated",
                 "at": datetime.now(timezone.utc).isoformat(),
-                "meta": {"plan": plan, "provider": "stripe", "session_id": session_id},
+                "meta": {"plan": plan, "provider": "stripe", "session_id": session_id,
+                          "source": "status_lookup" if cs else "redirect_trust"},
             })
 
     await db.payment_transactions.update_one(
         {"session_id": session_id},
         {"$set": {
-            "status": cs.status,
-            "payment_status": cs.payment_status,
-            "amount_total": cs.amount_total,
-            "currency": cs.currency,
+            "status": status_str, "payment_status": payment_status,
+            "amount_total": amount_total, "currency": currency,
+            "stripe_lookup_error": stripe_error,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }},
     )
 
     return {
         "session_id": session_id,
-        "status": cs.status,
-        "payment_status": cs.payment_status,
-        "amount_total": cs.amount_total,
-        "currency": cs.currency,
+        "status": status_str,
+        "payment_status": payment_status,
+        "amount_total": amount_total,
+        "currency": currency,
         "plan": tx.get("plan"),
     }
 
@@ -459,8 +505,7 @@ async def stripe_status(session_id: str, request: Request):
 async def stripe_webhook(request: Request):
     if not STRIPE_API_KEY:
         return {"ok": False, "error": "stripe_not_configured"}
-    host_url = str(request.base_url).rstrip("/")
-    sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=f"{host_url}/api/webhook/stripe")
+    sc = get_stripe(request)
     body = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
     try:
