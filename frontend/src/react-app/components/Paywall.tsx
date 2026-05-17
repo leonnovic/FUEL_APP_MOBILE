@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   X, Check, Gift, User, Crown, Shield, Zap, Smartphone,
-  CreditCard, Lock, AlertTriangle, ChevronRight, Loader2,
+  CreditCard, Lock, AlertTriangle, Loader2,
   CheckCircle2, Calendar, HardDrive, Upload, ArrowRight
 } from 'lucide-react';
 import {
-  TIERS, type SubscriptionTier, type SubscriptionState,
-  getSubscription, activateTier, setSubscription, logSubscriptionAction,
+  TIERS, type SubscriptionState,
+  getSubscription, activateTier, logSubscriptionAction,
 } from '@/react-app/lib/subscriptionStore';
+import {
+  startStripeCheckout, startMpesaStkPush, pollMpesaStatus, pollStripeStatus,
+  getToken as getBackendToken,
+} from '@/react-app/lib/backendApi';
 
 interface PaywallProps {
   onClose: () => void;
@@ -53,7 +57,7 @@ export default function Paywall({ onClose }: PaywallProps) {
     setStep('payment');
   }, []);
 
-  const handleMpesaPayment = useCallback(() => {
+  const handleMpesaPayment = useCallback(async () => {
     setError('');
     if (!phone || !/^\+?\d{9,12}$/.test(phone.replace(/\s/g, ''))) {
       setError('Please enter a valid phone number');
@@ -63,27 +67,93 @@ export default function Paywall({ onClose }: PaywallProps) {
       setError('Please agree to the terms');
       return;
     }
+    if (!getBackendToken()) {
+      setError('Please sign in to your account first so we can confirm your subscription.');
+      return;
+    }
 
     setStep('processing');
+    const normalizedPhone = formatPhone(phone);
 
-    // Simulate M-PESA STK Push
-    setTimeout(() => {
-      // In production, this would call the actual M-PESA API
-      // For now, simulate a successful payment
-      const normalizedPhone = formatPhone(phone);
+    try {
+      const push = await startMpesaStkPush(selectedTier, normalizedPhone);
+
+      // Real Daraja flow — poll the backend until the callback marks it paid/failed.
+      const txId = push.tx_id;
       const tierData = TIERS.find(t => t.key === selectedTier);
-      if (!tierData) return;
+      if (!tierData) { setError('Plan not found'); setStep('payment'); return; }
 
-      const receipt = `MPESA${Date.now()}`;
-      const newSub = activateTier(selectedTier, {
-        mpesaReceipt: receipt,
-        phone: normalizedPhone,
-      });
-      setSub(newSub);
-      logSubscriptionAction('activated', selectedTier, `M-PESA payment: ${receipt}`);
-      setStep('success');
-    }, 3000);
+      if (push.mocked) {
+        // Backend told us Daraja is not configured — activate locally and show a
+        // clearly-labelled receipt so the user understands this is a demo path.
+        const newSub = activateTier(selectedTier, {
+          mpesaReceipt: `DEMO-${Date.now()}`,
+          phone: normalizedPhone,
+        });
+        setSub(newSub);
+        logSubscriptionAction('activated', selectedTier, 'M-PESA mocked (sandbox creds not set)');
+        setStep('success');
+        return;
+      }
+
+      const startedAt = Date.now();
+      const POLL_INTERVAL = 4000;
+      const TIMEOUT_MS = 90000;
+
+      const tick = async (): Promise<void> => {
+        if (Date.now() - startedAt > TIMEOUT_MS) {
+          setError('Payment timed out. If you completed the M-PESA prompt, your subscription will activate shortly.');
+          setStep('payment');
+          return;
+        }
+        try {
+          const s = await pollMpesaStatus(txId);
+          if (s.payment_status === 'paid') {
+            const newSub = activateTier(selectedTier, {
+              mpesaReceipt: s.mpesa_receipt || `MPESA${Date.now()}`,
+              phone: normalizedPhone,
+            });
+            setSub(newSub);
+            logSubscriptionAction('activated', selectedTier, `M-PESA: ${s.mpesa_receipt}`);
+            setStep('success');
+            return;
+          }
+          if (s.payment_status === 'failed') {
+            setError(s.result_desc || 'Payment was cancelled or failed.');
+            setStep('payment');
+            return;
+          }
+          setTimeout(tick, POLL_INTERVAL);
+        } catch (e) {
+          // Transient errors — keep polling
+          setTimeout(tick, POLL_INTERVAL);
+        }
+      };
+      setTimeout(tick, POLL_INTERVAL);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'M-PESA push failed';
+      setError(msg);
+      setStep('payment');
+    }
   }, [phone, agreed, selectedTier]);
+
+  const handleStripePayment = useCallback(async () => {
+    setError('');
+    if (!getBackendToken()) {
+      setError('Please sign in to your account first so we can confirm your subscription.');
+      return;
+    }
+    setStep('processing');
+    try {
+      const r = await startStripeCheckout(selectedTier, 'monthly');
+      // Redirect to Stripe — the success URL will return with ?session_id=…
+      window.location.href = r.url;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to start checkout';
+      setError(msg);
+      setStep('payment');
+    }
+  }, [selectedTier]);
 
   const handleSimulateSuccess = useCallback(() => {
     const receipt = `MPESA${Date.now()}`;
@@ -300,16 +370,19 @@ export default function Paywall({ onClose }: PaywallProps) {
               <Zap size={18} /> Pay Ksh {selectedTierData.priceKES.toLocaleString()} via M-PESA
             </button>
 
-            {/* Simulate button for demo */}
-            <button
-              onClick={handleSimulateSuccess}
-              style={{
-                width: '100%', marginTop: 8, padding: 10, background: 'transparent', color: '#6b7280', border: '1px dashed #374151',
-                borderRadius: 10, fontSize: 11, cursor: 'pointer',
-              }}
-            >
-              [Demo: Simulate successful payment]
-            </button>
+            {/* Simulate button hidden — only show in dev / when no backend token */}
+            {!getBackendToken() && (
+              <button
+                onClick={handleSimulateSuccess}
+                style={{
+                  width: '100%', marginTop: 8, padding: 10, background: 'transparent', color: '#6b7280', border: '1px dashed #374151',
+                  borderRadius: 10, fontSize: 11, cursor: 'pointer',
+                }}
+                data-testid="paywall-simulate-btn"
+              >
+                [Offline mode: Simulate successful payment]
+              </button>
+            )}
 
             <p style={{ fontSize: 10, color: '#4b5563', textAlign: 'center', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <Lock size={10} /> Secured by Safaricom M-PESA. Kenya Data Protection Act 2019 compliant.

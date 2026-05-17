@@ -94,6 +94,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
 
+    // Try backend first (so cloud sync works); fall back to localStorage on any failure.
+    try {
+      const { backendLogin } = await import('@/react-app/lib/backendApi');
+      const u = await backendLogin(email, password);
+      setUser({
+        id: `email_${u.email}`,
+        authId: `email_${u.email}`,
+        authMethod: 'email',
+        email: u.email,
+        name: u.name || u.email,
+      });
+      setIsPending(false);
+      return true;
+    } catch { /* fall through to local */ }
+
     const users = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
     const found = Object.values(users).find((u: any) => u.email === email && u.password === password);
 
@@ -135,6 +150,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const id = `user_${Date.now()}`;
     users[id] = { id, email, password, name, createdAt: new Date().toISOString() };
     localStorage.setItem('fuelpro_email_users', JSON.stringify(users));
+
+    // Best-effort backend register so cloud sync + paywall work end-to-end.
+    try {
+      const { backendRegister } = await import('@/react-app/lib/backendApi');
+      await backendRegister(email, password, name || email);
+    } catch (e) {
+      // If backend rejects (e.g. email already exists there), try login silently
+      try {
+        const { backendLogin } = await import('@/react-app/lib/backendApi');
+        await backendLogin(email, password);
+      } catch { /* offline-only mode */ }
+    }
 
     setUser({
       id: `email_${email}`,

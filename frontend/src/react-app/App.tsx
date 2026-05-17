@@ -11,6 +11,7 @@ import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
 import SubscriptionChecker from "@/react-app/components/SubscriptionChecker";
 import TrialGate from "@/react-app/components/TrialGate";
+import StripeReturnHandler from "@/react-app/components/StripeReturnHandler";
 import { lazy, Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 
