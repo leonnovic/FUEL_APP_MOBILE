@@ -12,6 +12,8 @@ import PasswordReset from "@/react-app/pages/PasswordReset";
 import SubscriptionChecker from "@/react-app/components/SubscriptionChecker";
 import TrialGate from "@/react-app/components/TrialGate";
 import StripeReturnHandler from "@/react-app/components/StripeReturnHandler";
+import TeamManagement from "@/react-app/pages/TeamManagement";
+import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
 import { lazy, Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 
@@ -113,6 +115,10 @@ export default function App() {
 
                 {/* Invite acceptance - public */}
                 <Route path="/join/:inviteId" element={<InviteAccept />} />
+
+                {/* Team + Digest — owner/manager tools */}
+                <Route path="/team" element={<TeamManagement />} />
+                <Route path="/digest" element={<DailyDigestPage />} />
 
                 {/* Main app - requires auth, shows loader while checking */}
                 <Route path="/" element={<MainAppLoader />} />

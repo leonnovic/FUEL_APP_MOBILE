@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import json
 import logging
 import os
 import uuid
@@ -1061,24 +1063,82 @@ async def accept_invite(body: InviteAccept):
 
 
 # ---------------------------------------------------------------------------
-# AI M-PESA Reconciliation (Emergent LLM key)
+# AI M-PESA Reconciliation (Emergent LLM key) — with result caching
 # ---------------------------------------------------------------------------
+import hashlib as _hashlib
+
+
 class ReconcileBody(BaseModel):
     inflows: list[dict[str, Any]]
     sales: list[dict[str, Any]]
 
 
+def _reconcile_cache_key(inflows: list[dict], sales: list[dict]) -> str:
+    payload = json.dumps(
+        {"i": [(i.get("receipt"), i.get("paidIn") or i.get("amount")) for i in inflows],
+         "s": [(s.get("id"), s.get("amount") or s.get("total")) for s in sales]},
+        sort_keys=True, default=str,
+    ).encode()
+    return _hashlib.sha256(payload).hexdigest()
+
+
 @api.post("/ai/reconcile-mpesa")
 async def ai_reconcile(body: ReconcileBody, user: dict = Depends(get_current_user)):
     from services.ai import reconcile_mpesa_with_sales
+    cache_key = _reconcile_cache_key(body.inflows, body.sales)
+    cached = await db.ai_reconcile_cache.find_one(
+        {"user_id": user["id"], "key": cache_key}, {"_id": 0},
+    )
+    if cached and cached.get("result", {}).get("ok"):
+        return {**cached["result"], "cached": True}
+
     result = await reconcile_mpesa_with_sales(body.inflows, body.sales)
+
+    if result.get("ok"):
+        await db.ai_reconcile_cache.update_one(
+            {"user_id": user["id"], "key": cache_key},
+            {"$set": {
+                "user_id": user["id"], "key": cache_key, "result": result,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+
     await db.audit_log.insert_one({
         "id": str(uuid.uuid4()), "user_id": user["id"], "action": "ai.reconcile_mpesa",
         "at": datetime.now(timezone.utc).isoformat(),
         "meta": {"inflows": len(body.inflows), "sales": len(body.sales),
-                  "matched": len(result.get("matches", [])) if result.get("ok") else 0},
+                  "matched": len(result.get("matches", [])) if result.get("ok") else 0,
+                  "cached": False},
     })
     return result
+
+
+# ---------------------------------------------------------------------------
+# Daily Reconciliation Digest
+# ---------------------------------------------------------------------------
+@api.post("/digest/preview")
+async def digest_preview(user: dict = Depends(get_current_user)):
+    """Build the user's digest right now WITHOUT emailing it. Lets the UI show
+    a 'preview my daily digest' button."""
+    from services.digest import build_digest_for_user, render_digest_html
+    d = await build_digest_for_user(db, user)
+    return {"ok": True, "digest": d, "html": render_digest_html(d)}
+
+
+@api.post("/digest/send")
+async def digest_send_now(user: dict = Depends(get_current_user)):
+    """Force-send the user's digest right now. Useful for testing the email pipeline."""
+    from services.digest import send_digest_to_user
+    return await send_digest_to_user(db, user)
+
+
+@api.get("/digest/history")
+async def digest_history(user: dict = Depends(get_current_user), limit: int = 14):
+    rows = await db.daily_digests.find(
+        {"user_id": user["id"]}, {"_id": 0},
+    ).sort("date", -1).to_list(limit)
+    return {"items": rows, "ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1216,13 +1276,23 @@ async def on_startup():
         await db.invites.create_index("code", unique=True)
         await db.invites.create_index("email")
         await db.password_resets.create_index("email", unique=True)
+        await db.ai_reconcile_cache.create_index([("user_id", 1), ("key", 1)], unique=True)
+        await db.daily_digests.create_index([("user_id", 1), ("date", -1)])
         for c in ALLOWED_COLLECTIONS:
             await db[f"sync_{c}"].create_index("user_id")
         log.info("MongoDB indexes ready")
     except Exception as e:
         log.warning("Index creation issue: %s", e)
 
+    # Start the daily digest scheduler (only when DIGEST_ENABLED=1)
+    if os.environ.get("DIGEST_ENABLED", "1") == "1":
+        from services.digest import digest_scheduler
+        app.state.digest_task = asyncio.create_task(digest_scheduler(db))
+
 
 @app.on_event("shutdown")
 async def shutdown():
+    task = getattr(app.state, "digest_task", None)
+    if task and not task.done():
+        task.cancel()
     client.close()

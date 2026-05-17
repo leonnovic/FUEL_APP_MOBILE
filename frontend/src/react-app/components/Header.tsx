@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Fuel, Sun, Moon, Settings, User, Download, QrCode, LogOut,
   Edit3, Image, ChevronDown, Layers, Plus, X, Check, Menu, Shield,
-  Globe, LayoutDashboard, Crown
+  Globe, LayoutDashboard, Crown, Sparkles
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -155,6 +155,12 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             <button onClick={() => setShowQRCode(true)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><QrCode size={12} /><span className="hidden lg:inline">QR</span></button>
             <SyncStatusIndicator countryCode={location.currentCountry.id} compact />
             <RoleSelector />
+            <button onClick={() => navigate('/team')} data-testid="header-team-btn" className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg text-xs text-indigo-300 transition-colors flex items-center gap-1.5 border border-indigo-500/20" title="Team Members">
+              <User size={12} /><span className="hidden lg:inline">Team</span>
+            </button>
+            <button onClick={() => navigate('/digest')} data-testid="header-digest-btn" className="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg text-xs text-blue-300 transition-colors flex items-center gap-1.5 border border-blue-500/20" title="Daily Digest">
+              <Sparkles size={12} /><span className="hidden lg:inline">Digest</span>
+            </button>
             <button onClick={() => navigate('/founder')} className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-xs text-amber-400 transition-colors flex items-center gap-1.5 border border-amber-500/20">
               <Crown size={12} /><span className="hidden lg:inline">Admin</span>
             </button>
