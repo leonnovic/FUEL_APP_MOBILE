@@ -1075,8 +1075,11 @@ class ReconcileBody(BaseModel):
 
 def _reconcile_cache_key(inflows: list[dict], sales: list[dict]) -> str:
     payload = json.dumps(
-        {"i": [(i.get("receipt"), i.get("paidIn") or i.get("amount")) for i in inflows],
-         "s": [(s.get("id"), s.get("amount") or s.get("total")) for s in sales]},
+        {"i": [(i.get("receipt"), i.get("paidIn") or i.get("amount"),
+                 i.get("date"), i.get("time")) for i in inflows],
+         "s": [(s.get("id"), s.get("amount") or s.get("total"),
+                 s.get("date"), s.get("time"), s.get("fuel_type") or s.get("fuelType"))
+                for s in sales]},
         sort_keys=True, default=str,
     ).encode()
     return _hashlib.sha256(payload).hexdigest()

@@ -150,6 +150,7 @@ def render_digest_html(d: dict[str, Any]) -> str:
 
 
 async def send_digest_to_user(db, user: dict) -> dict[str, Any]:
+    import uuid as _uuid
     from services.notifications import send_email
     d = await build_digest_for_user(db, user)
 
@@ -168,11 +169,27 @@ async def send_digest_to_user(db, user: dict) -> dict[str, Any]:
     )
 
     # Store the digest in Mongo so the UI can preview it
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.daily_digests.update_one(
         {"user_id": user["id"], "date": d["date"]},
-        {"$set": {**d, "delivery": delivery, "sent_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {**d, "delivery": delivery, "sent_at": now_iso}},
         upsert=True,
     )
+    # Audit trail (parity with ai.reconcile_mpesa + auth.password_reset)
+    await db.audit_log.insert_one({
+        "id": str(_uuid.uuid4()),
+        "user_id": user["id"],
+        "action": "digest.send",
+        "at": now_iso,
+        "meta": {
+            "date": d["date"],
+            "delivery_ok": delivery.get("ok", False),
+            "delivery_skipped": delivery.get("skipped"),
+            "matched": d.get("matched", 0),
+            "sales_count": d.get("sales_count", 0),
+            "inflows_count": d.get("inflows_count", 0),
+        },
+    })
     return {"digest": d, "delivery": delivery}
 
 
