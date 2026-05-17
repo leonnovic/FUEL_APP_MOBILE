@@ -214,6 +214,7 @@ export async function fetchExternalNews(countryCode?: string): Promise<ExternalN
   }
   
   // Fetch global sources
+  const globalSources = NEWS_SOURCES['GLOBAL'] || [];
   for (const source of globalSources) {
     if (source.rssUrl) {
       const xml = await fetchRSS(source.rssUrl);

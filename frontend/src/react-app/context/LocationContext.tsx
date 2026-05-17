@@ -8,7 +8,7 @@ import { getCountryByCode } from '@/react-app/lib/world-country-utils';
 
 /** Get the first available country profile as universal fallback */
 function getUniversalFallback(): CountryProfile {
-  return COUNTRY_LIST[0] || getCountryById('US') || {
+  return COUNTRY_LIST[0] || getCountryById('US') || (({
     id: 'US', name: 'United States', shortName: 'USA',
     currency: { code: 'USD', symbol: '$', name: 'US Dollar' },
     timezone: 'America/New_York', flag: '🇺🇸',
@@ -23,7 +23,7 @@ function getUniversalFallback(): CountryProfile {
     complianceDocuments: [],
     communication: { defaultMessage: '', whatsappEnabled: false, smsEnabled: false },
     newsSources: [],
-  } as CountryProfile;
+  } as unknown) as CountryProfile);
 }
 
 /** Get user's detected country code from any source */
@@ -153,8 +153,8 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
     saveStationCountries(stationCountries);
   }, [stationCountries]);
 
-  const getCountry = useCallback((code: string) => {
-    return getCountryById(code) || getCountryByCode(code.toUpperCase()) || getUniversalFallback();
+  const getCountry = useCallback((code: string): CountryProfile => {
+    return (getCountryById(code) || (getCountryByCode(code.toUpperCase()) as unknown as CountryProfile) || getUniversalFallback());
   }, []);
 
   const getStationLocation = useCallback((sid: string) => {
@@ -203,7 +203,7 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
         ...(prev[sid] || { stationId: sid, city: '', timezone: '', coordinates: null, detected: false, updatedAt: '', preciseCoords: null, preciseAddress: '', preciseTimestamp: '' }),
         stationId: sid,
         countryCode: upperCode,
-        timezone: country?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: (country as { timezone?: string })?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
         detected: false,
         updatedAt: new Date().toISOString(),
       }

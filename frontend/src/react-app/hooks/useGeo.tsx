@@ -37,7 +37,7 @@ function resolveDefaultGeo(): GeoState {
             currency: config.defaultCurrency,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             locale: `en-${cc}`,
-            flag: config.flag || '🌍',
+            flag: (config as { flag?: string }).flag || '🌍',
             lat: parsed.latitude || null,
             lon: parsed.longitude || null,
             city: parsed.city || null,

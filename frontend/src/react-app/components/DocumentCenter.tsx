@@ -323,8 +323,7 @@ export default function DocumentCenter() {
         <input
           ref={folderInputRef}
           type="file"
-          webkitdirectory="true"
-          directory="true"
+          {...({ webkitdirectory: 'true', directory: 'true' } as Record<string, string>)}
           multiple
           onChange={handleFolderSelect}
           style={{ display: 'none' }}

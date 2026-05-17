@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { REGIONAL_CONFIGS, getRegionalConfig } from '@/react-app/config/regions';
+import { getRegionalConfig } from '@/react-app/config/regions';
 
 // ============================================================
 // LOCALIZATION CONTEXT

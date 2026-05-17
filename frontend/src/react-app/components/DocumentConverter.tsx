@@ -36,7 +36,7 @@ const ALL_ACCEPTED_EXTS = '.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.txt,.csv,.odt,
 /** OCR-lite: extract text from image using canvas */
 async function imageToText(file: File): Promise<string> {
   return new Promise((resolve) => {
-    const img = new Image();
+    const img = new window.Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
@@ -71,7 +71,7 @@ async function convertFile(
     // For image-to-image, just create a converted version
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const img = new Image();
+    const img = new window.Image();
     const url = URL.createObjectURL(file);
     await new Promise<void>((res) => { img.onload = () => res(); img.src = url; });
     canvas.width = img.width;
@@ -179,7 +179,7 @@ async function convertFile(
         }
 
         // Footer on each page
-        const pageCount = doc.internal.getNumberOfPages();
+        const pageCount = (doc.internal as unknown as { getNumberOfPages(): number }).getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
           doc.setPage(i);
           doc.setFontSize(8);

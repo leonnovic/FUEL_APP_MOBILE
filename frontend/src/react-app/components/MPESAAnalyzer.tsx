@@ -435,20 +435,25 @@ export default function MPESAAnalyzer() {
     try {
       addProgress(`Reading ${pdfFiles.length} PDF(s)...`);
 
-      let allLines: string[] = [];
+      const allLines: string[] = [];
       for (const file of pdfFiles) {
         addProgress(`Extracting text from "${file.name}"...`);
         const { lines, error } = await extractPDFText(file);
 
         if (error) {
-          addProgress(`ERROR: ${error}`);
-          setDebugInfo(`PDF Extraction Error: ${error}\n\nTry using "Manual Text Paste" mode instead. Copy text from your PDF viewer and paste it.`);
-          setIsProcessing(false);
-          return;
+          addProgress(`ERROR in "${file.name}": ${error}`);
+          // Continue with other files instead of failing the whole batch
+          continue;
         }
 
         addProgress(`Extracted ${lines.length} lines from "${file.name}"`);
         allLines.push(...lines);
+      }
+
+      if (allLines.length === 0) {
+        setDebugInfo(`No text could be extracted from any of the ${pdfFiles.length} PDF(s).\n\nTry using "Manual Text Paste" mode instead.`);
+        setIsProcessing(false);
+        return;
       }
 
       setExtractedRawLines(allLines);
@@ -514,13 +519,26 @@ export default function MPESAAnalyzer() {
       return;
     }
 
-    const { inflows: records, excluded } = extractFromLines(lines);
+    const { inflows: rawRecords, excluded } = extractFromLines(lines);
+
+    // Deduplicate across multiple PDFs by receipt number (same receipt in 2 statements = 1 inflow)
+    const seen = new Set<string>();
+    const records: InflowRecord[] = [];
+    let dupCount = 0;
+    for (const r of rawRecords) {
+      const key = r.receipt || `${r.date}|${r.time}|${r.paidIn}|${r.details}`;
+      if (seen.has(key)) { dupCount++; continue; }
+      seen.add(key);
+      records.push(r);
+    }
+    if (dupCount > 0) addProgress(`Deduplicated ${dupCount} duplicate receipt(s) across uploaded statements`);
+
     const st = calculateStats(records, excluded);
 
     setInflowData(records);
     setStats(st);
     addProgress(`Done! ${records.length} inflows extracted | Total: Ksh ${formatNumber(st.totalAmount, 2)}`);
-    setValidationWarning(`Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`);
+    setValidationWarning(`Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)${dupCount > 0 ? ` | ${dupCount} duplicates removed` : ''}`);
   };
 
   const processWithAI = async (text: string) => {
@@ -965,6 +983,12 @@ export default function MPESAAnalyzer() {
             <span className="text-xs text-indigo-500">{showRangeFilter ? '(hide)' : '(show)'}</span>
           </button>
           {showRangeFilter && (
+            <p className="text-[10px] text-indigo-600/80 dark:text-indigo-300/80 mb-3 -mt-1">
+              Uses <strong>True Inflow (Balance Delta +)</strong> — sums positive balance jumps within the range,
+              capturing inflows that may not appear as &quot;Paid In&quot; in the PDF.
+            </p>
+          )}
+          {showRangeFilter && (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -986,22 +1010,45 @@ export default function MPESAAnalyzer() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => {
-                  let filtered = inflowData;
-                  if (receiptFilter.trim()) {
-                    filtered = filtered.filter(r => r.receipt.toUpperCase().includes(receiptFilter.toUpperCase()));
+                  // ===== TRUE INFLOW Range Filter =====
+                  // Compute the sum of positive balance deltas (True Inflow), NOT recorded paidIn.
+                  // To compute the delta for the FIRST record in the filter range, we need
+                  // its immediate predecessor from the FULL sorted dataset.
+                  const allSorted = [...inflowData].sort((a, b) => {
+                    const ta = `${a.date || '0000-00-00'}T${a.time || '00:00:00'}`;
+                    const tb = `${b.date || '0000-00-00'}T${b.time || '00:00:00'}`;
+                    return ta.localeCompare(tb);
+                  });
+                  const startMs = timeRangeStart ? new Date(timeRangeStart).getTime() : -Infinity;
+                  const endMs = timeRangeEnd ? new Date(timeRangeEnd).getTime() : Infinity;
+                  const receiptQ = receiptFilter.trim().toUpperCase();
+                  const recordTimeMs = (r: InflowRecord) =>
+                    new Date(`${r.date}T${r.time || '00:00:00'}`).getTime();
+                  const matches = (r: InflowRecord) => {
+                    if (receiptQ && !r.receipt.toUpperCase().includes(receiptQ)) return false;
+                    const t = recordTimeMs(r);
+                    if (isNaN(t)) return false;
+                    if (t < startMs || t > endMs) return false;
+                    return true;
+                  };
+
+                  let trueInflowTotal = 0;
+                  let matchedCount = 0;
+                  for (let i = 0; i < allSorted.length; i++) {
+                    const r = allSorted[i];
+                    if (!matches(r)) continue;
+                    matchedCount++;
+                    if (i === 0) continue; // No previous balance to delta against
+                    const prev = allSorted[i - 1];
+                    if (prev.balance > 0 && r.balance > 0) {
+                      const delta = r.balance - prev.balance;
+                      if (delta > 0) trueInflowTotal += delta;
+                    }
                   }
-                  if (timeRangeStart) {
-                    const start = new Date(timeRangeStart).getTime();
-                    filtered = filtered.filter(r => { const d = new Date(`${r.date}T${r.time || '00:00:00'}`).getTime(); return !isNaN(d) && d >= start; });
-                  }
-                  if (timeRangeEnd) {
-                    const end = new Date(timeRangeEnd).getTime();
-                    filtered = filtered.filter(r => { const d = new Date(`${r.date}T${r.time || '23:59:59'}`).getTime(); return !isNaN(d) && d <= end; });
-                  }
-                  const total = filtered.reduce((s, r) => s + r.paidIn, 0);
-                  setRangeFilterTotal(total);
-                  setRangeFilterCount(filtered.length);
-                }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2">
+                  setRangeFilterTotal(Math.round(trueInflowTotal * 100) / 100);
+                  setRangeFilterCount(matchedCount);
+                }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2"
+                data-testid="mpesa-range-filter-calculate-btn">
                   <Calculator size={14} /> Calculate Total
                 </button>
                 <button onClick={() => { setReceiptFilter(''); setTimeRangeStart(''); setTimeRangeEnd(''); setRangeFilterTotal(null); setRangeFilterCount(0); }}

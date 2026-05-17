@@ -1551,7 +1551,7 @@ function renderSection(id: SectionId) {
     case 'theme': return <ThemeSection />;
     case 'notifications': return <NotificationsSection />;
     case 'environment': return <EnvironmentSection />;
-    case 'webhooks': return <WebhookSection />;
+    case 'webhooks': return <WebhooksSection />;
     case 'cache': return <CacheSection />;
     case 'trialmgr': return <TrialManagerSection />;
     case 'companyprofile': return <CompanyProfileSection />;

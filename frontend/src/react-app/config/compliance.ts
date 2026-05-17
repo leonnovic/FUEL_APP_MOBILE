@@ -811,4 +811,4 @@ export function getAllComplianceCountries(): { key: string; code: string; name: 
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export type { ComplianceConfig };
+export type { ComplianceConfig as ComplianceConfigType };

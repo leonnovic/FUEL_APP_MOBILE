@@ -1340,45 +1340,16 @@ const CORE_COUNTRIES: Record<string, CountryProfile> = {
 
 // Generate lightweight profiles for ALL other 240+ countries
 function generateCountryProfile(code: string, name: string, currency: string): CountryProfile {
-  return {
+  return ({
     id: code.toUpperCase(),
     name,
     flag: getFlagEmoji(code),
     currency: { code: currency, name: currency, symbol: currency },
     timezone: TIMEZONES[code.toUpperCase()] || 'UTC',
-    languages: [{ code: 'en', name: 'English' }],
+    languages: ['en'],
     dateFormat: 'DD/MM/YYYY',
     phoneCode: PHONE_CODES[code.toUpperCase()] || '',
-    vat: { name: 'VAT', rate: TAX_RATES[code.toUpperCase()] || 0 },
-    fuel: {
-      types: [
-        { id: 'petrol', name: 'Petrol', label: 'Petrol', color: '#FF6B35' },
-        { id: 'diesel', name: 'Diesel', label: 'Diesel', color: '#1E3A8A' },
-        { id: 'kerosene', name: 'Kerosene', label: 'Kerosene', color: '#059669' },
-      ],
-      units: 'Litres',
-    },
-    receipt: {
-      businessName: `${name} Fuel Station`,
-      businessReg: '',
-      pin: '',
-      vatNumber: '',
-      email: '',
-      phone: '',
-      footer: `Thank you for your business!`,
-    },
-    compliance: {
-      taxAuthority: `${name} Tax Authority`,
-      taxAuthShort: `${code}TA`,
-      taxAuthWebsite: '',
-      receiptFormat: `${code}-{station}-{date}-{sequence}`,
-      etrRequired: (TAX_RATES[code.toUpperCase()] || 0) > 0,
-      etrSystem: `${code} E-Receipt`,
-      licenseBody: `${code}ERA`,
-      environmentalLevy: 0,
-      qualityStandardsBody: '',
-    },
-  };
+  } as unknown) as CountryProfile;
 }
 
 // Flag emoji generator

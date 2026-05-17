@@ -109,7 +109,7 @@ export default function FuelVideoMiniPlayer() {
   const [isClosed, setIsClosed] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const currentVideo = videos[currentIndex];
 

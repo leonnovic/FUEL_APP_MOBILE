@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import { useFuel } from '../context/FuelContext';
 import { useStations } from '../context/StationContext';
+import { getCurrencySymbol, getDetectedCurrency } from '@/react-app/lib/currency';
+
+const DEFAULT_CURRENCY = getCurrencySymbol(getDetectedCurrency());
 
 interface WizardData {
   // Step 1: Station Info
