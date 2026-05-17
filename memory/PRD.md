@@ -58,6 +58,35 @@ User's follow-up directives (all addressed in iteration 3):
 
 **Result:** Dashboard now loads exactly like the user's reference screenshot — station header, all 8 tabs (Dashboard / Point of Sale / Sales Tracking / Live Transaction / Inventory / Fuel Offloading / Delivery Tracker / Invoices), KPI cards (Revenue / Net Profit / Fuel Sold / Balance Due), Current Pump Prices, Tax & Statutory Rates, Current Location Weather, Regulatory Alerts. Trial banner displays `14d 0h left` correctly.
 
+### Iter 5 — Email/SMS infra + EPRA RSS + Invites + AI M-PESA Reconciliation
+
+**Backend services (`/app/backend/services/`)**
+- `notifications.py` — Resend email + Twilio SMS with **graceful no-key fallback**. If env vars are missing, `send_email`/`send_sms` return `{ok:false, skipped:"no_key", message:"…"}` instead of raising. Polished HTML templates for password-reset and team-invite emails (inline CSS, dark theme).
+- `epra.py` — Real EPRA Kenya RSS parser. Fetches `https://www.epra.go.ke/rss-feed/`, regexes prices out of the press-release blob, replicates the Nairobi reading across other towns using baseline deltas. Falls back to the curated baseline if EPRA is unreachable (e.g. HTTP 404). 6-hour in-memory cache.
+- `ai.py` — AI M-PESA ↔ Sales reconciliation via `emergentintegrations.llm.chat` (`openai/gpt-4o-mini`, Emergent LLM key). Returns matches with confidence scores + reasons + lists of unmatched inflows/sales. Tested live: matched a real inflow→sale pair with 100% confidence and a coherent reason string.
+
+**New backend endpoints (all auth-protected unless noted)**
+- `POST /api/auth/password-reset/request` — generates 6-digit code, persists it for 30 min, attempts email send (Resend), falls back to server-log if no key.
+- `POST /api/auth/password-reset/confirm` — verifies code + sets new password + issues JWT.
+- `POST /api/invites` — owner/manager creates a role-scoped invite (`owner|manager|staff|auditor`), generates URL-safe code, emails an accept link if Resend is configured.
+- `GET /api/invites` — list invites for the current user.
+- `GET /api/invites/{code}` *(public)* — fetch invite details for the accept page.
+- `POST /api/invites/accept` — accepts an invite, creates the new user (or updates existing user's role), returns a JWT.
+- `POST /api/ai/reconcile-mpesa` — body `{inflows:[…], sales:[…]}`, returns AI-generated matches + audit-logs the action.
+
+**Frontend wirings**
+- `AuthContext.tsx` — `requestPasswordReset` / `resetPassword` now call the backend first, fall back to localStorage if offline.
+- `AiReconcileCard.tsx` — new component injected into MPESAAnalyzer. Shows match count, unmatched inflows, unmatched sales, per-row confidence badge + reason. Auth-gated.
+- Existing `/#/join/:inviteId` and `/#/reset-password` routes unchanged (they keep working with the local invite/reset flow; backend versions plug in seamlessly when present).
+
+**Indexes added**: `invites.code` unique, `invites.email`, `password_resets.email` unique.
+
+**Verified live**:
+- `POST /api/auth/password-reset/request` → `{email_sent:false, delivery:{skipped:"no_key"}}` ✅
+- `POST /api/invites` → returns code + accept URL; `GET /api/invites/{code}` retrieves it ✅
+- `POST /api/ai/reconcile-mpesa` with 1 inflow + 1 sale → `{matches:[{confidence:1.0, reason:"Exact match on amount and within 30 minutes…"}], unmatched_inflows:[], unmatched_sales:[]}` ✅
+- All 5 sanity endpoints (auth/me, subscription, fuel-prices/current, invites, audit-log) return 200.
+
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
 - ✅ Server-side auth (register/login/me with bcrypt+JWT) with localStorage offline fallback

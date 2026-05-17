@@ -842,37 +842,243 @@ async def sync_put(collection: str, request: Request, user: dict = Depends(get_c
 
 
 # ---------------------------------------------------------------------------
-# EPRA fuel prices (cached, lightweight stub — replaced by real EPRA fetch later)
+# EPRA fuel prices (real RSS parser with cache + baseline fallback)
 # ---------------------------------------------------------------------------
-_EPRA_CACHE: dict[str, Any] = {"data": None, "ts": None}
-
-
 @api.get("/fuel-prices/current")
 async def fuel_prices(region: str = "nairobi"):
-    """Return latest known fuel prices for a region.
-    NOTE: Real EPRA RSS parser is a planned upgrade; right now this returns
-    a curated baseline so the UI has working data."""
-    now = datetime.now(timezone.utc)
-    if _EPRA_CACHE["data"] and _EPRA_CACHE["ts"] and (now - _EPRA_CACHE["ts"]).total_seconds() < 3600:
-        return _EPRA_CACHE["data"]
+    """Live EPRA Kenya fuel prices. Tries the EPRA RSS first, falls back to a
+    curated baseline if the network is unreachable or the feed format changes."""
+    from services.epra import get_fuel_prices  # local import keeps cold-boot fast
+    return await get_fuel_prices(region)
 
-    baseline = {
-        "ok": True, "region": region, "source": "fuelpro_baseline",
-        "valid_from": "2026-01-15", "valid_to": "2026-02-14",
-        "currency": "KES",
-        "prices": {
-            "nairobi":  {"petrol": 176.58, "diesel": 168.06, "kerosene": 156.04},
-            "mombasa":  {"petrol": 173.31, "diesel": 164.80, "kerosene": 152.78},
-            "kisumu":   {"petrol": 179.10, "diesel": 170.58, "kerosene": 158.56},
-            "nakuru":   {"petrol": 177.21, "diesel": 168.69, "kerosene": 156.67},
-            "eldoret":  {"petrol": 179.97, "diesel": 171.45, "kerosene": 159.43},
-            "lodwar":   {"petrol": 195.34, "diesel": 186.82, "kerosene": 174.80},
-        },
-        "fetched_at": now.isoformat(),
+
+# ---------------------------------------------------------------------------
+# Password reset (Resend email or console fallback)
+# ---------------------------------------------------------------------------
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+@api.post("/auth/password-reset/request")
+async def password_reset_request(body: PasswordResetRequest):
+    """Generate a 6-digit reset code and (best-effort) email it to the user."""
+    from services.notifications import send_email, password_reset_email_html
+    import secrets
+
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+
+    # Always return success-ish to avoid enumeration leaks
+    if not user:
+        return {"ok": True, "message": "If that email is registered we sent reset instructions."}
+
+    code = f"{secrets.randbelow(900000) + 100000}"
+    expires = datetime.now(timezone.utc) + timedelta(minutes=30)
+    await db.password_resets.update_one(
+        {"email": email},
+        {"$set": {"email": email, "code": code, "expires_at": expires.isoformat(),
+                  "used": False, "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+
+    public_url = (PUBLIC_BACKEND_URL or "").rstrip("/")
+    reset_url = f"{public_url}/#/reset-password?email={email}&code={code}" if public_url else None
+    result = await send_email(
+        to=email,
+        subject="Reset your FuelPro password",
+        html=password_reset_email_html(user.get("name", ""), code, reset_url),
+        text=f"Your FuelPro reset code is {code}. It expires in 30 minutes.",
+    )
+    if not result.get("ok"):
+        log.info("PASSWORD RESET CODE for %s = %s (delivery: %s)", email, code,
+                 result.get("skipped") or result.get("error"))
+    return {
+        "ok": True,
+        "message": "If that email is registered we sent reset instructions.",
+        "email_sent": result.get("ok", False),
+        "delivery": result,
     }
-    _EPRA_CACHE["data"] = baseline
-    _EPRA_CACHE["ts"] = now
-    return baseline
+
+
+@api.post("/auth/password-reset/confirm", response_model=TokenResponse)
+async def password_reset_confirm(body: PasswordResetConfirm):
+    email = body.email.lower().strip()
+    rec = await db.password_resets.find_one({"email": email}, {"_id": 0})
+    if not rec or rec.get("used") or rec.get("code") != body.code:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Reset code expired")
+
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"password_hash": _hash_pw(body.new_password),
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await db.password_resets.update_one({"email": email}, {"$set": {"used": True}})
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user_doc["id"], "action": "auth.password_reset",
+        "at": datetime.now(timezone.utc).isoformat(), "meta": {},
+    })
+    return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))
+
+
+# ---------------------------------------------------------------------------
+# Team invites (multi-user roles)
+# ---------------------------------------------------------------------------
+ALLOWED_ROLES = {"owner", "manager", "staff", "auditor"}
+
+
+class InviteCreate(BaseModel):
+    email: EmailStr
+    role: str = "staff"
+    station_id: Optional[str] = None
+
+
+class InviteAccept(BaseModel):
+    code: str
+    password: str = Field(min_length=6, max_length=128)
+    name: str = Field(min_length=1, max_length=120)
+
+
+@api.post("/invites")
+async def create_invite(body: InviteCreate, user: dict = Depends(get_current_user)):
+    """Owner/manager creates an email invite. Returns the accept code + URL."""
+    from services.notifications import send_email, invite_email_html
+    import secrets
+
+    if user.get("role") not in {"owner", "manager"}:
+        raise HTTPException(status_code=403, detail="Only owners/managers can invite teammates")
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+
+    code = secrets.token_urlsafe(16)
+    now = datetime.now(timezone.utc)
+    invite_id = str(uuid.uuid4())
+    invite_doc = {
+        "id": invite_id, "code": code,
+        "email": body.email.lower().strip(),
+        "role": body.role,
+        "station_id": body.station_id,
+        "invited_by_user_id": user["id"],
+        "invited_by_name": user.get("name", user["email"]),
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(days=14)).isoformat(),
+    }
+    await db.invites.insert_one(invite_doc)
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["id"], "action": "invite.created",
+        "at": now.isoformat(),
+        "meta": {"invited_email": body.email, "role": body.role, "invite_id": invite_id},
+    })
+
+    public_url = (PUBLIC_BACKEND_URL or "").rstrip("/")
+    accept_url = f"{public_url}/#/join/{code}" if public_url else f"/#/join/{code}"
+    email_result = await send_email(
+        to=body.email,
+        subject=f"You're invited to FuelPro as {body.role}",
+        html=invite_email_html(
+            inviter=user.get("name", user["email"]),
+            station=body.station_id or "FuelPro",
+            accept_url=accept_url,
+            role=body.role,
+        ),
+        text=f"{user.get('name', user['email'])} invited you to FuelPro as {body.role}. Accept: {accept_url}",
+    )
+    return {
+        "ok": True, "invite_id": invite_id, "code": code, "accept_url": accept_url,
+        "email_delivery": email_result,
+    }
+
+
+@api.get("/invites")
+async def list_invites(user: dict = Depends(get_current_user)):
+    rows = await db.invites.find({"invited_by_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"items": rows, "ok": True}
+
+
+@api.get("/invites/{code}")
+async def get_invite(code: str):
+    inv = await db.invites.find_one({"code": code}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.get("status") != "pending":
+        raise HTTPException(status_code=410, detail=f"Invite {inv.get('status')}")
+    if datetime.fromisoformat(inv["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Invite expired")
+    return {"email": inv["email"], "role": inv["role"],
+            "station_id": inv.get("station_id"),
+            "invited_by_name": inv.get("invited_by_name")}
+
+
+@api.post("/invites/accept", response_model=TokenResponse)
+async def accept_invite(body: InviteAccept):
+    inv = await db.invites.find_one({"code": body.code}, {"_id": 0})
+    if not inv or inv.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Invalid invite")
+    if datetime.fromisoformat(inv["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="Invite expired")
+
+    email = inv["email"]
+    now = datetime.now(timezone.utc)
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"role": inv["role"], "updated_at": now.isoformat()}},
+        )
+        user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    else:
+        user_doc = {
+            "id": str(uuid.uuid4()),
+            "email": email, "name": body.name.strip(),
+            "password_hash": _hash_pw(body.password),
+            "role": inv["role"], "tier": "free",
+            "subscription_status": "trial",
+            "trial_started_at": now.isoformat(),
+            "trial_ends_at": (now + timedelta(days=14)).isoformat(),
+            "created_at": now.isoformat(), "updated_at": now.isoformat(),
+            "invited_by": inv.get("invited_by_user_id"),
+        }
+        await db.users.insert_one(user_doc)
+
+    await db.invites.update_one({"code": body.code}, {"$set": {"status": "accepted", "accepted_at": now.isoformat()}})
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": inv.get("invited_by_user_id"),
+        "action": "invite.accepted",
+        "at": now.isoformat(),
+        "meta": {"new_user_email": email, "role": inv["role"]},
+    })
+    return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))
+
+
+# ---------------------------------------------------------------------------
+# AI M-PESA Reconciliation (Emergent LLM key)
+# ---------------------------------------------------------------------------
+class ReconcileBody(BaseModel):
+    inflows: list[dict[str, Any]]
+    sales: list[dict[str, Any]]
+
+
+@api.post("/ai/reconcile-mpesa")
+async def ai_reconcile(body: ReconcileBody, user: dict = Depends(get_current_user)):
+    from services.ai import reconcile_mpesa_with_sales
+    result = await reconcile_mpesa_with_sales(body.inflows, body.sales)
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["id"], "action": "ai.reconcile_mpesa",
+        "at": datetime.now(timezone.utc).isoformat(),
+        "meta": {"inflows": len(body.inflows), "sales": len(body.sales),
+                  "matched": len(result.get("matches", [])) if result.get("ok") else 0},
+    })
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1213,9 @@ async def on_startup():
         await db.payment_transactions.create_index("user_id")
         await db.subscriptions.create_index("user_id", unique=True)
         await db.audit_log.create_index([("user_id", 1), ("at", -1)])
+        await db.invites.create_index("code", unique=True)
+        await db.invites.create_index("email")
+        await db.password_resets.create_index("email", unique=True)
         for c in ALLOWED_COLLECTIONS:
             await db[f"sync_{c}"].create_index("user_id")
         log.info("MongoDB indexes ready")

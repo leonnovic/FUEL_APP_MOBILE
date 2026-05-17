@@ -5,6 +5,7 @@ import {
   ShieldCheck, Shield, Ban, Wallet, ClipboardPaste, Bug
 } from 'lucide-react';
 import { formatNumber } from '@/react-app/utils/formatUtils';
+import AiReconcileCard from '@/react-app/components/AiReconcileCard';
 
 // ============================================================
 // M-PESA Inflow Analyzer v5 - RESTRUCTURED
@@ -1072,6 +1073,11 @@ export default function MPESAAnalyzer() {
             </div>
           )}
         </div>
+      )}
+
+      {/* AI M-PESA Reconciliation */}
+      {inflowData.length > 0 && (
+        <AiReconcileCard inflows={inflowData} />
       )}
 
       {/* Inflows Table */}

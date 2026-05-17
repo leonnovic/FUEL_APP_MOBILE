@@ -280,25 +280,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
 
+    // Backend-first: hits Resend if RESEND_API_KEY is set, otherwise logs the code server-side.
+    try {
+      const r = await fetch(`${(import.meta as any).env?.REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/request`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setIsPending(false);
+        return {
+          success: true,
+          message: data.email_sent
+            ? 'Reset code sent to your email.'
+            : 'Reset code generated. Check the server logs (no email key configured) or use the local fallback.',
+        };
+      }
+    } catch { /* fall through to local fallback */ }
+
     const users = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
     const found = Object.values(users).find((u: any) => u.email === email);
-
     if (!found) {
       setError('No account found with this email');
       setIsPending(false);
       return { success: false, message: 'No account found with this email' };
     }
 
-    // Generate 6-digit reset code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const codes: Record<string, { code: string; expiresAt: string }> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || '{}');
-    codes[email] = { code, expiresAt: new Date(Date.now() + 15 * 60000).toISOString() }; // 15 min expiry
+    codes[email] = { code, expiresAt: new Date(Date.now() + 30 * 60000).toISOString() };
     localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes));
 
-    // In a real app, this would send an email. Here we log it and show it.
     console.log(`[Password Reset] Code for ${email}: ${code}`);
     setIsPending(false);
-    return { success: true, code, message: 'Reset code generated. Check your email (or console for demo).' };
+    return { success: true, code, message: 'Reset code generated (local fallback). Check console.' };
   }, []);
 
   const verifyResetCode = useCallback((email: string, code: string): boolean => {
@@ -320,22 +335,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
+    // Backend-first reset using the verified code
+    const codes: Record<string, any> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || '{}');
+    const entry = codes[email];
+    if (entry) {
+      try {
+        const r = await fetch(`${(import.meta as any).env?.REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/confirm`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, code: entry.code, new_password: newPassword }),
+        });
+        if (r.ok) {
+          delete codes[email];
+          localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes));
+          // Also update local user record so offline login keeps working
+          const users: Record<string, any> = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
+          const local = Object.entries(users).find(([, u]: [string, any]) => u.email === email);
+          if (local) {
+            const [uid, ud] = local;
+            users[uid] = { ...ud, password: newPassword };
+            localStorage.setItem('fuelpro_email_users', JSON.stringify(users));
+          }
+          setIsPending(false);
+          return true;
+        }
+      } catch { /* fall through to local */ }
+    }
+
     const users: Record<string, any> = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
-    const entry = Object.entries(users).find(([, u]: [string, any]) => u.email === email);
-    if (!entry) {
+    const entryUser = Object.entries(users).find(([, u]: [string, any]) => u.email === email);
+    if (!entryUser) {
       setError('Account not found');
       setIsPending(false);
       return false;
     }
 
-    const [userId, userData] = entry;
+    const [userId, userData] = entryUser;
     users[userId] = { ...userData, password: newPassword };
     localStorage.setItem('fuelpro_email_users', JSON.stringify(users));
 
-    // Clear reset code
-    const codes: Record<string, any> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || '{}');
-    delete codes[email];
-    localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes));
+    const codes2: Record<string, any> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || '{}');
+    delete codes2[email];
+    localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes2));
 
     setIsPending(false);
     return true;
