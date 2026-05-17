@@ -257,7 +257,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
   }, [stations, adminSettings]);
 
-  useEffect(() => { persist(); }, [stations, adminSettings, persist]);
+  // CRITICAL: only persist AFTER the initial load has committed. Without this guard
+  // the persist effect runs once on mount with the seed `stations=[]` closure value,
+  // overwriting whatever was just written to localStorage (e.g. by the QuickStart
+  // button on the Welcome screen) and effectively wiping it.
+  useEffect(() => {
+    if (isStationLoading) return;
+    persist();
+  }, [stations, adminSettings, persist, isStationLoading]);
 
   // Station CRUD
   const createStation = useCallback((stationData: Partial<Station>): Station => {

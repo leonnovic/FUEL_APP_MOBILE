@@ -49,6 +49,15 @@ User's follow-up directives (all addressed in iteration 3):
 
 **Backend regression** (`/app/backend/tests/test_fuelpro_backend.py`): 32 pytest cases, 32 passing after the Stripe workaround. Idempotency verified — three repeated status calls upgrade the user exactly once.
 
+### Iter 4 — Timeout fix + Quick Start fix + Dashboard fully loads
+**Two critical user-facing bugs squashed:**
+
+1. **Trial timeout was hard-coded to 60 MINUTES** (`getTrialState()` in `TrialGate.tsx`). The banner read `Trial: 1h 0m 0s left` and locked users out after one hour. Replaced with a **14-day** trial that matches the backend's `trial_ends_at`. The banner now shows `Trial: 14d 0h left` and refreshes every 30 seconds. The progress bar is now correctly scaled (was using `totalSeconds / 3600` which made it overflow immediately). Defensive migration handles the legacy `minutesLeft` shape.
+
+2. **Quick Start button silently wiped its own state** — a race in `StationContext`. The `persist` `useEffect` was firing on mount with the seed `stations=[]` closure value *before* the `loadFromStorage` effect had committed its result, overwriting the freshly-written station from QuickStart. Fixed by gating the persist effect on `!isStationLoading`, so it only fires after the initial load commits.
+
+**Result:** Dashboard now loads exactly like the user's reference screenshot — station header, all 8 tabs (Dashboard / Point of Sale / Sales Tracking / Live Transaction / Inventory / Fuel Offloading / Delivery Tracker / Invoices), KPI cards (Revenue / Net Profit / Fuel Sold / Balance Due), Current Pump Prices, Tax & Statutory Rates, Current Location Weather, Regulatory Alerts. Trial banner displays `14d 0h left` correctly.
+
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
 - ✅ Server-side auth (register/login/me with bcrypt+JWT) with localStorage offline fallback
