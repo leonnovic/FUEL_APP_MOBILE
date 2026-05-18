@@ -51,6 +51,8 @@ JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 PUBLIC_BACKEND_URL = os.environ.get("PUBLIC_BACKEND_URL", "")  # e.g. https://create-app-1192.preview.emergentagent.com
+APP_ENV = os.environ.get("APP_ENV", "production").lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod"}
 MPESA_ENV = os.environ.get("MPESA_ENV", "sandbox")
 MPESA_CONSUMER_KEY = os.environ.get("MPESA_CONSUMER_KEY", "")
 MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "")
@@ -868,24 +870,46 @@ class PasswordResetConfirm(BaseModel):
 
 
 @api.post("/auth/password-reset/request")
-async def password_reset_request(body: PasswordResetRequest):
-    """Generate a 6-digit reset code and (best-effort) email it to the user."""
+async def password_reset_request(body: PasswordResetRequest, request: Request):
+    """Generate a 6-digit reset code and (best-effort) email it to the user.
+    Rate-limited per-IP (10/h) and per-email (3/h) to prevent enumeration & spam.
+    """
     from services.notifications import send_email, password_reset_email_html
     import secrets
 
     email = body.email.lower().strip()
-    user = await db.users.find_one({"email": email}, {"_id": 0})
+    ip = (request.client.host if request.client else "anonymous")
+    now = datetime.now(timezone.utc)
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
 
-    # Always return success-ish to avoid enumeration leaks
+    # Rate limit by IP (10/h)
+    ip_count = await db.password_resets_log.count_documents({"ip": ip, "at": {"$gt": one_hour_ago}})
+    if ip_count >= 10:
+        log.warning("Password-reset rate limit (IP) tripped: ip=%s count=%s", ip, ip_count)
+        # Constant-time response to avoid timing oracle
+        await asyncio.sleep(0.4)
+        return {"ok": True, "message": "If that email is registered we sent reset instructions."}
+    # Rate limit by email (3/h)
+    email_count = await db.password_resets_log.count_documents({"email": email, "at": {"$gt": one_hour_ago}})
+    if email_count >= 3:
+        log.warning("Password-reset rate limit (email) tripped: email=%s count=%s", email, email_count)
+        await asyncio.sleep(0.4)
+        return {"ok": True, "message": "If that email is registered we sent reset instructions."}
+
+    # Log the attempt regardless of whether the email exists
+    await db.password_resets_log.insert_one({"email": email, "ip": ip, "at": now.isoformat()})
+
+    user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user:
+        await asyncio.sleep(0.4)  # constant-time to prevent enumeration
         return {"ok": True, "message": "If that email is registered we sent reset instructions."}
 
     code = f"{secrets.randbelow(900000) + 100000}"
-    expires = datetime.now(timezone.utc) + timedelta(minutes=30)
+    expires = now + timedelta(minutes=30)
     await db.password_resets.update_one(
         {"email": email},
         {"$set": {"email": email, "code": code, "expires_at": expires.isoformat(),
-                  "used": False, "created_at": datetime.now(timezone.utc).isoformat()}},
+                  "used": False, "created_at": now.isoformat()}},
         upsert=True,
     )
 
@@ -900,12 +924,15 @@ async def password_reset_request(body: PasswordResetRequest):
     if not result.get("ok"):
         log.info("PASSWORD RESET CODE for %s = %s (delivery: %s)", email, code,
                  result.get("skipped") or result.get("error"))
-    return {
+    # Don't leak delivery details in production
+    response: dict[str, Any] = {
         "ok": True,
         "message": "If that email is registered we sent reset instructions.",
         "email_sent": result.get("ok", False),
-        "delivery": result,
     }
+    if not IS_PRODUCTION:
+        response["delivery"] = result
+    return response
 
 
 @api.post("/auth/password-reset/confirm", response_model=TokenResponse)
@@ -951,7 +978,14 @@ class InviteAccept(BaseModel):
 
 @api.post("/invites")
 async def create_invite(body: InviteCreate, user: dict = Depends(get_current_user)):
-    """Owner/manager creates an email invite. Returns the accept code + URL."""
+    """Owner/manager creates an email invite. Returns the accept code + URL.
+
+    Hardening (from iteration-6 security review):
+      • Reject if the email already belongs to a registered FuelPro user — those
+        users should sign in & be invited via a separate role-change flow.
+      • Reject if there's already a pending invite for the same email — caller
+        should resend / revoke the existing one.
+    """
     from services.notifications import send_email, invite_email_html
     import secrets
 
@@ -960,12 +994,33 @@ async def create_invite(body: InviteCreate, user: dict = Depends(get_current_use
     if body.role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
 
+    target_email = body.email.lower().strip()
+
+    # Disallow inviting an existing registered user — closes the role-downgrade vector.
+    existing_user = await db.users.find_one({"email": target_email}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(
+            status_code=409,
+            detail="That email already has a FuelPro account. Ask them to sign in directly — invite-based role changes are disabled for existing users.",
+        )
+
+    # One pending invite per email at a time.
+    pending = await db.invites.find_one({"email": target_email, "status": "pending"}, {"_id": 0})
+    if pending:
+        if datetime.fromisoformat(pending["expires_at"]) >= datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=409,
+                detail="A pending invite already exists for that email. Copy the existing link or wait until it expires.",
+            )
+        # Auto-expire stale rows
+        await db.invites.update_one({"id": pending["id"]}, {"$set": {"status": "expired"}})
+
     code = secrets.token_urlsafe(16)
     now = datetime.now(timezone.utc)
     invite_id = str(uuid.uuid4())
     invite_doc = {
         "id": invite_id, "code": code,
-        "email": body.email.lower().strip(),
+        "email": target_email,
         "role": body.role,
         "station_id": body.station_id,
         "invited_by_user_id": user["id"],
@@ -1022,6 +1077,11 @@ async def get_invite(code: str):
 
 @api.post("/invites/accept", response_model=TokenResponse)
 async def accept_invite(body: InviteAccept):
+    """Accept an invite. Hardened: only creates NEW users — invites targeting
+    an existing FuelPro account are rejected at /api/invites creation time, so
+    this endpoint shouldn't see them. If somehow one slips through we 409 here
+    too rather than silently re-assigning the existing user's role.
+    """
     inv = await db.invites.find_one({"code": body.code}, {"_id": 0})
     if not inv or inv.get("status") != "pending":
         raise HTTPException(status_code=400, detail="Invalid invite")
@@ -1032,25 +1092,23 @@ async def accept_invite(body: InviteAccept):
     now = datetime.now(timezone.utc)
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {"role": inv["role"], "updated_at": now.isoformat()}},
+        raise HTTPException(
+            status_code=409,
+            detail="That email already has a FuelPro account. Please sign in instead.",
         )
-        user_doc = await db.users.find_one({"email": email}, {"_id": 0})
-    else:
-        user_doc = {
-            "id": str(uuid.uuid4()),
-            "email": email, "name": body.name.strip(),
-            "password_hash": _hash_pw(body.password),
-            "role": inv["role"], "tier": "free",
-            "subscription_status": "trial",
-            "trial_started_at": now.isoformat(),
-            "trial_ends_at": (now + timedelta(days=14)).isoformat(),
-            "created_at": now.isoformat(), "updated_at": now.isoformat(),
-            "invited_by": inv.get("invited_by_user_id"),
-        }
-        await db.users.insert_one(user_doc)
 
+    user_doc = {
+        "id": str(uuid.uuid4()),
+        "email": email, "name": body.name.strip(),
+        "password_hash": _hash_pw(body.password),
+        "role": inv["role"], "tier": "free",
+        "subscription_status": "trial",
+        "trial_started_at": now.isoformat(),
+        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
+        "created_at": now.isoformat(), "updated_at": now.isoformat(),
+        "invited_by": inv.get("invited_by_user_id"),
+    }
+    await db.users.insert_one(user_doc)
     await db.invites.update_one({"code": body.code}, {"$set": {"status": "accepted", "accepted_at": now.isoformat()}})
     await db.audit_log.insert_one({
         "id": str(uuid.uuid4()),
@@ -1247,10 +1305,14 @@ async def oauth_cb(): return {"ok": False, "error": "oauth_not_configured"}
 app.include_router(api)
 
 
-# Catch-all AFTER router so specific handlers win
+# Catch-all AFTER router so specific handlers win.
+# In production we 404 unknown /api routes instead of returning a silent stub —
+# typo'd routes should surface loudly rather than hide behind ok:true.
 @app.api_route("/api/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def api_fallback(full_path: str, request: Request):
-    log.info("Unhandled %s /api/%s → safe stub", request.method, full_path)
+    if IS_PRODUCTION:
+        raise HTTPException(status_code=404, detail=f"Unknown API route: /api/{full_path}")
+    log.info("Unhandled %s /api/%s → safe stub (non-prod)", request.method, full_path)
     if request.method == "GET":
         return {"ok": True, "items": [], "stub": True, "path": full_path}
     return {"ok": True, "stub": True, "path": full_path}
@@ -1281,6 +1343,13 @@ async def on_startup():
         await db.password_resets.create_index("email", unique=True)
         await db.ai_reconcile_cache.create_index([("user_id", 1), ("key", 1)], unique=True)
         await db.daily_digests.create_index([("user_id", 1), ("date", -1)])
+        await db.password_resets_log.create_index([("ip", 1), ("at", -1)])
+        await db.password_resets_log.create_index([("email", 1), ("at", -1)])
+        await db.invites.create_index(
+            [("email", 1), ("status", 1)],
+            unique=True,
+            partialFilterExpression={"status": "pending"},
+        )
         for c in ALLOWED_COLLECTIONS:
             await db[f"sync_{c}"].create_index("user_id")
         log.info("MongoDB indexes ready")

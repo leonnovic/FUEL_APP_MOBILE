@@ -370,8 +370,8 @@ export default function Paywall({ onClose }: PaywallProps) {
               <Zap size={18} /> Pay Ksh {selectedTierData.priceKES.toLocaleString()} via M-PESA
             </button>
 
-            {/* Simulate button hidden — only show in dev / when no backend token */}
-            {!getBackendToken() && (
+            {/* Simulate button — DEV-only fallback when no backend token. Strip from production. */}
+            {!getBackendToken() && import.meta.env.DEV && (
               <button
                 onClick={handleSimulateSuccess}
                 style={{
@@ -380,7 +380,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                 }}
                 data-testid="paywall-simulate-btn"
               >
-                [Offline mode: Simulate successful payment]
+                [Dev only: Simulate successful payment]
               </button>
             )}
 

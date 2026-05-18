@@ -128,14 +128,20 @@ function HomeContent() {
           const raw = localStorage.getItem('fuelpro_stations_v3');
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed.length > 0) {
+            // parsed is `{stations:[...], version:'3.0'}` (object), NOT an array.
+            // The old check `parsed.length > 0` was always false (silent dead poll),
+            // and any attempt to "fix" it to an array form would cause a refresh loop.
+            // Use the correct nested shape and only reload once.
+            const list = Array.isArray(parsed) ? parsed : (parsed?.stations || []);
+            if (list.length > 0) {
               clearInterval(interval);
-              window.location.reload();
+              // Soft-refresh: re-evaluate the route without a hard reload.
+              // StationContext will re-read storage on the next render.
+              window.dispatchEvent(new CustomEvent('fuelpro:app-reload'));
             }
           }
-        } catch {}
-      }, 500);
-      // Stop polling after 10 seconds
+        } catch { /* ignore parse errors */ }
+      }, 1500);
       const timeout = setTimeout(() => clearInterval(interval), 10000);
       return () => { clearInterval(interval); clearTimeout(timeout); };
     }

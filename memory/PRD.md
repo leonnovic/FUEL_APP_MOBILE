@@ -119,6 +119,41 @@ User's follow-up directives (all addressed in iteration 3):
 **Testing**
 - Regression suite: 17/18 passing on first run; the only failure (`digest.send` not audit-logged) **fixed in-iteration** by adding the audit row in `services/digest.send_digest_to_user`. Re-verified live: `actions: ['digest.send', 'user.register']` now in audit log.
 
+### Iter 7 — Production mode + refresh fix + security hardening
+
+**🔥 Refresh bug fixed** — The Home.tsx polling loop on the welcome screen was
+checking `parsed.length > 0` against an OBJECT (`{stations:[...], version:'3.0'}`),
+which was always false (silent dead poll) but any naive "fix" to it would have
+triggered a refresh loop. Replaced with a correct nested check and swapped the
+hard `window.location.reload()` for a soft `fuelpro:app-reload` event. Verified
+end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh).
+
+**🚨 Production env mode** (`APP_ENV=production`)
+- New `IS_PRODUCTION` flag drives strict mode across `server.py`.
+- **Catch-all `/api/{path}`** — now returns **404** in production (typo'd routes surface loudly). Returns the `{ok:true, stub:true}` shape only in non-prod.
+- **Password-reset response** — no longer leaks the `delivery` field in production (avoid email-enumeration via the `skipped:'no_key'` signal).
+
+**🔒 Security hardening**
+- **Password-reset rate limiting**: 10/h per-IP + 3/h per-email, logged in `password_resets_log`. Indexed for fast lookup. Returns constant-time success message to defeat enumeration.
+- **Invite hardening (role-downgrade vector closed)**:
+  - `POST /api/invites` rejects with **409** if the target email already has a FuelPro account (existing users must sign in; admins change roles via the future role-management flow).
+  - `POST /api/invites` rejects with **409** if a pending invite already exists for that email.
+  - Mongo partial unique index on `(email, status)` where `status="pending"` enforces this at the database layer too.
+  - `POST /api/invites/accept` no longer auto-upgrades existing users' roles — only creates net-new users.
+- **Demo paths removed**: Paywall's "[Offline mode: Simulate]" button now only renders when `import.meta.env.DEV` is true (stripped from production bundles).
+
+**🌍 Location-aware (verified working)**
+- Featureflag table in `TenantContext.tsx` resolves M-PESA only for KE/TZ/UG (with company opt-out); compliance routes by country; tab visibility (Home.tsx) hides `mpesa` and `regional` tabs when feature flags say so. Pixel-confirmed: a Kenyan station shows `Kenya KES`, EPRA pump prices, NSSF/SHA rates, housing levy, Africa weather; the same code base would render USD/IRS/etc. for a US user via the same `resolveFeatureFlags(company, countryCode)` pipeline (240+ country profiles already shipped in `countries.ts`).
+
+**Verified live**
+- Catch-all: `GET /api/something-unknown-xyz` → **404** ✅
+- Password-reset: response has no `delivery` field in prod, rate-limited ✅
+- Invite dup: 1st → 200, 2nd to same email → **409** ✅
+- Invite to existing user: → **409** ✅
+- All 6 sanity endpoints still **200** ✅
+- Frontend: no refresh loop after Quick Start (URL stable for 6s+) ✅
+- `yarn build` → zero warnings, clean ✅
+
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
 - ✅ Server-side auth (register/login/me with bcrypt+JWT) with localStorage offline fallback
