@@ -87,6 +87,38 @@ User's follow-up directives (all addressed in iteration 3):
 - `POST /api/ai/reconcile-mpesa` with 1 inflow + 1 sale → `{matches:[{confidence:1.0, reason:"Exact match on amount and within 30 minutes…"}], unmatched_inflows:[], unmatched_sales:[]}` ✅
 - All 5 sanity endpoints (auth/me, subscription, fuel-prices/current, invites, audit-log) return 200.
 
+### Iter 6 — World-class push: Daily Digest + Team UI + AI cache + Audit fix
+
+**Daily Reconciliation Digest** (`services/digest.py`)
+- `build_digest_for_user` pulls yesterday's sales + M-PESA inflows from per-user collections, runs AI reconciliation, returns a summary blob with sales/inflow counts, matched count, totals, deltas, unmatched lists.
+- `render_digest_html` produces a polished dark-themed HTML email (inline CSS, table layout).
+- `send_digest_to_user` emails the digest (Resend) and upserts a row into `daily_digests` keyed by `(user_id, date)`. Also writes an `digest.send` audit row.
+- `digest_scheduler` background asyncio task fires daily at `DIGEST_HOUR_UTC` (default 04:00 UTC = 07:00 Africa/Nairobi).
+- Endpoints: `POST /api/digest/preview` (no email, returns HTML for in-app preview), `POST /api/digest/send` (force-send + persist), `GET /api/digest/history` (last 14 days).
+
+**AI reconcile cache** (`/api/ai/reconcile-mpesa`)
+- SHA-256 keyed cache scoped per-user: includes receipt/amount/date/time for inflows and id/amount/date/time/fuel_type for sales (testing-agent feedback applied).
+- First call: `cached:false`, hits the LLM. Identical second call: `cached:true`, returns same matches instantly.
+- Backed by `ai_reconcile_cache` collection.
+
+**Team Members UI** (`/#/team` → `pages/TeamManagement.tsx`)
+- Invite teammates by email with role dropdown (manager/staff/auditor).
+- Lists all sent invites with status badges (Pending / Accepted / Expired).
+- Copy-link button → puts `${origin}/#/join/{code}` on clipboard for WhatsApp/SMS sharing.
+- Open-in-tab button for testing.
+- "Sign in required" / "Failed to load" graceful empty states.
+
+**Daily Digest UI** (`/#/digest` → `pages/DailyDigestPage.tsx`)
+- Today's preview (3 KPI cards: Sales / Inflows / Matched + delta) and inline HTML preview (iframe srcDoc).
+- 14-day history table with status badges (Sent / No-key / Stored).
+- "Send to me now" button to test the email pipeline; "Refresh" button to rebuild.
+
+**Header buttons** (`components/Header.tsx`)
+- Added `Team` button (indigo) and `Digest` button (blue) next to `Admin`, both with `data-testid` for testability.
+
+**Testing**
+- Regression suite: 17/18 passing on first run; the only failure (`digest.send` not audit-logged) **fixed in-iteration** by adding the audit row in `services/digest.send_digest_to_user`. Re-verified live: `actions: ['digest.send', 'user.register']` now in audit log.
+
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
 - ✅ Server-side auth (register/login/me with bcrypt+JWT) with localStorage offline fallback
