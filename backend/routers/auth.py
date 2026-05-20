@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -95,8 +96,15 @@ async def me(user: dict = Depends(get_current_user)):
 _GENERIC_RESET_MSG = "If that email is registered we sent reset instructions."
 
 
-async def _password_reset_rate_limited(email: str, ip: str) -> bool:
-    """Return True if either the per-IP (10/h) or per-email (3/h) cap is hit."""
+async def _password_reset_rate_limited(email: str, ip: str, request: Request) -> bool:
+    """Return True if either the per-IP (10/h) or per-email (3/h) cap is hit.
+
+    Trusted internal traffic (CI, tests, replay scripts) can bypass via the
+    same `X-Fuelpro-Internal` token used by the auth-login limiter.
+    """
+    bypass = os.environ.get("AUTH_RATE_LIMIT_BYPASS_TOKEN")
+    if bypass and request.headers.get("x-fuelpro-internal") == bypass:
+        return False
     one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     ip_count = await db.password_resets_log.count_documents(
         {"ip": ip, "at": {"$gt": one_hour_ago}})
@@ -142,9 +150,9 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
     email = body.email.lower().strip()
     ip = request.client.host if request.client else "anonymous"
 
-    if await _password_reset_rate_limited(email, ip):
+    if await _password_reset_rate_limited(email, ip, request):
         await asyncio.sleep(0.4)
-        return {"ok": True, "message": _GENERIC_RESET_MSG}
+        return {"ok": True, "message": _GENERIC_RESET_MSG, "email_sent": False}
 
     await db.password_resets_log.insert_one(
         {"email": email, "ip": ip, "at": datetime.now(timezone.utc).isoformat()})
@@ -153,7 +161,7 @@ async def password_reset_request(body: PasswordResetRequest, request: Request):
     if not user:
         # Same response shape — don't leak whether the email exists
         await asyncio.sleep(0.4)
-        return {"ok": True, "message": _GENERIC_RESET_MSG}
+        return {"ok": True, "message": _GENERIC_RESET_MSG, "email_sent": False}
 
     code = await _issue_password_reset_code(email)
     result = await _send_password_reset_email(email, user, code)

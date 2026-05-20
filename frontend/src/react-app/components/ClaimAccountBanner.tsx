@@ -38,7 +38,7 @@ export default function ClaimAccountBanner() {
     if (!token) { setIsGuest(false); return; }
     fetch(`${API_BASE}/api/auth/me`, { headers: authHeader() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => setIsGuest(!!d?.user?.is_guest))
+      .then(d => setIsGuest(!!d?.is_guest))
       .catch(() => setIsGuest(false));
   }, []);
 

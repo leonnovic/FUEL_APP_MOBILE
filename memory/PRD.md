@@ -18,6 +18,53 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 24 — Claim Account banner + structured payment logs + payment-replay tests
+
+**🪪 ClaimAccountBanner — guest → real account upgrade**
+- New `components/ClaimAccountBanner.tsx` mounted globally in `App.tsx`.
+- Renders only when `/api/auth/me` returns `is_guest: true` (Quick-Start users).
+- Two states: **collapsed pill** ("You're using a guest account · Claim now") and **expanded form** (Name + Email + Password).
+- Submits to `POST /api/auth/claim-guest` — preserves `user_id`, all stations / sales / sync data intact.
+- Per-session dismissable (re-appears next launch until claimed).
+- testids: `claim-banner-collapsed`, `claim-banner-cta`, `claim-banner-expanded`, `claim-{name,email,password}-input`, `claim-submit-btn`, `claim-banner-dismiss`.
+- Schema fix: `UserOut` now includes `is_guest: bool = False` field. `_user_doc_to_out()` populates it.
+
+**📊 Structured payment logs**
+- `routers/mpesa.py`: `mpesa_stk_callback_handler` and `_activate_subscription_from_callback` now emit grep-able single-line logs:
+  - `fuelpro.mpesa.callback.parsed checkout_id=... result_code=... status=... receipt=...`
+  - `fuelpro.mpesa.activated user_id=... plan=... receipt=... amount=... period_end=...`
+- `routers/payments.py`: `_activate_subscription_from_stripe` now logs:
+  - `fuelpro.stripe.activated session_id=... user_id=... plan=... cycle=... source={live|redirect_trust} period_end=...`
+  - `fuelpro.stripe.activate.skipped session_id=... reason=no_user_id` when metadata is missing.
+- All log lines are stable structured key=value pairs designed for `tail | grep | awk` ops triage at scale.
+
+**🧪 `test_payment_replay.py` — 14 new replay tests**
+- `TestMpesaCallbackReplay` (4 tests): canonical paid payload, failed payload, empty metadata, partial metadata. All hit the live `/api/mpesa/stk-callback` endpoint.
+- `TestStripeStatusFlow` (2 tests): unknown session_id (503/404), URL-only 404 disambiguation.
+- `TestClaimGuestFlow` (4 tests): Quick-Start returns guest, claim converts (user_id preserved), rejects non-guests, rejects duplicate email.
+- `TestRefactorHelpersExist` (4 tests): imports every named helper from Iter-22/23 refactors + pure-function determinism check on `_parse_stk_callback`.
+
+**🐞 Password-reset rate-limit bypass**
+- `_password_reset_rate_limited()` now honours the same `X-Fuelpro-Internal: <AUTH_RATE_LIMIT_BYPASS_TOKEN>` header used by login/register rate-limit. CI/test runs no longer trip the per-IP 10/h cap.
+- Response shape now always includes `email_sent: bool` on every code path (no-user, rate-limited, success). Fixes a brittle assertion in `TestPasswordReset::test_full_flow`.
+- Added missing `import os` to `routers/auth.py`.
+
+**Tested**
+- Full suite: **157 passed, 4 env-skips, 0 failures** (up from 143 — added 14 replay tests).
+- `pytest tests/test_payment_replay.py` → **14/14 passing on first run**.
+- Live E2E via Playwright: Quick-Start → ClaimAccountBanner collapsed → click CTA → expanded form with all three input fields + submit button. Banner is per-session-dismissable and hidden for non-guest users.
+
+**Files added**
+- `/app/frontend/src/react-app/components/ClaimAccountBanner.tsx`
+- `/app/backend/tests/test_payment_replay.py`
+
+**Files modified**
+- `/app/frontend/src/react-app/App.tsx` — mounts `<ClaimAccountBanner />`
+- `/app/backend/core.py` — `UserOut` + `_user_doc_to_out` include `is_guest`
+- `/app/backend/routers/auth.py` — `email_sent` always present, rate-limit-bypass for password-reset, `os` import
+- `/app/backend/routers/mpesa.py` — structured logs in `mpesa_stk_callback_handler` + `_activate_subscription_from_callback`
+- `/app/backend/routers/payments.py` — structured logs in `_activate_subscription_from_stripe`
+
 ### Iter 23 — Full refactor sweep (all remaining code-review items)
 
 **Goal**: Refactor every long/high-complexity function flagged in the code review, using the 143-test suite as a regression safety net. All 6 remaining offenders done.
