@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, X, Check, Settings } from 'lucide-react';
+import { Shield, X, Settings } from 'lucide-react';
 
 /**
  * Lightweight GDPR/CCPA consent banner.
@@ -97,54 +97,52 @@ export default function ConsentManager() {
       role="dialog"
       aria-label="Privacy preferences"
       data-testid="consent-banner"
-      className="fixed inset-x-0 bottom-0 z-50 p-3 md:p-5"
+      className="fixed inset-x-0 bottom-0 z-50 p-2 sm:p-3 pointer-events-none"
     >
-      <div className="max-w-3xl mx-auto bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-start gap-3 p-4 md:p-5">
-          <Shield size={22} className="text-amber-400 flex-shrink-0 mt-0.5" />
+      <div className="max-w-md ml-auto bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden pointer-events-auto">
+        <div className="flex items-start gap-3 p-3.5 sm:p-4">
+          <Shield size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-white">Your privacy choices</h3>
-            <p className="text-xs text-gray-300 mt-1 leading-relaxed">
-              FuelPro stores essential data (login, your stations, your sales) on your account.
-              You can opt out of optional usage analytics and product update emails.
+            <h3 className="text-xs font-bold text-white">Your privacy choices</h3>
+            <p className="text-[11px] text-gray-300 mt-0.5 leading-relaxed">
+              FuelPro stores your data on your account. Opt out of optional analytics + emails any time.
             </p>
 
             {showSettings && (
-              <div className="mt-4 space-y-2.5" data-testid="consent-settings">
-                <Row label="Essential (login + your data)" desc="Required — cannot be disabled."
-                     checked disabled />
-                <Row label="Analytics" desc="Anonymised usage data so we can fix the things you actually use."
+              <div className="mt-3 space-y-2" data-testid="consent-settings">
+                <Row label="Essential" desc="Required — login + your data." checked disabled />
+                <Row label="Analytics" desc="Anonymised usage data."
                      checked={analytics} onChange={setAnalytics}
                      testId="consent-analytics" />
-                <Row label="Marketing" desc="Product updates, founder broadcasts, M-PESA receipt SMS digests."
+                <Row label="Marketing" desc="Product updates + broadcasts."
                      checked={marketing} onChange={setMarketing}
                      testId="consent-marketing" />
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-1.5 mt-3">
               {!showSettings && (
                 <>
                   <button
                     onClick={acceptAll}
                     data-testid="consent-accept-all"
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-xs font-semibold transition-colors"
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-[11px] font-semibold transition-colors"
                   >
-                    <Check size={12} className="inline mr-1" /> Accept all
+                    Accept all
                   </button>
                   <button
                     onClick={rejectNonEssential}
                     data-testid="consent-reject-nonessential"
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors"
+                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[11px] font-medium transition-colors"
                   >
-                    Reject non-essential
+                    Reject
                   </button>
                   <button
                     onClick={() => setShowSettings(true)}
                     data-testid="consent-customise"
-                    className="px-4 py-2 text-xs text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1"
+                    className="px-3 py-1.5 text-[11px] text-gray-300 hover:text-white transition-colors inline-flex items-center gap-1"
                   >
-                    <Settings size={12} /> Customise
+                    <Settings size={11} /> Customise
                   </button>
                 </>
               )}
@@ -153,13 +151,13 @@ export default function ConsentManager() {
                   <button
                     onClick={saveCustom}
                     data-testid="consent-save"
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-xs font-semibold transition-colors"
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-[11px] font-semibold transition-colors"
                   >
-                    Save preferences
+                    Save
                   </button>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className="px-4 py-2 text-xs text-gray-300 hover:text-white transition-colors"
+                    className="px-3 py-1.5 text-[11px] text-gray-300 hover:text-white transition-colors"
                   >
                     Cancel
                   </button>
@@ -174,7 +172,7 @@ export default function ConsentManager() {
               className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
               data-testid="consent-close"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           )}
         </div>
