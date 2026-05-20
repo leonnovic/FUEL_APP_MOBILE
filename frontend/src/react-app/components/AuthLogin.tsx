@@ -1,4 +1,6 @@
 import { useAuth } from '@/react-app/context/AuthContext';
+import { useI18n } from '@/react-app/context/I18nContext';
+import LanguagePicker from '@/react-app/components/LanguagePicker';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
@@ -14,6 +16,7 @@ type LoginMode = 'email' | 'username' | 'register';
 export default function AuthLogin() {
   const navigate = useNavigate();
   const { loginWithEmail, registerWithEmail, loginWithUsername, user, isPending, error, clearError } = useAuth();
+  const { t } = useI18n();
 
   const [mode, setMode] = useState<LoginMode>('email');
 
@@ -111,6 +114,7 @@ export default function AuthLogin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center p-4 overflow-hidden relative">
+      <LanguagePicker />
       {/* Animated background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
@@ -127,21 +131,21 @@ export default function AuthLogin() {
             </div>
             <div>
               <h1 className="text-3xl font-bold text-white font-serif tracking-tight">FuelPro</h1>
-              <p className="text-sm text-amber-400 font-medium">Professional Fuel Management</p>
+              <p className="text-sm text-amber-400 font-medium">{t('auth.tagline')}</p>
             </div>
           </div>
 
           <h2 className="text-xl text-gray-200 leading-relaxed">
-            Welcome to your comprehensive fuel management solution for unlimited stations
+            {t('auth.welcome')}
           </h2>
 
           <div className="space-y-3">
             {[
-              { icon: Cloud, title: 'Cloud Sync', desc: 'Your data securely synced across all devices in real-time', color: 'text-blue-400' },
-              { icon: Lock, title: 'Secure Authentication', desc: 'Password-based login with encrypted local storage', color: 'text-green-400' },
-              { icon: Zap, title: 'Real-Time Updates', desc: 'Track sales, deliveries, and payments as they happen', color: 'text-amber-400' },
-              { icon: Server, title: 'Multi-Station', desc: 'Manage unlimited stations with independent data', color: 'text-purple-400' },
-              { icon: ShieldCheck, title: 'Admin Control', desc: 'Full system management and configuration panel', color: 'text-emerald-400' },
+              { icon: Cloud, title: t('feature.cloud_sync'), desc: t('feature.cloud_sync_desc'), color: 'text-blue-400' },
+              { icon: Lock, title: t('feature.secure_auth'), desc: 'Password-based login with encrypted local storage', color: 'text-green-400' },
+              { icon: Zap, title: t('feature.realtime_updates'), desc: 'Track sales, deliveries, and payments as they happen', color: 'text-amber-400' },
+              { icon: Server, title: t('feature.multistation'), desc: 'Manage unlimited stations with independent data', color: 'text-purple-400' },
+              { icon: ShieldCheck, title: t('feature.admin_control'), desc: 'Full system management and configuration panel', color: 'text-emerald-400' },
             ].map(f => (
               <div key={f.title} className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group">
                 <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
@@ -175,14 +179,14 @@ export default function AuthLogin() {
                 </div>
                 <div className="text-left">
                   <h1 className="text-lg font-bold text-white font-serif">FuelPro</h1>
-                  <p className="text-[10px] text-amber-400">Professional Fuel Management</p>
+                  <p className="text-[10px] text-amber-400">{t('auth.tagline')}</p>
                 </div>
               </div>
               <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <KeyRound size={24} className="text-white" />
               </div>
               <h3 className="text-lg font-bold text-white font-serif">
-                {mode === 'register' ? 'Create Account' : 'Sign In'}
+                {mode === 'register' ? t('auth.create_account') : t('auth.sign_in')}
               </h3>
               <p className="text-gray-400 text-xs mt-1">
                 {mode === 'register' ? 'Join FuelPro and manage your stations' : 'Enter your credentials to continue'}
@@ -220,12 +224,10 @@ export default function AuthLogin() {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              Continue with Google
-            </button>
-
-            <div className="relative mb-4">
+              {t('auth.continue_google')}
+            </button>            <div className="relative mb-4">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div>
-              <div className="relative flex justify-center"><span className="px-3 bg-gray-900 text-[10px] text-gray-500 uppercase tracking-wider">or with email</span></div>
+              <div className="relative flex justify-center"><span className="px-3 bg-gray-900 text-[10px] text-gray-500 uppercase tracking-wider">{t('auth.or_with_email')}</span></div>
             </div>
 
             {/* Mode Tabs - only on login */}
@@ -254,7 +256,7 @@ export default function AuthLogin() {
             {mode === 'email' && (
               <form onSubmit={handleEmailLogin} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">{t('auth.email')}</label>
                   <div className="relative">
                     <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
@@ -269,10 +271,10 @@ export default function AuthLogin() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-300">Password</label>
+                    <label className="block text-xs font-medium text-gray-300">{t('auth.password')}</label>
                     <button type="button" onClick={() => navigate('/reset-password')}
                       className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors">
-                      Forgot Password?
+                      {t('auth.forgot_pw')}
                     </button>
                   </div>
                   <div className="relative">
@@ -301,7 +303,7 @@ export default function AuthLogin() {
                   {isPending ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <><LogIn size={16} /> Sign In</>
+                    <><LogIn size={16} /> {t('auth.sign_in')}</>
                   )}
                 </button>
               </form>
@@ -500,14 +502,14 @@ export default function AuthLogin() {
                   onClick={() => setMode('register')}
                   className="text-xs text-gray-400 hover:text-white flex items-center gap-1 mx-auto transition-colors"
                 >
-                  <UserPlus size={12} /> New to FuelPro? Create an account
+                  <UserPlus size={12} /> {t('auth.new_to_fuelpro')}
                 </button>
               )}
               <button
                 onClick={() => navigate('/founder')}
                 className="mt-2 text-xs text-amber-500/70 hover:text-amber-400 flex items-center gap-1 mx-auto transition-colors"
               >
-                <Crown size={12} /> Founder Access
+                <Crown size={12} /> {t('auth.founder_access')}
               </button>
             </div>
 

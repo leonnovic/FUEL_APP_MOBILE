@@ -374,17 +374,83 @@ class TestReceiptVerify:
 
 
 # ---------------------------------------------------------------- Catch-all
-class TestCatchAll:
-    def test_unknown_get_returns_stub(self, session):
-        r = session.get(f"{API}/something-totally-unknown")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["ok"] is True
-        assert body.get("stub") is True
+# Production-hardening (iter 9): unknown /api routes 404 in prod; dev returns stubs.
+import os as _os
+_IS_PROD = _os.environ.get("APP_ENV", "production").lower() in {"production", "prod"}
 
-    def test_unknown_post_returns_stub(self, session):
+
+class TestCatchAll:
+    def test_unknown_get(self, session):
+        r = session.get(f"{API}/something-totally-unknown")
+        if _IS_PROD:
+            assert r.status_code == 404
+        else:
+            assert r.status_code == 200
+            assert r.json().get("stub") is True
+
+    def test_unknown_post(self, session):
         r = session.post(f"{API}/another-unknown-route", json={"foo": "bar"})
-        assert r.status_code == 200
+        if _IS_PROD:
+            assert r.status_code == 404
+        else:
+            assert r.status_code == 200
+            assert r.json().get("stub") is True
+
+
+# ---------------------------------------------------------------- Iter 9: Users list + role PATCH
+class TestTeamRoles:
+    def test_list_users_requires_auth(self, session):
+        r = session.get(f"{API}/users")
+        assert r.status_code == 401
+
+    def test_owner_can_list_users(self, session, user_a):
+        r = session.get(f"{API}/users", headers=_auth(user_a["token"]))
+        assert r.status_code == 200, r.text
         body = r.json()
         assert body["ok"] is True
-        assert body.get("stub") is True
+        assert isinstance(body["users"], list)
+        assert any(u["id"] == user_a["user"]["id"] for u in body["users"])
+        # No password hash leakage
+        for u in body["users"]:
+            assert "password_hash" not in u
+
+    def test_role_patch_invalid_role(self, session, user_a):
+        r = session.patch(f"{API}/users/{user_a['user']['id']}/role",
+                          json={"role": "superadmin"}, headers=_auth(user_a["token"]))
+        assert r.status_code == 400
+
+    def test_role_patch_unknown_user(self, session, user_a):
+        r = session.patch(f"{API}/users/nonexistent-user-xyz/role",
+                          json={"role": "manager"}, headers=_auth(user_a["token"]))
+        assert r.status_code == 404
+
+    def test_role_patch_owner_can_change(self, session, user_a, user_b):
+        # user_a (owner) downgrades user_b to manager
+        r = session.patch(f"{API}/users/{user_b['user']['id']}/role",
+                          json={"role": "manager"}, headers=_auth(user_a["token"]))
+        assert r.status_code == 200, r.text
+        assert r.json()["role"] == "manager"
+        # Verify persistence via /auth/me using user_b token
+        me = session.get(f"{API}/auth/me", headers=_auth(user_b["token"])).json()
+        assert me["role"] == "manager"
+
+    def test_non_owner_forbidden_role_change(self, session, user_b, user_a):
+        # user_b is now 'manager' from previous test → cannot change roles
+        r = session.patch(f"{API}/users/{user_a['user']['id']}/role",
+                          json={"role": "manager"}, headers=_auth(user_b["token"]))
+        assert r.status_code == 403
+
+
+# ---------------------------------------------------------------- Iter 9: Founder login
+class TestFounder:
+    def test_founder_login_with_default_password(self, session):
+        r = session.post(f"{API}/founder/login", json={"password": "publican1D#20"})
+        # If founder seed succeeded, expect 200; if not seeded yet, accept 401 once
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert "token" in body
+        assert "must_change_password" in body
+
+    def test_founder_login_wrong_password(self, session):
+        r = session.post(f"{API}/founder/login", json={"password": "wrongpass-xyz"})
+        assert r.status_code in (401, 429)

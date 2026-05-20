@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Users, UserPlus, Copy, Mail, Crown, ShieldCheck, UserCheck, Eye,
-  CheckCircle2, Clock, Loader2, ArrowLeft, AlertCircle, ExternalLink,
+  CheckCircle2, Clock, Loader2, ArrowLeft, AlertCircle, ExternalLink, Settings,
 } from 'lucide-react';
 
 const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
@@ -28,6 +28,16 @@ interface Invite {
   expires_at: string;
 }
 
+interface TeamUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'owner' | 'manager' | 'staff' | 'auditor';
+  tier: string;
+  subscription_status: string;
+  created_at: string;
+}
+
 const ROLE_META: Record<Invite['role'], { label: string; desc: string; icon: typeof Users; color: string }> = {
   owner:   { label: 'Owner',   desc: 'Full control — billing, settings, team',   icon: Crown,       color: '#a855f7' },
   manager: { label: 'Manager', desc: 'Day-to-day operations + invite staff',     icon: ShieldCheck, color: '#3b82f6' },
@@ -38,12 +48,15 @@ const ROLE_META: Record<Invite['role'], { label: string; desc: string; icon: typ
 export default function TeamManagement() {
   const navigate = useNavigate();
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [users, setUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<Invite['role']>('staff');
   const [submitting, setSubmitting] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [roleUpdateMsg, setRoleUpdateMsg] = useState<string | null>(null);
 
   const getToken = () => localStorage.getItem('fuelpro_jwt');
 
@@ -52,13 +65,44 @@ export default function TeamManagement() {
     try {
       const token = getToken();
       if (!token) { setError('Please sign in.'); setLoading(false); return; }
-      const r = await fetch(`${API_BASE}/api/invites`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error(`Failed: ${r.status}`);
-      const data = await r.json();
-      setInvites(data.items || []);
+      // Fetch invites and team users in parallel
+      const [invitesRes, usersRes] = await Promise.all([
+        fetch(`${API_BASE}/api/invites`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (!invitesRes.ok) throw new Error(`Invites failed: ${invitesRes.status}`);
+      const invitesData = await invitesRes.json();
+      setInvites(invitesData.items || []);
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setUsers(usersData.users || []);
+      } else if (usersRes.status === 403) {
+        // Manager-only endpoint — silently skip if user isn't authorised
+        setUsers([]);
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load invites');
+      setError(e instanceof Error ? e.message : 'Failed to load team data');
     } finally { setLoading(false); }
+  };
+
+  const changeUserRole = async (userId: string, newRole: TeamUser['role']) => {
+    setSavingUserId(userId); setRoleUpdateMsg(null);
+    try {
+      const token = getToken();
+      const r = await fetch(`${API_BASE}/api/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || `Failed (${r.status})`);
+      // Update locally so the UI reflects the change immediately
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      setRoleUpdateMsg(`Role updated for ${data.user_id?.slice(0, 8) || userId.slice(0, 8)}…`);
+      setTimeout(() => setRoleUpdateMsg(null), 2500);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to change role');
+    } finally { setSavingUserId(null); }
   };
 
   useEffect(() => { load(); }, []);
@@ -265,6 +309,73 @@ export default function TeamManagement() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Role Management — owner-only section */}
+        <div className="mt-8 bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-2xl overflow-hidden" data-testid="team-roles-section">
+          <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings size={16} className="text-amber-400" />
+              <h2 className="text-sm font-bold text-amber-400">Roles & Permissions ({users.length})</h2>
+            </div>
+            {roleUpdateMsg && (
+              <span className="text-[11px] text-green-400 flex items-center gap-1" data-testid="team-role-update-msg">
+                <CheckCircle2 size={11} /> {roleUpdateMsg}
+              </span>
+            )}
+          </div>
+
+          {users.length === 0 && !loading && (
+            <div className="p-12 text-center text-gray-500 text-sm" data-testid="team-roles-empty">
+              Sign in as an owner or manager to manage roles, or no other users exist yet.
+            </div>
+          )}
+
+          {users.length > 0 && (
+            <div className="divide-y divide-white/[0.04]">
+              {users.map(u => {
+                const meta = ROLE_META[u.role] || ROLE_META.staff;
+                const Icon = meta.icon;
+                return (
+                  <div key={u.id} className="p-4 hover:bg-white/[0.03] transition-colors" data-testid={`team-role-row-${u.id}`}>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: `${meta.color}20`, color: meta.color }}
+                      >
+                        <Icon size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{u.name || u.email}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {u.email} · <span className="capitalize">{u.tier}</span> · {u.subscription_status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <select
+                          value={u.role}
+                          disabled={savingUserId === u.id}
+                          onChange={(e) => changeUserRole(u.id, e.target.value as TeamUser['role'])}
+                          className="px-2.5 py-1.5 bg-black/40 border border-white/[0.08] rounded-lg text-xs font-semibold focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                          data-testid={`team-role-select-${u.id}`}
+                        >
+                          <option value="owner">Owner</option>
+                          <option value="manager">Manager</option>
+                          <option value="staff">Staff</option>
+                          <option value="auditor">Auditor</option>
+                        </select>
+                        {savingUserId === u.id && <Loader2 size={14} className="animate-spin text-amber-400" />}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="p-3 text-[11px] text-gray-500 border-t border-white/[0.06]">
+            Only owners can change roles. Manager → Staff → Auditor are progressively read-only.
+          </div>
         </div>
       </div>
     </div>

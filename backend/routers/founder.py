@@ -1,0 +1,145 @@
+"""Founder access + role management."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from jose import jwt
+from pydantic import BaseModel, Field
+
+from core import (
+    ALLOWED_ROLES,
+    FOUNDER_DEFAULT_PASSWORD,
+    FOUNDER_EMAIL,
+    JWT_ALG,
+    JWT_SECRET,
+    _hash_pw,
+    _verify_pw,
+    db,
+    get_current_user,
+    log,
+    new_id,
+    now_iso,
+    require_founder,
+)
+
+router = APIRouter()
+
+
+class FounderLoginBody(BaseModel):
+    password: str
+
+
+class FounderChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class RoleChangeBody(BaseModel):
+    role: str
+
+
+async def ensure_founder_seeded():
+    """Idempotent founder seed — called from server.py startup."""
+    existing = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if existing:
+        return
+    await db.founder.insert_one({
+        "id": "founder",
+        "email": FOUNDER_EMAIL,
+        "password_hash": _hash_pw(FOUNDER_DEFAULT_PASSWORD),
+        "created_at": now_iso(),
+        "password_set_by_user": False,
+    })
+    log.info("Founder access seeded (default password from FOUNDER_DEFAULT_PASSWORD env)")
+
+
+@router.post("/founder/login")
+async def founder_login(body: FounderLoginBody, request: Request):
+    """Founder access verification. Rate-limited 5/h per IP."""
+    ip = request.client.host if request.client else "anonymous"
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    attempts = await db.founder_login_log.count_documents({"ip": ip, "at": {"$gt": one_hour_ago}})
+    if attempts >= 5:
+        await asyncio.sleep(0.5)
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+
+    await db.founder_login_log.insert_one({"ip": ip, "at": now_iso()})
+
+    founder = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if not founder or not _verify_pw(body.password, founder.get("password_hash", "")):
+        await asyncio.sleep(0.4)
+        raise HTTPException(status_code=401, detail="Invalid founder password")
+
+    exp = datetime.now(timezone.utc) + timedelta(hours=4)
+    token = jwt.encode({"sub": "founder", "exp": exp, "scope": "founder"},
+                       JWT_SECRET, algorithm=JWT_ALG)
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": "founder", "action": "founder.login",
+        "at": now_iso(), "meta": {"ip": ip},
+    })
+    return {
+        "ok": True, "token": token,
+        "must_change_password": not founder.get("password_set_by_user", False),
+    }
+
+
+@router.post("/founder/change-password")
+async def founder_change_password(body: FounderChangePasswordBody, _=Depends(require_founder)):
+    founder = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if not founder or not _verify_pw(body.current_password, founder.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Current password is wrong")
+    await db.founder.update_one(
+        {"id": "founder"},
+        {"$set": {"password_hash": _hash_pw(body.new_password),
+                  "password_set_by_user": True, "updated_at": now_iso()}},
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": "founder", "action": "founder.password_changed",
+        "at": now_iso(), "meta": {},
+    })
+    return {"ok": True}
+
+
+@router.get("/founder/users")
+async def founder_list_users(_=Depends(require_founder)):
+    rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(2000)
+    return {"users": rows, "ok": True, "total": len(rows)}
+
+
+@router.patch("/users/{user_id}/role")
+async def update_user_role(user_id: str, body: RoleChangeBody,
+                            caller: dict = Depends(get_current_user)):
+    """Owner can change a user's role (replaces invite-based downgrade)."""
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    if caller.get("role") not in {"owner"}:
+        raise HTTPException(status_code=403, detail="Only owners can change roles")
+
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": body.role, "updated_at": now_iso()}},
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(),
+        "user_id": caller["id"],
+        "action": "user.role_changed",
+        "at": now_iso(),
+        "meta": {"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
+    })
+    return {"ok": True, "user_id": user_id, "role": body.role}
+
+
+@router.get("/users")
+async def list_team_users(caller: dict = Depends(get_current_user)):
+    """Lists all users — owner/manager only — for the Role Management UI."""
+    if caller.get("role") not in {"owner", "manager"}:
+        raise HTTPException(status_code=403, detail="Only owners/managers can list users")
+    rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
+    return {"users": rows, "ok": True}

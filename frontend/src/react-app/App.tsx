@@ -4,6 +4,7 @@ import { StationProvider } from '@/react-app/context/StationContext';
 import { TenantProvider } from '@/react-app/context/TenantContext';
 import { ThemeProvider } from '@/react-app/context/ThemeContext';
 import { LocalizationProvider } from '@/react-app/context/LocalizationContext';
+import { I18nProvider } from '@/react-app/context/I18nContext';
 import { PermissionProvider } from '@/react-app/context/PermissionContext';
 import { FuelProvider } from "@/react-app/context/FuelContext";
 import HomePage from "@/react-app/pages/Home";
@@ -99,38 +100,40 @@ export default function App() {
     <AuthProvider>
       <ThemeProvider>
         <LocalizationProvider>
-          <PermissionProvider>
-            <Router>
-              <StripeReturnHandler />
-              <GoogleAuthCallback />
-              <Routes>
-                {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                <Route path="/founder" element={
-                  <Suspense fallback={<RouteFallback />}>
-                    <FounderAccessV2 />
-                  </Suspense>
-                } />
-                <Route path="/founder-v1" element={<Navigate to="/founder" replace />} />
-                <Route path="/admin" element={<Navigate to="/founder" replace />} />
+          <I18nProvider>
+            <PermissionProvider>
+              <Router>
+                <StripeReturnHandler />
+                <GoogleAuthCallback />
+                <Routes>
+                  {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                  <Route path="/founder" element={
+                    <Suspense fallback={<RouteFallback />}>
+                      <FounderAccessV2 />
+                    </Suspense>
+                  } />
+                  <Route path="/founder-v1" element={<Navigate to="/founder" replace />} />
+                  <Route path="/admin" element={<Navigate to="/founder" replace />} />
 
-                {/* Password Reset - public */}
-                <Route path="/reset-password" element={<PasswordReset />} />
+                  {/* Password Reset - public */}
+                  <Route path="/reset-password" element={<PasswordReset />} />
 
-                {/* Invite acceptance - public */}
-                <Route path="/join/:inviteId" element={<InviteAccept />} />
+                  {/* Invite acceptance - public */}
+                  <Route path="/join/:inviteId" element={<InviteAccept />} />
 
-                {/* Team + Digest — owner/manager tools */}
-                <Route path="/team" element={<TeamManagement />} />
-                <Route path="/digest" element={<DailyDigestPage />} />
+                  {/* Team + Digest — owner/manager tools */}
+                  <Route path="/team" element={<TeamManagement />} />
+                  <Route path="/digest" element={<DailyDigestPage />} />
 
-                {/* Main app - requires auth, shows loader while checking */}
-                <Route path="/" element={<MainAppLoader />} />
+                  {/* Main app - requires auth, shows loader while checking */}
+                  <Route path="/" element={<MainAppLoader />} />
 
-                {/* Catch all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Router>
-          </PermissionProvider>
+                  {/* Catch all */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Router>
+            </PermissionProvider>
+          </I18nProvider>
         </LocalizationProvider>
       </ThemeProvider>
     </AuthProvider>

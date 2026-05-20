@@ -1,0 +1,52 @@
+{
+  "summary": "Iter 9 full-stack test (post-refactor): 39/40 main backend regression + 16/18 iter6 features pass — remaining failures are the 3 intentional security-hardening regressions documented by the review request (Stripe redirect-trust idempotency, password-reset delivery field stripped in prod, catch-all 404 in prod). New role-management endpoints (GET /api/users, PATCH /api/users/{id}/role) work end-to-end including 403 for non-owners. Frontend: i18n picker with 7 locales works, FR translation + locale persistence verified, Founder login OK, Team Management page renders Roles & Permissions with 45 `team-role-select-{id}` dropdowns. CRITICAL BUG: trial counter banner is rendered but never ticks down — value frozen at `14d 00h 00m 00s left` for the entire session because localStorage `fuelpro_trial` is written with key `trialStartedAt` (ISO string) but TrialGate.getTrialState() reads `data.startedAt` (ms epoch) which is always undefined → `startedAt = Date.now()` every tick → msLeft = TRIAL_MS constantly. Secondary issue: Header logo upload button has no data-testid (`header-logo-button` / `header-logo-input` not present), making the spec-mandated UI assertion untestable.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/stripe/status/{sid}", "issue": "Idempotency assertion fails: after first status check the user tier auto-upgrades to 'pro' (intentional redirect-trust behavior). Tests need to drop the `tier == free` assumption."},
+      {"endpoint": "POST /api/auth/password-reset/request", "issue": "Response no longer contains `delivery` field in production (prod-hardening). iter6 test expects `delivery.skipped == 'no_key'` — needs `xfail` or guard on APP_ENV."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TrialGate", "issue": "Trial banner never decrements. After login, value stays at '14d 00h 00m 00s left' indefinitely (5 samples over 6s identical). User-visible regression of the explicit acceptance criterion 'visibly count down from 14d to 0d'. Root cause: localStorage.fuelpro_trial is persisted with shape {userId,email,trialStartedAt:ISO,...} (likely by AuthLogin / session manager) but TrialGate.tsx getTrialState() reads `data.startedAt` (numeric ms). Since `data.startedAt` is undefined, line 23 falls back to `Date.now()` on every tick → msLeft is always TRIAL_MS exactly. Fix: in getTrialState parse `data.trialStartedAt` (Date.parse) as fallback, or align the writer to also write `startedAt` numeric. Confirmed via localStorage dump in browser: {\"userId\":\"...\",\"trialStartedAt\":\"2026-05-20T08:36:48.808Z\",\"trialUsed\":false,...} — no `startedAt` key at all.", "selector": "[data-testid='trial-banner-time-left']", "priority": "HIGH"},
+      {"component": "Header", "issue": "Logo upload button / file input have no data-testid attributes. Could not drive the logo-upload flow via Playwright as specified. Recommended testids: `header-logo-button`, `header-logo-input`, `header-logo-img`.", "selector": "n/a", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fuelpro_backend.py",
+    "/app/backend/tests/test_iteration6_features.py",
+    "/app/test_reports/pytest/iteration9_main.xml",
+    "/app/test_reports/pytest/iteration9_iter6.xml"
+  ],
+  "action_items": [
+    "P0 — Fix TrialGate.getTrialState(): support `data.trialStartedAt` ISO string as fallback. Pseudocode: `const startedAt = Number.isFinite(data.startedAt) ? data.startedAt : (data.trialStartedAt ? Date.parse(data.trialStartedAt) : Date.now());` (validate NaN). Without this, the prominent trial banner is permanently stuck at 14d 00h 00m 00s.",
+    "P1 — Add data-testid to Header logo button (`header-logo-button`), file input (`header-logo-input`), and the rendered logo img (`header-logo-img`) so logo-persistence flow is reliably automatable.",
+    "P2 — Mark Stripe status-after-redirect-upgrades-user assertion as `xfail` in /app/backend/tests/test_fuelpro_backend.py (TestStripe.test_checkout_status_and_idempotency) — the upgrade is intentional now.",
+    "P2 — Mark password-reset `delivery` field test as `xfail` when APP_ENV=production in /app/backend/tests/test_iteration6_features.py (TestPasswordReset.test_full_flow)."
+  ],
+  "critical_code_review_comments": [
+    "TrialGate localStorage schema mismatch is the highest-impact bug — trivially fixable but breaks the explicit acceptance criterion of the iteration.",
+    "FuelContext.tsx is 900+ LOC with multiple persistence keys (`user_<id>_compact`, `user_<id>_companyData`, etc.) — duplicate state pathways increase risk of further sync bugs like the trial one. Consider consolidating around a single canonical storage shape with a migration helper.",
+    "server.py refactor is clean (160 LOC, routers compose via APIRouter). routers/founder.py mixes `/founder/*` and `/users` + `/users/{id}/role` — consider extracting a dedicated `routers/users.py` to clarify ownership semantics.",
+    "Catch-all in production (raise 404) is correct; verified via TestCatchAll. Logs `Unhandled %s /api/%s → safe stub (non-prod)` only triggers in dev — good operational hygiene.",
+    "PATCH /api/users/{id}/role correctly enforces owner-only and writes an audit row (action=user.role_changed). Self-demotion path is not guarded: an owner can downgrade themselves to staff and lose admin access — consider blocking self role-changes or requiring at least one remaining owner.",
+    "TestTeamRoles seeds via existing user_a/user_b session fixtures and downgrades user_b → manager; this side-effect leaks into the test_non_owner_forbidden_role_change subsequent test which depends on it. Works but is order-fragile; recommend per-test fresh users."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fuelpro_backend.py (added APP_ENV-aware catch-all assertions; new TestTeamRoles class with 6 tests covering GET /api/users + PATCH /api/users/{id}/role; new TestFounder class with founder login coverage)"
+  ],
+  "success_rate": {
+    "backend": "94% (55/58 across both suites; 3 documented-intentional failures)",
+    "frontend": "75% (i18n + locale persistence + team roles UI + founder + login flow all pass; trial counter broken; logo flow untestable for lack of data-testid)"
+  },
+  "test_credentials": "Per-run TEST_<uuid>@fuelpro.app / password123. Founder password publican1D#20 verified via POST /api/founder/login (200 + must_change_password flag returned).",
+  "seed_data_creation": "Multiple TEST_iter9_* and TEST_<uuid> users created via /api/auth/register during this iteration. user_b downgraded to 'manager' as part of TestTeamRoles. No cleanup performed — periodic Mongo prune recommended.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Trial-counter bug is a one-line fix in TrialGate.tsx (line 22-23). After fixing, sample the banner 3+ times over 4–5 seconds at viewport 1920x1080 (long-form span shows). Logo persistence flow can be tested via direct UI (Header logo button) once data-testids land; until then, the persistence layer must be verified by writing to `user_<id>_companyData` localStorage key and reloading — note that this app uses MULTIPLE storage keys (`user_<id>_compact`, `user_<id>_companyData`) so writing only one may not be respected. The 3 backend xfails (Stripe status, password-reset delivery, prod catch-all) are intentional per review request — do not re-fix.",
+  "rca of the issue": "BUG: Trial counter stuck at 14d 00h 00m 00s. RCA: /app/frontend/src/react-app/components/TrialGate.tsx line 22-23 reads `data.startedAt` (numeric epoch ms) from localStorage.fuelpro_trial. However the actual persisted shape (written elsewhere — likely AuthLogin/session manager) is `{userId, email, deviceFingerprint, trialStartedAt: <ISO string>, trialUsed, verified, ipHash}`. Field name mismatch → `data.startedAt === undefined` → line 23 fallback `let startedAt = data.startedAt || Date.now();` → startedAt is reset to current time on every getTrialState() call → msLeft = TRIAL_MS - (Date.now()-Date.now()) = TRIAL_MS exactly, every second. Reproduction: register fresh user → login → observe banner shows '14d 00h 00m 00s left' and never changes. Mitigation:\n```\nconst startedAt = Number.isFinite(data.startedAt)\n    ? data.startedAt\n    : (data.trialStartedAt ? Date.parse(data.trialStartedAt) : Date.now());\nif (!Number.isFinite(startedAt) || startedAt > Date.now()) { ... }\n```\nAdditionally normalize the writer so both forms exist (write both `startedAt: ms` and `trialStartedAt: ISO`) for backwards-compat with any legacy code."
+}
