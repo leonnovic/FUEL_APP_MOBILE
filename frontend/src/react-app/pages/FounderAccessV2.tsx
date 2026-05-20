@@ -8,6 +8,7 @@ import {
   CheckCircle2, AlertTriangle, X, Save, Moon, Sun, Menu, XCircle,
   ChevronDown, ChevronUp, Search, Globe
 } from 'lucide-react';
+import MockedVsLiveBanner from '@/react-app/components/MockedVsLiveBanner';
 
 // ─── Storage Keys ───
 const SESSION_KEY = 'fuelpro_founder_session';
@@ -276,6 +277,7 @@ function DashboardSection() {
         <h2 className="text-xl font-bold text-white">Dashboard</h2>
         <p className="text-sm text-gray-500 mt-1">Overview of your FuelPro platform</p>
       </div>
+      <MockedVsLiveBanner />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Total Revenue" value={`$${totalRevenue.toLocaleString()}`} icon={DollarSign} color="text-amber-400" />
         <KpiCard title="Total Sales" value={totalSales} icon={ShoppingCart} color="text-emerald-400" />

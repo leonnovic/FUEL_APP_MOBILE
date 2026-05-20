@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Mail, Send, RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History } from 'lucide-react';
+import PushNotificationToggle from '@/react-app/components/PushNotificationToggle';
 
 const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -125,6 +126,12 @@ export default function DailyDigestPage() {
             <p className="text-sm text-amber-200">{sendResult}</p>
           </div>
         )}
+
+        {/* Push notifications opt-in */}
+        <section className="mb-8" data-testid="digest-push-section">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Browser notifications</h2>
+          <PushNotificationToggle />
+        </section>
 
         {/* Today's preview */}
         <section className="mb-10">

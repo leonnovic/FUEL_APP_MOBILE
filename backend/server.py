@@ -26,7 +26,7 @@ from core import (
     db,
     log,
 )
-from routers import auth, digest, features, founder, founder_ops, identity, invites, misc, mpesa, oauth_extra, payments, storage, sync, ws
+from routers import auth, digest, features, founder, founder_ops, identity, invites, misc, mpesa, oauth_extra, payments, push, storage, sync, ws
 from routers import health as health_router
 from routers.founder import ensure_founder_seeded
 from routers.founder_ops import apply_runtime_config_to_env
@@ -71,6 +71,7 @@ api.include_router(payments.router)
 api.include_router(mpesa.router)
 api.include_router(sync.router)
 api.include_router(storage.router)
+api.include_router(push.router)
 api.include_router(ws.router)
 api.include_router(invites.router)
 api.include_router(identity.router)
@@ -153,6 +154,8 @@ async def on_startup():
         await db.storage_files.create_index("key", unique=True)
         await db.identity_links.create_index([("anonymous_id", 1), ("user_id", 1)], unique=True)
         await db.identity_links.create_index("user_id")
+        await db.push_subscriptions.create_index("endpoint", unique=True)
+        await db.push_subscriptions.create_index("user_id")
         await db.invites.create_index(
             [("email", 1), ("status", 1)],
             unique=True,

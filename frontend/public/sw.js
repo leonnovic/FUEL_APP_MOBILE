@@ -106,3 +106,70 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(cacheFirst(request, RUNTIME_CACHE));
 });
+
+// ---------------------------------------------------------------------------
+// Web Push handling (cross-platform: Chrome/Edge/Firefox/Android + iOS 16.4+ PWA)
+// ---------------------------------------------------------------------------
+self.addEventListener('push', (event) => {
+  let payload = { title: 'FuelPro', body: 'You have a new notification.', url: '/', icon: '/logo-small.png', tag: 'fuelpro' };
+  try {
+    if (event.data) {
+      const text = event.data.text();
+      try { payload = { ...payload, ...JSON.parse(text) }; }
+      catch { payload.body = text || payload.body; }
+    }
+  } catch { /* ignore */ }
+
+  const opts = {
+    body: payload.body,
+    icon: payload.icon || '/logo-small.png',
+    badge: '/logo-small.png',
+    tag: payload.tag || 'fuelpro',
+    renotify: !!payload.tag,
+    data: { url: payload.url || '/' },
+    requireInteraction: false,
+  };
+  event.waitUntil(self.registration.showNotification(payload.title, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Focus an existing tab on the same origin if any
+      for (const client of clientList) {
+        try {
+          const u = new URL(client.url);
+          if (u.origin === self.location.origin && 'focus' in client) {
+            client.focus();
+            if ('navigate' in client) client.navigate(targetUrl);
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+      // Otherwise open a fresh window
+      if (self.clients.openWindow) self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  // Browser rotated the subscription — try to re-subscribe with stored VAPID key
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(STATIC_CACHE);
+      const stored = await cache.match('/_vapid_pubkey');
+      let appKey = null;
+      if (stored) appKey = await stored.text();
+      else {
+        // Best-effort: fetch from API
+        const r = await fetch('/api/push/public-key');
+        if (r.ok) { const j = await r.json(); appKey = j.public_key; }
+      }
+      if (!appKey) return;
+      const arr = Uint8Array.from(atob((appKey + '='.repeat((4 - appKey.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: arr });
+    } catch { /* ignore */ }
+  })());
+});

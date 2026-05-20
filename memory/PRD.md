@@ -18,6 +18,32 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 29 — FCM-free Web Push + Founder mocked/live banner + Deploy checklist (Feb 2026)
+
+**🟢 New: Web Push (cross-platform)**
+- VAPID key pair generated (stored in `/app/backend/.env` as `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`). No Firebase / no service-account JSON needed.
+- Backend `routers/push.py`: `/api/push/public-key`, `/subscribe`, `/unsubscribe`, `/test`, `/subscriptions`, `/broadcast` (founder).
+- Backend dep adds: `pywebpush==2.3.0`, `py-vapid==1.9.4`, `http_ece==1.2.1`.
+- Subscriptions persisted in MongoDB `push_subscriptions` collection (indexed on `endpoint` unique + `user_id`).
+- Frontend `hooks/usePushNotifications.ts` — handles permission → VAPID subscribe → server persist; exposes `iosNeedsInstall` flag.
+- Frontend `components/PushNotificationToggle.tsx` — Enable/Disable/Send-test buttons, iOS install hint.
+- Mounted in `pages/DailyDigestPage.tsx` under a "Browser notifications" section.
+- SW (`public/sw.js`) extended with `push`, `notificationclick`, `pushsubscriptionchange` handlers. Notification click focuses existing tab and navigates, otherwise opens a new window.
+- 5 new pytest cases (`tests/test_push.py`) all green. Full suite: **162 passed**.
+
+**🟢 New: Founder Mocked-vs-Live banner**
+- `components/MockedVsLiveBanner.tsx` polls `/api/founder/integrations` every 60s and shows live/mocked status for Stripe, M-PESA, Resend, Twilio, AWS S3, Apple, Microsoft — with a single "X/7 live" pill summary.
+- Mounted at top of `FounderAccessV2` → DashboardSection. Auto-refresh + collapse.
+
+**🟢 New: Deploy checklist**
+- `/app/memory/DEPLOY_CHECKLIST.md` — pre-deploy verification, env vars to mirror in prod (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACT_EMAIL`), post-deploy smoke tests, rollback procedure, key-paste guide.
+
+**Files modified/created**
+- New: `backend/routers/push.py`, `backend/tests/test_push.py`, `frontend/src/react-app/hooks/usePushNotifications.ts`, `frontend/src/react-app/components/PushNotificationToggle.tsx`, `frontend/src/react-app/components/MockedVsLiveBanner.tsx`, `memory/DEPLOY_CHECKLIST.md`
+- Edited: `backend/server.py` (router register + index), `backend/requirements.txt` (push deps), `backend/.env` (VAPID), `frontend/public/sw.js` (push events), `frontend/src/react-app/pages/DailyDigestPage.tsx` (push toggle), `frontend/src/react-app/pages/FounderAccessV2.tsx` (mocked-live banner)
+
+**Testing**: backend **162 passed**, 4 skipped, no regressions. Frontend HMR clean, app renders.
+
 ### Iter 28 — Cross-platform PWA upgrades + dep prune (Feb 2026)
 
 **🟢 Added**
