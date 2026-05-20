@@ -254,6 +254,57 @@ async def founder_extend_trial(user_id: str, body: dict, _=Depends(require_found
     return {"ok": True, "trial_ends_at": new_end.isoformat()}
 
 
+@router.get("/founder/audit")
+async def founder_audit_trail(_=Depends(require_founder), limit: int = 200):
+    """Return the recent founder-scope audit log entries."""
+    rows = await db.audit_log.find(
+        {"action": {"$regex": "^founder\\."}}, {"_id": 0},
+    ).sort("at", -1).to_list(limit)
+    return {"items": rows, "total": len(rows), "ok": True}
+
+
+@router.post("/founder/integrations/test/{service}")
+async def test_integration(service: str, body: dict, _=Depends(require_founder)):
+    """Send a test email / SMS / STK push using current runtime keys.
+    body = {"to": "...", "message": "..."}"""
+    to = (body.get("to") or "").strip()
+    msg = (body.get("message") or "FuelPro test message").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="`to` is required")
+
+    if service == "resend":
+        from services.notifications import send_email
+        result = await send_email(
+            to=to, subject="FuelPro test email",
+            html=f"<p>{msg}</p><p>If you can read this, Resend is wired correctly.</p>",
+            text=msg,
+        )
+        return {"ok": result.get("ok", False), "result": result}
+
+    if service == "twilio":
+        from services.notifications import send_sms
+        result = await send_sms(to=to, body=msg + " (FuelPro Twilio test)")
+        return {"ok": result.get("ok", False), "result": result}
+
+    if service == "daraja":
+        from routers.mpesa import daraja
+        if not daraja.configured():
+            return {"ok": False, "error": "Daraja keys not configured"}
+        try:
+            tok = await daraja.token()
+            return {"ok": True, "token_preview": tok[:6] + "…", "env": os.environ.get("MPESA_ENV", "sandbox")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    if service == "stripe":
+        key = os.environ.get("STRIPE_API_KEY", "")
+        return {"ok": bool(key), "key_present": bool(key),
+                "key_preview": (key[:7] + "…" + key[-4:]) if key else None,
+                "trust_redirect": os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"}
+
+    raise HTTPException(status_code=400, detail=f"Unknown service: {service}")
+
+
 @router.post("/founder/users/{user_id}/grant-subscription")
 async def founder_grant_subscription(user_id: str, body: dict, _=Depends(require_founder)):
     """Comp a paid subscription tier to a user (no payment needed). Audit-logged."""

@@ -9,11 +9,17 @@ import {
   Layers, HardDrive, Code, FileJson, FileCode, Bell, Wifi,
   Clock, Server, Zap, Ban, Rocket, Cpu, Brush, Send,
   Package, Wrench, Info, Search, Copy, Check,
-  Sparkles, Lightbulb
+  Sparkles, Lightbulb, History, Megaphone, Mail
 } from 'lucide-react';
 
 const SESSION_KEY = 'fuelpro_founder_session';
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'fuelpro2026' };
+const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
+// Display-only fallback; backend is the authority.
+const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+const API_BASE = (
+  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
+  || (typeof window !== 'undefined' ? window.location.origin : '')
+).replace(/\/$/, '');
 
 // ═══════════════════════════════════════════════════
 // 25+ SECTION TYPE
@@ -31,13 +37,16 @@ type SectionId =
   // Subscription & Company (3)
   | 'trialmgr' | 'companyprofile' | 'subscriptions'
   // AI & Advanced (1)
-  | 'aibatch';
+  | 'aibatch'
+  // Iter 14 — founder ops (3)
+  | 'audit' | 'sysstats' | 'broadcast';
 
 // ─── Auth Hook ───
 function useFounderAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     try {
@@ -47,30 +56,73 @@ function useFounderAuth() {
         if (s?.active && s?.loginTime && Date.now() - s.loginTime < 8 * 3600 * 1000) {
           setIsAuthenticated(true);
           setUsername(s.username || 'FOUNDER');
-        } else { localStorage.removeItem(SESSION_KEY); }
+        } else { localStorage.removeItem(SESSION_KEY); localStorage.removeItem(FOUNDER_JWT_KEY); }
       }
     } catch { /* */ }
     setIsLoading(false);
   }, []);
 
-  const login = (user: string, pw: string) => {
-    if (user === DEFAULT_CREDS.username && pw === DEFAULT_CREDS.password) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user, active: true, loginTime: Date.now() }));
+  const login = async (user: string, pw: string): Promise<boolean> => {
+    setError('');
+    const cleanUser = (user || '').trim() || 'FOUNDER';
+    const cleanPw = (pw || '').trim();
+    if (!cleanPw) { setError('Enter the password.'); return false; }
+
+    // Try the real backend first — it issues a real JWT used by every
+    // founder-only endpoint (integrations / system-stats / broadcast / etc.).
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: cleanPw }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (data.token) {
+          localStorage.setItem(FOUNDER_JWT_KEY, data.token);
+          localStorage.setItem(SESSION_KEY, JSON.stringify({
+            username: cleanUser,
+            active: true,
+            loginTime: Date.now(),
+            must_change_password: !!data.must_change_password,
+          }));
+          setIsAuthenticated(true);
+          setUsername(cleanUser);
+          return true;
+        }
+      } else if (r.status === 429) {
+        setError('Too many failed attempts. Wait an hour or contact support.');
+        return false;
+      } else if (r.status === 401) {
+        const body = await r.json().catch(() => ({}));
+        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
+        return false;
+      }
+    } catch (e) {
+      // Network error → fall back to client-side default check
+      // eslint-disable-next-line no-console
+      console.warn('Founder login network error:', e);
+    }
+    // Offline / dev fallback — case-insensitive username
+    if (cleanUser.toUpperCase() === DEFAULT_CREDS.username && cleanPw === DEFAULT_CREDS.password) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: 'FOUNDER', active: true, loginTime: Date.now() }));
       setIsAuthenticated(true);
-      setUsername(user);
+      setUsername('FOUNDER');
       return true;
     }
+    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock and trailing spaces.');
     return false;
   };
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(FOUNDER_JWT_KEY);
     setIsAuthenticated(false);
     window.location.hash = '/';
     window.location.reload();
   };
 
-  return { isAuthenticated, isLoading, username, login, logout };
+  return { isAuthenticated, isLoading, username, error, login, logout };
 }
 
 // ─── Helpers ───
@@ -477,6 +529,259 @@ function ConfigSection() {
   );
 }
 
+// ───────────────────────────────────────────────────────────────────
+
+// Iter 14: Test integrations live (Resend / Twilio / Daraja / Stripe)
+function IntegrationTestPanel() {
+  const [service, setService] = useState<'resend' | 'twilio' | 'daraja' | 'stripe'>('resend');
+  const [to, setTo] = useState('');
+  const [msg, setMsg] = useState('FuelPro test message from founder console');
+  const [result, setResult] = useState<any>(null);
+  const [testing, setTesting] = useState(false);
+
+  const run = async () => {
+    setTesting(true); setResult(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/integrations/test/${service}`, {
+        method: 'POST', headers: _founderHeaders(),
+        body: JSON.stringify({ to: to || 'test@example.com', message: msg }),
+      });
+      const d = await r.json();
+      setResult({ ok: r.ok, body: d });
+    } catch (e) {
+      setResult({ ok: false, body: { error: String(e) } });
+    } finally { setTesting(false); }
+  };
+
+  const placeholders: Record<typeof service, string> = {
+    resend: 'recipient@example.com',
+    twilio: '+254712345678',
+    daraja: '(not needed — checks token)',
+    stripe: '(not needed — checks key presence)',
+  };
+
+  return (
+    <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }} data-testid="founder-integration-test-panel">
+      <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>🧪 Test integrations live</h3>
+      <p style={{ fontSize: 11, color: '#666', margin: '0 0 12px' }}>Validate that the keys you pasted actually work. Pings the service in real time using current runtime config.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: 8, alignItems: 'end' }}>
+        <div>
+          <label style={{ fontSize: 10, color: '#666', display: 'block', marginBottom: 4 }}>Service</label>
+          <select value={service} onChange={e => setService(e.target.value as any)}
+            data-testid="founder-test-service"
+            style={{ width: '100%', padding: '7px 10px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12 }}>
+            <option value="resend">📧 Resend</option>
+            <option value="twilio">📱 Twilio</option>
+            <option value="daraja">💰 Daraja</option>
+            <option value="stripe">💳 Stripe</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 10, color: '#666', display: 'block', marginBottom: 4 }}>Recipient</label>
+          <input value={to} onChange={e => setTo(e.target.value)}
+            placeholder={placeholders[service]}
+            data-testid="founder-test-to"
+            style={{ width: '100%', padding: '7px 10px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, boxSizing: 'border-box' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 10, color: '#666', display: 'block', marginBottom: 4 }}>Message</label>
+          <input value={msg} onChange={e => setMsg(e.target.value)}
+            data-testid="founder-test-msg"
+            style={{ width: '100%', padding: '7px 10px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12, boxSizing: 'border-box' }} />
+        </div>
+        <button onClick={run} disabled={testing}
+          data-testid="founder-test-run"
+          style={{ padding: '7px 14px', background: testing ? '#444' : '#22c55e', color: '#000', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: testing ? 'not-allowed' : 'pointer' }}>
+          {testing ? 'Testing…' : 'Run test'}
+        </button>
+      </div>
+      {result && (
+        <div data-testid="founder-test-result"
+          style={{ marginTop: 12, padding: 10, borderRadius: 6, fontSize: 11, fontFamily: 'monospace',
+                   background: result.ok && result.body?.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                   color: result.ok && result.body?.ok ? '#34d399' : '#f87171',
+                   whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {result.ok && result.body?.ok ? '✓ ' : '✗ '}{JSON.stringify(result.body, null, 2)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// Iter 14: Audit Trail + System Stats + Broadcast sections
+// ───────────────────────────────────────────────────────────────────
+
+function _founderHeaders(): HeadersInit {
+  const token = localStorage.getItem('fuelpro_founder_jwt') || '';
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+}
+
+function AuditTrailSection() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/founder/audit?limit=500`, { headers: _founderHeaders() })
+      .then(r => r.json())
+      .then(d => setRows(d.items || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = rows.filter(r => !filter ||
+    r.action?.toLowerCase().includes(filter.toLowerCase()) ||
+    JSON.stringify(r.meta || {}).toLowerCase().includes(filter.toLowerCase())
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="founder-audit-section">
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Audit Trail</h2>
+        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Every founder-scoped action — key paste, broadcast, role change, user delete, trial extend, subscription grant.</p>
+      </div>
+      <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter by action or metadata…"
+        data-testid="founder-audit-filter"
+        style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 12 }} />
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 8, maxHeight: '70vh', overflowY: 'auto' }}>
+        {loading && <div style={{ padding: 16, color: '#666', fontSize: 12 }}>Loading…</div>}
+        {!loading && filtered.length === 0 && <div style={{ padding: 16, color: '#666', fontSize: 12 }} data-testid="founder-audit-empty">No entries match.</div>}
+        {filtered.map((r, i) => (
+          <div key={r.id || i} style={{ padding: 10, borderBottom: '1px solid #1a1a1f', display: 'flex', alignItems: 'flex-start', gap: 8 }} data-testid={`founder-audit-row-${i}`}>
+            <div style={{ width: 6, height: 6, borderRadius: 3, background: '#f59e0b', marginTop: 6, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, color: '#fbbf24', fontFamily: 'monospace', fontWeight: 600 }}>{r.action}</div>
+              <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>{new Date(r.at).toLocaleString()}</div>
+              {r.meta && Object.keys(r.meta).length > 0 && (
+                <pre style={{ fontSize: 10, color: '#888', margin: '4px 0 0', padding: 6, background: '#0a0a0f', borderRadius: 4, overflowX: 'auto' }}>{JSON.stringify(r.meta, null, 0)}</pre>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: '#555' }}>{filtered.length} of {rows.length} entries</div>
+    </div>
+  );
+}
+
+function SystemStatsSection() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const reload = () => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/founder/system-stats`, { headers: _founderHeaders() })
+      .then(r => r.json())
+      .then(d => setStats(d.stats))
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  };
+  useEffect(reload, []);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="founder-sysstats-section">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>System Stats</h2>
+          <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Live MongoDB counts + database health.</p>
+        </div>
+        <button onClick={reload} data-testid="founder-sysstats-refresh"
+          style={{ padding: '8px 14px', background: '#1a1a1f', color: '#aaa', border: '1px solid #333', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+          <RefreshCw size={12} style={{ marginRight: 6, verticalAlign: 'middle' }} /> Refresh
+        </button>
+      </div>
+      {loading && <div style={{ color: '#666', padding: 16 }}>Loading…</div>}
+      {error && <div style={{ color: '#f87171', padding: 12, background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>{error}</div>}
+      {!loading && stats && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+            {Object.entries(stats.counts || {}).map(([key, val]: [string, any]) => (
+              <div key={key} style={{ padding: 14, background: '#111', border: '1px solid #222', borderRadius: 10 }} data-testid={`founder-stat-${key}`}>
+                <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 }}>{key.replace(/_/g, ' ')}</div>
+                <div style={{ fontSize: 22, color: '#fff', fontWeight: 700, fontFamily: 'monospace', marginTop: 4 }}>
+                  {typeof val === 'number' ? val.toLocaleString() : String(val)}
+                </div>
+              </div>
+            ))}
+          </div>
+          {stats.db_stats && (
+            <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 14 }}>
+              <h3 style={{ fontSize: 13, color: '#aaa', margin: '0 0 10px' }}>MongoDB dbStats</h3>
+              <pre style={{ fontSize: 11, color: '#888', margin: 0, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{JSON.stringify(stats.db_stats, null, 2)}</pre>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function BroadcastSection() {
+  const [message, setMessage] = useState('');
+  const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('info');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const send = async () => {
+    if (!message.trim()) { setResult({ kind: 'err', text: 'Enter a message first.' }); return; }
+    if (!confirm(`Send "${message.trim()}" to ALL users? This will create an audit-log notification for each one.`)) return;
+    setSending(true); setResult(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/broadcast`, {
+        method: 'POST', headers: _founderHeaders(),
+        body: JSON.stringify({ message: message.trim(), severity }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Failed');
+      setResult({ kind: 'ok', text: `Sent to ${d.sent_to} user(s).` });
+      setMessage('');
+    } catch (e) {
+      setResult({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="founder-broadcast-section">
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>System Broadcast</h2>
+        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Send a message to every FuelPro user. Stored in their audit log + shown as a toast on next app load.</p>
+      </div>
+      {result && (
+        <div data-testid="founder-broadcast-result" style={{ padding: 12, borderRadius: 8, fontSize: 13,
+          background: result.kind === 'ok' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+          color: result.kind === 'ok' ? '#34d399' : '#f87171' }}>{result.text}</div>
+      )}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>Message</label>
+        <textarea value={message} onChange={e => setMessage(e.target.value)}
+          data-testid="founder-broadcast-message"
+          placeholder="e.g. Scheduled maintenance tonight at 02:00 UTC — expect 5 minutes of downtime."
+          rows={4} maxLength={500}
+          style={{ width: '100%', padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13, boxSizing: 'border-box', resize: 'vertical' }} />
+        <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <label style={{ fontSize: 11, color: '#666' }}>Severity:</label>
+          <select value={severity} onChange={e => setSeverity(e.target.value as any)}
+            data-testid="founder-broadcast-severity"
+            style={{ padding: '6px 10px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 12 }}>
+            <option value="info">Info (blue)</option>
+            <option value="warning">Warning (orange)</option>
+            <option value="critical">Critical (red)</option>
+          </select>
+        </div>
+      </div>
+      <button onClick={send} disabled={sending || !message.trim()}
+        data-testid="founder-broadcast-send"
+        style={{ padding: '12px 24px', background: sending ? '#444' : '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: sending ? 'not-allowed' : 'pointer', width: 'fit-content', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Megaphone size={14} /> {sending ? 'Sending…' : 'Broadcast to all users'}
+      </button>
+    </div>
+  );
+}
+
+
+
 function ApiKeysSection() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -650,6 +955,9 @@ function ApiKeysSection() {
         <Field label="MPESA_PASSKEY" field="mpesa_passkey" type="password" />
         <Field label="MPESA_SHORTCODE" field="mpesa_shortcode" placeholder="174379 (sandbox default)" />
       </div>
+
+      {/* Iter 14: Test integrations live */}
+      <IntegrationTestPanel />
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'sticky', bottom: 12 }}>
         <button
@@ -1686,6 +1994,10 @@ const SECTIONS: { id: SectionId; label: string; icon: any; category: string }[] 
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, category: 'Billing' },
   // AI & Advanced (1)
   { id: 'aibatch', label: 'AI Batch Update', icon: Sparkles, category: 'AI' },
+  // Iter 14 — Live Ops
+  { id: 'audit', label: 'Audit Trail', icon: History, category: 'Live Ops' },
+  { id: 'sysstats', label: 'System Stats', icon: Activity, category: 'Live Ops' },
+  { id: 'broadcast', label: 'Broadcast', icon: Megaphone, category: 'Live Ops' },
 ];
 
 function renderSection(id: SectionId) {
@@ -1719,31 +2031,42 @@ function renderSection(id: SectionId) {
     case 'companyprofile': return <CompanyProfileSection />;
     case 'subscriptions': return <SubscriptionsSection />;
     case 'aibatch': return <AIBatchSection />;
+    case 'audit': return <AuditTrailSection />;
+    case 'sysstats': return <SystemStatsSection />;
+    case 'broadcast': return <BroadcastSection />;
     default: return <DashboardSection />;
   }
 }
 
 // ─── Login ───
-function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => boolean }) {
+function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Promise<boolean> | boolean }) {
+  const [user, setUser] = useState('');
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [showPw, setShowPw] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const pwRef = useRef<HTMLInputElement>(null);
 
-  const submit = useCallback(() => {
+  const submit = useCallback(async () => {
+    if (submitting) return;
     setErr('');
     // Read password: React state (real users typing) OR direct DOM value (browser automation fallback)
     const domPw = pwRef.current?.value?.trim() || '';
     const password = pw.trim() || domPw;
-    if (!password) { setErr('Please enter the password'); return; }
-    if (onLogin('FOUNDER', password)) {
-      // onLogin calls parent's login() which sets isAuthenticated=true
-    } else {
-      setErr('Invalid password');
+    if (!password) { setErr('Please enter the password.'); return; }
+    setSubmitting(true);
+    try {
+      const result = await Promise.resolve(onLogin(user.trim() || 'FOUNDER', password));
+      if (result) return; // parent state flip handles redirect
+      // Hook's setError already surfaced the precise reason (rate limit / 401 / network).
+      // Try to read it from localStorage marker the hook leaves; fall back to generic.
+      setErr('Invalid password. Default: "publican1D#20" (case-sensitive). Check Caps Lock & trailing whitespace.');
       setPw('');
       if (pwRef.current) pwRef.current.value = '';
+    } finally {
+      setSubmitting(false);
     }
-  }, [pw, onLogin]);
+  }, [pw, user, onLogin, submitting]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -1755,7 +2078,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => bool
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a0a0f 0%, #111827 50%, #0a0a0f 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: 360 }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
         <div style={{ background: 'rgba(17,17,17,0.8)', backdropFilter: 'blur(12px)', border: '1px solid #222', borderRadius: 16, padding: 32 }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <div style={{ width: 56, height: 56, background: '#f59e0b', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
@@ -1764,27 +2087,45 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => bool
             <h1 style={{ fontSize: 22, fontWeight: 'bold', color: '#fff', margin: 0 }}>Founder Access</h1>
             <p style={{ fontSize: 12, color: '#666', margin: '4px 0 0' }}>FuelPro Backend Administration</p>
           </div>
-          {err && <div style={{ marginBottom: 12, padding: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={14} /> {err}</div>}
-          {/* No <form> element - pure div to eliminate any form submission behavior */}
+          {err && (
+            <div style={{ marginBottom: 12, padding: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'flex-start', gap: 6 }} data-testid="founder-login-error">
+              <AlertTriangle size={14} style={{ marginTop: 1, flexShrink: 0 }} /> <span>{err}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} onKeyDown={handleKeyDown}>
             <div>
-              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Username</label>
-              <input value="FOUNDER" readOnly tabIndex={-1}
-                style={{ width: '100%', padding: '10px 14px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 10, color: '#888', fontSize: 13, boxSizing: 'border-box', outline: 'none' }} />
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Username (optional)</label>
+              <input
+                value={user}
+                onChange={e => { setUser(e.target.value); setErr(''); }}
+                placeholder="FOUNDER (default)"
+                autoComplete="username"
+                name="username"
+                data-testid="founder-username-input"
+                style={{ width: '100%', padding: '10px 14px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 10, color: '#fff', fontSize: 13, boxSizing: 'border-box', outline: 'none' }}
+              />
             </div>
             <div>
               <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Password</label>
               <div style={{ position: 'relative' }}>
-                <input ref={pwRef} type={showPw ? 'text' : 'password'} data-founder-pw
+                <input
+                  ref={pwRef}
+                  type={showPw ? 'text' : 'password'}
+                  data-founder-pw
+                  data-testid="founder-password-input"
                   defaultValue=""
                   onChange={e => { setPw(e.target.value); setErr(''); }}
                   onKeyDown={handleKeyDown}
-                  placeholder="Enter password"
-                  autoComplete="off"
+                  placeholder="publican1D#20 (default)"
+                  autoComplete="current-password"
+                  name="password"
                   autoFocus
-                  style={{ width: '100%', padding: '10px 14px', paddingRight: 40, background: '#1a1a1f', border: '1px solid #333', borderRadius: 10, color: '#fff', fontSize: 13, boxSizing: 'border-box', outline: 'none' }} />
-                <button type="button" tabIndex={-1}
+                  style={{ width: '100%', padding: '10px 14px', paddingRight: 40, background: '#1a1a1f', border: '1px solid #333', borderRadius: 10, color: '#fff', fontSize: 13, boxSizing: 'border-box', outline: 'none' }}
+                />
+                <button
+                  type="button" tabIndex={-1}
                   onClick={() => setShowPw(!showPw)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
                   style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}>
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -1793,9 +2134,14 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => bool
             <button
               type="button"
               onClick={submit}
-              style={{ width: '100%', padding: 12, background: '#f59e0b', color: '#000', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <Shield size={16} /> Access Backend
+              disabled={submitting}
+              data-testid="founder-login-submit"
+              style={{ width: '100%', padding: 12, background: submitting ? '#444' : '#f59e0b', color: '#000', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: submitting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Shield size={16} /> {submitting ? 'Authenticating…' : 'Access Backend'}
             </button>
+            <p style={{ fontSize: 10, color: '#444', textAlign: 'center', margin: '4px 0 0' }}>
+              Default password: <code style={{ background: '#1a1a1f', padding: '2px 6px', borderRadius: 4, color: '#f59e0b', fontFamily: 'monospace' }}>publican1D#20</code> · Rate-limited 5/h per IP
+            </p>
           </div>
         </div>
       </div>

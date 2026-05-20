@@ -127,20 +127,32 @@ type SectionId = 'dashboard' | 'users' | 'stations' | 'sales' | 'inventory'
 //  LOGIN COMPONENT
 // ═══════════════════════════════════════════════════
 function FounderLogin({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('FOUNDER');
+  // Pre-filled but immediately editable. Removing the value lets the user
+  // tab/type freely without fighting browser autofill that may stamp it.
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login } = useFounderAuth();
+  const { login, error: ctxError } = useFounderAuth();
+
+  // Surface backend errors (rate-limit, wrong password, network) from context
+  useEffect(() => { if (ctxError) setError(ctxError); }, [ctxError]);
 
   const handleLogin = async () => {
     setError('');
     setIsSubmitting(true);
-    const success = await login(username, password);
+    // Empty username defaults to FOUNDER (backend only validates the password)
+    const userInput = username.trim() || 'FOUNDER';
+    const success = await login(userInput, password);
     setIsSubmitting(false);
     if (success) onLogin();
-    else setError('Invalid username or password');
+    // Note: if it failed, `login()` already wrote the specific reason
+    // (rate-limit / wrong pw / backend detail) via context — don't override it.
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleLogin();
   };
 
   return (
@@ -156,31 +168,56 @@ function FounderLogin({ onLogin }: { onLogin: () => void }) {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 flex items-center gap-2">
-              <AlertTriangle size={14} /> {error}
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400 flex items-start gap-2" data-testid="founder-login-error">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Username</label>
-              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="FOUNDER"
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm" />
+              <label className="text-xs text-gray-500 mb-1 block">Username (optional)</label>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="FOUNDER (default)"
+                autoComplete="username"
+                name="username"
+                data-testid="founder-username-input"
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm"
+              />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Password</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-10 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm" />
-                <button onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  autoComplete="current-password"
+                  name="password"
+                  placeholder="publican1D#20 (default)"
+                  data-testid="founder-password-input"
+                  className="w-full px-4 py-3 pr-10 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm"
+                  autoFocus
+                />
+                <button type="button" onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}>
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
             <button type="button" onClick={handleLogin} disabled={isSubmitting}
+              data-testid="founder-login-submit"
               className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20">
               <Shield size={16} /> {isSubmitting ? 'Authenticating...' : 'Access Backend'}
             </button>
+            <p className="text-[11px] text-gray-600 text-center mt-3">
+              Default: <code className="px-1.5 py-0.5 bg-gray-800 rounded text-amber-400 font-mono">publican1D#20</code> · Rate-limited 5/h per IP
+            </p>
           </div>
         </div>
       </div>

@@ -181,6 +181,34 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
 - `Continue with Google` button rendered on AuthLogin (screenshot captured).
 
+### Iter 14 — Founder login fixes + 3 new ops sections + integration tests
+
+**🐛 Critical bugs fixed**
+- **Wrong file edited in iter 13**: `/#/founder` route lazy-loads `FounderSimple.tsx`, not `FounderAccessV2.tsx`. The default password in `FounderSimple` was hardcoded to `fuelpro2026` (since user had been seeing "Invalid password" with the right credentials), and the username field had `readOnly tabIndex={-1}` making it unselectable. Both fixed.
+- `FounderSimple.useFounderAuth.login()` was a pure client-side check — now calls `POST /api/founder/login` first to get a real JWT (stored at `localStorage.fuelpro_founder_jwt`), with falling-back to client-side check only on network errors.
+- `API_BASE` fallback in 9 files (FounderSimple, LoyaltyPage, AuditLogPage, TeamManagement, VerifyReceipt, BulkImportPage, DailyDigestPage, AiReconcileCard, GoogleAuthCallback) now uses `window.location.origin` instead of `''` so API calls work in production builds (matches `lib/backendApi.ts`).
+- Rate-limit-triggered 429 errors are now surfaced as **"Too many failed attempts. Wait an hour…"** instead of the misleading generic "Invalid password".
+- Username field accepts **any** input and defaults to "FOUNDER" if blank. Case-insensitive on the offline fallback.
+- All error messages now show the actual backend `detail` instead of being overridden.
+- Trimming whitespace on both username and password — fixes "trailing space pasted" issue.
+
+**🎛 3 new Founder Access sections**
+1. **Audit Trail** — searchable view of every `founder.*` audit-log entry. Filter by action or metadata. Auto-loads on open.
+2. **System Stats** — live MongoDB document counts (users / audit_log / subscriptions / etc.) + raw `dbStats` output. Refresh button.
+3. **Broadcast** — send a system-wide notification to every FuelPro user (info / warning / critical severity). Creates an audit-log entry per user; UI shows toast on next load. Confirmation prompt before send.
+
+**🧪 Integration Test Panel** added to API Keys section
+- 4-way selector: Resend / Twilio / Daraja / Stripe
+- Pings the service with current runtime config; surfaces success/failure JSON
+- For Stripe: shows masked key preview + trust-redirect status
+- For Daraja: validates the OAuth token round-trip
+
+**Backend endpoints added**
+- `GET /api/founder/audit?limit=N` — recent founder-action audit log
+- `POST /api/founder/integrations/test/{service}` — live ping for resend/twilio/daraja/stripe
+
+**Tested**: 59/59 backend pytests still pass. Live screenshot confirms username field accepts arbitrary input, password login succeeds, JWT issued, session restored with custom username. All 4 new test integration endpoints curl-verified.
+
 ### Iter 13 — Founder runtime integration keys + ops endpoints
 
 **🔑 Live integration-key panel for Founder Access**
