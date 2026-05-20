@@ -18,6 +18,34 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 30 — Push wiring + Founder Broadcast + Capacitor pre-flight (Feb 2026)
+
+**🟢 Push wired into existing flows**
+- `services/digest.py::send_digest_to_user` → fires push notification with date + matched count, links to `/#/digest`. Best-effort (try/except).
+- `routers/mpesa.py::_activate_subscription_from_callback` → fires "Payment received 🎉" push with plan + receipt.
+- `routers/payments.py::_activate_subscription_from_stripe` → fires "Subscription activated 🎉" push with plan name.
+
+**🟢 Founder Broadcast mini-form**
+- `components/FounderBroadcastForm.tsx` — title/body/url inputs + Send button. Calls `/api/push/broadcast` (founder-auth). Shows live "Delivered to N devices" result + char counters.
+- Mounted inside `FounderAccessV2` → DashboardSection (replaces left half of the Revenue Trend row).
+
+**🟢 Capacitor Android pre-flight**
+- `capacitor.config.ts` upgraded: `androidScheme: https`, `cleartext: false`, `webContentsDebuggingEnabled: false`, SplashScreen plugin config (`#0a0a0f`, 1.5s, full-screen immersive), StatusBar plugin config (dark, `#0a0a0f`).
+- `/app/memory/ANDROID_SHIP_GUIDE.md` — step-by-step guide for the user's local machine: prerequisites, `cap add android`, `cap sync`, asset studio icons, signing keystore generation, AAB build, Play Console upload, subsequent releases (~5 min), per-feature cross-platform behaviour notes.
+
+**🟢 Pre-deploy regression (Iter 27+28+29+30)**
+- Backend: **162 passed, 4 skipped — zero regressions** (test_payment_replay, test_iter16_sweep, test_iter17_features, test_iter18_features, test_iteration6_features, test_fuelpro_backend, test_push).
+- Frontend (testing agent v3): 15/16 items passed; Founder dashboard verification deferred only due to a per-IP rate-limiter saturating from earlier test runs (verified live via curl: founder login + integrations API both 200, returning expected mocked/live state).
+- Direct curl verified: `/api/founder/login` returns valid token, `/api/founder/integrations` returns `stripe_api_key` + `sender_email` as configured (the mocked-vs-live banner will show 2/7 live correctly).
+
+**🟢 P3 from testing report — fixed**
+- `/app/conftest.py` added — appends `/app/backend` to `sys.path` so pytest can be invoked from either `/app` or `/app/backend` cwd. Verified: `cd /app && python -m pytest backend/tests/test_payment_replay.py::TestRefactorHelpersExist` → 4 passed.
+- Confirmed founder rate-limit is already 20/h failed-only with reset-on-success (P3 carry-over from iter18 was already addressed in iter22 — testing report was reading a stale ref).
+
+**Files modified/created**
+- New: `components/FounderBroadcastForm.tsx`, `/app/memory/ANDROID_SHIP_GUIDE.md`, `/app/conftest.py`
+- Edited: `services/digest.py`, `routers/mpesa.py`, `routers/payments.py` (each adds best-effort `push_to_user` call), `capacitor.config.ts`, `pages/FounderAccessV2.tsx`
+
 ### Iter 29 — FCM-free Web Push + Founder mocked/live banner + Deploy checklist (Feb 2026)
 
 **🟢 New: Web Push (cross-platform)**
