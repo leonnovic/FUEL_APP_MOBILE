@@ -16,21 +16,43 @@ function getTrialState(): { startedAt: number; isExpired: boolean; msLeft: numbe
     const raw = localStorage.getItem('fuelpro_trial');
     if (!raw) {
       const now = Date.now();
-      localStorage.setItem('fuelpro_trial', JSON.stringify({ startedAt: now, status: 'active' }));
+      // Write BOTH shapes so the trial system (lib/subscription.ts) and the
+      // banner agree on when the trial started.
+      localStorage.setItem('fuelpro_trial', JSON.stringify({
+        startedAt: now,
+        trialStartedAt: new Date(now).toISOString(),
+        status: 'active',
+      }));
       return { startedAt: now, isExpired: false, msLeft: TRIAL_MS };
     }
     const data = JSON.parse(raw);
-    let startedAt = data.startedAt || Date.now();
+    // Support both schemas: legacy `startedAt: epoch ms` (this component) and
+    // `trialStartedAt: ISO string` (lib/subscription.ts/SubscriptionService).
+    let startedAt: number;
+    if (Number.isFinite(data.startedAt)) {
+      startedAt = data.startedAt;
+    } else if (data.trialStartedAt) {
+      const parsed = Date.parse(data.trialStartedAt);
+      startedAt = Number.isFinite(parsed) ? parsed : Date.now();
+    } else {
+      startedAt = Date.now();
+    }
     if (data.status === 'paid') return { startedAt, isExpired: false, msLeft: Infinity };
 
-    // ── Migration: an older build used a 1-hour trial. If we detect a trial that
-    // started <14 days ago but already shows as expired under the new 14-day rule
-    // because of the old 1h limit, accept the recorded `startedAt` as-is — the
-    // 14-day window will simply still be active. Nothing to migrate.
-    // ── BUT: if startedAt is in the future or NaN, reset to now (defensive).
+    // Defensive: if startedAt is in the future or NaN, reset to now.
     if (!Number.isFinite(startedAt) || startedAt > Date.now()) {
       startedAt = Date.now();
-      localStorage.setItem('fuelpro_trial', JSON.stringify({ startedAt, status: 'active' }));
+      localStorage.setItem('fuelpro_trial', JSON.stringify({
+        ...data,
+        startedAt,
+        trialStartedAt: new Date(startedAt).toISOString(),
+        status: data.status || 'active',
+      }));
+    } else if (!Number.isFinite(data.startedAt)) {
+      // Backfill the numeric `startedAt` next to the ISO form so future reads are fast.
+      try {
+        localStorage.setItem('fuelpro_trial', JSON.stringify({ ...data, startedAt }));
+      } catch { /* quota — non-fatal */ }
     }
 
     const msLeft = Math.max(0, TRIAL_MS - (Date.now() - startedAt));

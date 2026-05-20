@@ -96,9 +96,9 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
           {/* Left: Logo & Company */}
           <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
             {state.companyData.logo || logoPreview ? (
-              <img src={state.companyData.logo || logoPreview} alt="Logo" className="w-9 h-9 rounded-lg object-cover border border-white/20" />
+              <img src={state.companyData.logo || logoPreview} alt="Logo" data-testid="header-logo-img" className="w-9 h-9 rounded-lg object-cover border border-white/20" />
             ) : (
-              <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center flex-shrink-0" data-testid="header-logo-placeholder">
                 <Fuel size={18} className="text-white" />
               </div>
             )}
@@ -160,7 +160,7 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             {user && <span className="px-2 py-1 bg-white/5 rounded-md text-[10px] text-gray-300 flex items-center gap-1"><User size={10} className="text-amber-400" /><span className="hidden xl:inline">{user.name}</span></span>}
             <button onClick={() => setShowEditInfo(!showEditInfo)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><Edit3 size={12} /><span className="hidden lg:inline">Edit Info</span></button>
             <button onClick={() => setShowTabConfig(true)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><LayoutDashboard size={12} /><span className="hidden lg:inline">Tabs</span></button>
-            <label className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"><Image size={12} /><span className="hidden lg:inline">Logo</span><input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" /></label>
+            <label className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer" data-testid="header-logo-button"><Image size={12} /><span className="hidden lg:inline">Logo</span><input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" data-testid="header-logo-input" /></label>
             <button onClick={() => setShowQRCode(true)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><QrCode size={12} /><span className="hidden lg:inline">QR</span></button>
             <SyncStatusIndicator countryCode={location.currentCountry.id} compact />
             <RoleSelector />

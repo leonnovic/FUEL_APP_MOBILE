@@ -106,8 +106,13 @@ class TestPasswordReset:
         body = r.json()
         assert body["ok"] is True
         assert body["email_sent"] is False
-        delivery = body.get("delivery") or {}
-        assert delivery.get("skipped") == "no_key", f"delivery={delivery}"
+        # In production we strip the `delivery` field to avoid email-enumeration
+        # via the `skipped:'no_key'` signal. In dev it's still present for debug.
+        import os as _os
+        _is_prod = _os.environ.get("APP_ENV", "production").lower() in {"production", "prod"}
+        if not _is_prod:
+            delivery = body.get("delivery") or {}
+            assert delivery.get("skipped") == "no_key", f"delivery={delivery}"
 
         # Read code from Mongo
         rec = mdb.password_resets.find_one({"email": email.lower()})
@@ -332,11 +337,16 @@ class TestSyncIsolation:
 # ---------------------------------------------------------------- Catch-all
 class TestCatchAll:
     def test_unknown_returns_stub(self, s):
+        import os as _os
+        _is_prod = _os.environ.get("APP_ENV", "production").lower() in {"production", "prod"}
         r = s.get(f"{API}/something-unknown")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["ok"] is True
-        assert body.get("stub") is True
+        if _is_prod:
+            assert r.status_code == 404
+        else:
+            assert r.status_code == 200
+            body = r.json()
+            assert body["ok"] is True
+            assert body.get("stub") is True
 
 
 # ---------------------------------------------------------------- Audit log entries
