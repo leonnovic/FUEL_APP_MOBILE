@@ -1,6 +1,6 @@
 import { useAutoSync } from '@/react-app/hooks/useAutoSync';
 import { RefreshCw, CheckCircle2, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SyncStatusIndicatorProps {
   countryCode: string;
@@ -10,6 +10,25 @@ interface SyncStatusIndicatorProps {
 export default function SyncStatusIndicator({ countryCode, compact = false }: SyncStatusIndicatorProps) {
   const { isSyncing, lastSync, error, syncNow, unreadCount, highPriorityCount } = useAutoSync(countryCode);
   const [showDetails, setShowDetails] = useState(false);
+  // Force a re-render every 30s so the "2m ago" text stays current even without sync events
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Online/offline awareness for cross-platform deployments (web, Capacitor, Electron)
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
 
   const getLastSyncText = () => {
     if (!lastSync) return 'Never synced';
@@ -23,22 +42,26 @@ export default function SyncStatusIndicator({ countryCode, compact = false }: Sy
   };
 
   if (compact) {
+    const statusIcon = isSyncing ? (
+      <RefreshCw size={10} className="animate-spin text-blue-400" />
+    ) : !online ? (
+      <WifiOff size={10} className="text-amber-400" />
+    ) : error ? (
+      <WifiOff size={10} className="text-red-400" />
+    ) : (
+      <Wifi size={10} className="text-green-400" />
+    );
     return (
       <div className="flex items-center gap-1.5">
         <button
           onClick={syncNow}
           disabled={isSyncing}
+          data-testid="header-sync-pill"
           className="relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-colors text-[10px] text-gray-400"
-          title={`Last sync: ${getLastSyncText()}`}
+          title={!online ? 'Offline — changes queued locally' : `Last sync: ${getLastSyncText()}`}
         >
-          {isSyncing ? (
-            <RefreshCw size={10} className="animate-spin text-blue-400" />
-          ) : error ? (
-            <WifiOff size={10} className="text-red-400" />
-          ) : (
-            <Wifi size={10} className="text-green-400" />
-          )}
-          <span>{getLastSyncText()}</span>
+          {statusIcon}
+          <span data-testid="header-sync-text">{!online ? 'Offline' : getLastSyncText()}</span>
           {highPriorityCount > 0 && (
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[7px] text-white flex items-center justify-center">
               {highPriorityCount}

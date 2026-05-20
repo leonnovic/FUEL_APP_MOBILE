@@ -18,6 +18,32 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 28 — Cross-platform PWA upgrades + dep prune (Feb 2026)
+
+**🟢 Added**
+- **PWA install prompt** (`/app/frontend/src/react-app/components/PWAInstallPrompt.tsx`) — handles Chrome/Edge/Android via `beforeinstallprompt`, shows manual "Add to Home Screen" hint on iOS Safari, 14-day cooldown after dismiss.
+- **Update-available toast** (`UpdateAvailableToast.tsx`) — listens for `fuelpro:update-ready` event and offers one-click reload via SW `SKIP_WAITING`.
+- **Smart cross-platform share** (`/app/frontend/src/react-app/lib/smartShare.ts`) — Web Share API → clipboard → `window.prompt` cascade. Wired into Verify Receipt page with a new `Share` button (uses native share sheet on iOS/Android/Windows 11).
+- **Live "Last sync" pill** (`SyncStatusIndicator` compact) — now auto-ticks every 30s, reflects `navigator.onLine` (shows "Offline" when disconnected). Added `data-testid="header-sync-pill"` + `header-sync-text`.
+
+**🔧 Refactored / improved**
+- **Service worker** (`/app/frontend/public/sw.js`) rewritten with proper strategies:
+  - `/api/*` → network-first (so API responses are always fresh, cached fallback when offline)
+  - HTML navigations → network-first with SPA-shell fallback
+  - Static assets → cache-first
+  - Versioned caches (`fuelpro-v3-*`) so old caches purge on activation
+- **SW registration** in `index.html` now auto-checks for updates every 30 min, dispatches `fuelpro:update-ready`, and reloads on `controllerchange`.
+- **Manifest** enhanced: icons (192px any + 512px any/maskable), `display_override` for window-controls-overlay (desktop installed apps), `edge_side_panel` (Edge), `launch_handler: navigate-existing`, and a `share_target` so other apps can share into FuelPro's `/import` route.
+
+**🧹 Cleaned**
+- Pruned unused deps: `mysql2`, `drizzle-orm`, `drizzle-kit` (+ removed `db:generate/migrate/push` scripts). Smaller install, faster CI.
+
+**Files modified/created**
+- New: `components/PWAInstallPrompt.tsx`, `components/UpdateAvailableToast.tsx`, `lib/smartShare.ts`
+- Edited: `App.tsx` (mounts new components), `index.html` (SW update plumbing), `public/sw.js` (rewrite), `public/manifest.json` (icons + cross-platform fields), `components/SyncStatusIndicator.tsx` (live ticker + offline), `pages/VerifyReceipt.tsx` (Share button), `package.json` (prune)
+
+**Testing**: backend pytest = **157 passed, 4 skipped, no regressions**. Frontend smoke screenshot confirms app renders. HMR clean.
+
 ### Iter 27 — Header consolidation + scroll-overshoot fix (Feb 2026)
 
 **🐞 Fixed (P0 from `organize22.png` feedback)**

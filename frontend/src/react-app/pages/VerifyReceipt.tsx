@@ -5,7 +5,8 @@
  */
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import { ShieldCheck, AlertTriangle, Loader2, Receipt, ArrowRight, Copy, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Loader2, Receipt, ArrowRight, Copy, CheckCircle2, Share2 } from 'lucide-react';
+import { smartShare, supportsNativeShare } from '@/react-app/lib/smartShare';
 
 const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -55,6 +56,18 @@ export default function VerifyReceipt() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch { window.prompt('Copy this verification link:', shareUrl); }
+  };
+  const shareLink = async () => {
+    if (!result) return;
+    const res = await smartShare({
+      title: 'FuelPro receipt verification',
+      text: `FuelPro receipt ${result.receipt} — verified ✅`,
+      url: shareUrl,
+    });
+    if (res.ok && res.method === 'clipboard') {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    }
   };
 
   return (
@@ -140,13 +153,24 @@ export default function VerifyReceipt() {
                   </dl>
                 )}
                 {result.verified && (
-                  <button
-                    onClick={copyLink}
-                    className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-[11px] font-semibold"
-                    data-testid="verify-copy-link"
-                  >
-                    {copied ? <><CheckCircle2 size={11} /> Copied</> : <><Copy size={11} /> Copy verification link</>}
-                  </button>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      onClick={copyLink}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-[11px] font-semibold"
+                      data-testid="verify-copy-link"
+                    >
+                      {copied ? <><CheckCircle2 size={11} /> Copied</> : <><Copy size={11} /> Copy link</>}
+                    </button>
+                    {supportsNativeShare() && (
+                      <button
+                        onClick={shareLink}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 rounded-lg text-[11px] font-semibold"
+                        data-testid="verify-share-btn"
+                      >
+                        <Share2 size={11} /> Share
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

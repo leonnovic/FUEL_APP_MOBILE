@@ -2,18 +2,48 @@
   "name": "FuelPro - Fuel Management System",
   "short_name": "FuelPro",
   "description": "Complete fuel station management, sales tracking, EPRA compliance, and real-time analytics",
+  "id": "fuelpro-app",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
   "background_color": "#0a0a0f",
   "theme_color": "#f59e0b",
   "orientation": "any",
   "scope": "/",
-  "icons": [],
+  "icons": [
+    {
+      "src": "/logo-small.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-main.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
   "categories": ["business", "productivity", "finance"],
   "lang": "en",
   "dir": "ltr",
   "related_applications": [],
   "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "share_target": {
+    "action": "/#/import",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "shortcuts": [
     {
       "name": "Dashboard",

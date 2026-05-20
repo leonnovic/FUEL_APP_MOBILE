@@ -31,7 +31,28 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('/sw.js').then((reg) => {
+            // Auto-check for app updates every 30 minutes
+            setInterval(() => { try { reg.update(); } catch (e) {} }, 30 * 60 * 1000);
+            // When a new SW is waiting, prompt to refresh
+            reg.addEventListener('updatefound', () => {
+              const next = reg.installing;
+              if (!next) return;
+              next.addEventListener('statechange', () => {
+                if (next.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Dispatch a custom event so React can show an "Update available" toast
+                  window.dispatchEvent(new CustomEvent('fuelpro:update-ready', { detail: reg }));
+                }
+              });
+            });
+          }).catch(() => {});
+        });
+        // Reload once when a new SW takes control
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
         });
       }
     </script>

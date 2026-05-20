@@ -18,6 +18,8 @@ import RealtimeSync from "@/react-app/components/RealtimeSync";
 import BroadcastToast from "@/react-app/components/BroadcastToast";
 import ConsentManager from "@/react-app/components/ConsentManager";
 import ClaimAccountBanner from "@/react-app/components/ClaimAccountBanner";
+import PWAInstallPrompt from "@/react-app/components/PWAInstallPrompt";
+import UpdateAvailableToast from "@/react-app/components/UpdateAvailableToast";
 import TeamManagement from "@/react-app/pages/TeamManagement";
 import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
 import VerifyReceipt from "@/react-app/pages/VerifyReceipt";
@@ -118,6 +120,8 @@ export default function App() {
                 <BroadcastToast />
                 <ConsentManager />
                 <ClaimAccountBanner />
+                <PWAInstallPrompt />
+                <UpdateAvailableToast />
                 <Routes>
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route path="/founder" element={
