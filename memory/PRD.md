@@ -18,6 +18,79 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 17 — Apple/Microsoft OAuth + S3 storage + WebSocket realtime sync
+
+**🍎 Apple Sign-In + 🪟 Microsoft Sign-In (server-side ID-token verification)**
+- New router `routers/oauth_extra.py`:
+  - `POST /api/auth/apple` — verifies an Apple `id_token` JWT against `appleid.apple.com/auth/keys`, validates audience (`APPLE_CLIENT_ID`) and issuer; upserts the FuelPro user with `auth_methods += ['apple']`. Returns FuelPro JWT.
+  - `POST /api/auth/microsoft` — same flow for Azure AD using MSAL-style `id_token` from `login.microsoftonline.com/{tenant}/v2.0`. Tenant configurable (`MICROSOFT_TENANT`, default `common`).
+  - `GET /api/auth/oauth-providers` — public discovery: tells the frontend which buttons to render based on key availability.
+- JWKS cache with TTL + rotation refresh on miss. Returns 503 + clear message when keys aren't configured (so the UI can hide the buttons cleanly).
+- Frontend `ExtraOAuthButtons.tsx` lazy-loads provider SDKs from official CDNs (`appleid.cdn-apple.com`, `alcdn.msauth.net`). Buttons appear automatically once the founder pastes a client_id.
+
+**☁️ S3-backed cloud storage** (`routers/storage.py`)
+- Pre-signed PUT URLs so the browser uploads directly to S3 (bypasses proxy/ingress size limits): `POST /api/storage/presign-upload`.
+- `POST /api/storage/confirm-upload` after the PUT completes to flip status `pending → uploaded` in `db.storage_files`.
+- `GET /api/storage/presign-download?key=…`, `GET /api/storage/list`, `DELETE /api/storage/file?key=…` — all authorize on `users/{user_id}/` key prefix.
+- Categories enforced: `receipts | photos | payroll | documents | logos | misc`.
+- Returns 503 + clear message when AWS keys aren't configured.
+
+**🔌 Realtime WebSocket sync** (`routers/ws.py`)
+- `WS /api/ws/sync?token=<JWT>` — per-user multi-device channel. JWT in query string (browser `WebSocket` can't set headers).
+- Server-side heartbeat every 25s to keep ingress proxies from reaping idle sockets.
+- `publish_to_user(user_id, event, exclude=ws)` helper — used by sync.py, founder_ops.py to fan out events to OTHER devices on the same account (sender excluded).
+- `broadcast_all(event)` for system-wide founder broadcasts.
+- Frontend `RealtimeSync.tsx` auto-reconnects with exponential back-off (1s→30s cap); dispatches DOM `CustomEvent`s (`fuelpro:realtime`, `fuelpro:broadcast`) so feature modules can subscribe without coupling.
+- Frontend `BroadcastToast.tsx` listens for `fuelpro:broadcast` events and shows a transient banner with severity-tinted styling.
+- `GET /api/ws/stats` for ops dashboards.
+
+**🩺 Health Watchdog auto-alert toast in Founder dashboard**
+- HealthWatchdogSection now tracks previous summary and surfaces a red banner whenever the status transitions away from `ok` / `not_configured`. Auto-dismisses after 8s. testid `founder-health-alert`.
+
+**🎛 Founder Integration Keys panel — 7 new fields**
+- `APPLE_CLIENT_ID`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_TENANT` for OAuth.
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` for cloud storage.
+- All pasted via the existing `/api/founder/integrations` endpoint → applied to `os.environ` LIVE — no restart required.
+- IntegrationTestPanel selector extended: 4 services → 7 (added S3, Apple, Microsoft). `POST /api/founder/integrations/test/{s3|apple|microsoft}` validate the configured keys with a real bucket head-check / client_id presence check.
+
+**📦 Frontend deps + Node engines**
+- `package.json` engines: `node >=20.0.0` (was unset). Path to ≥22 documented; container currently ships Node 20.
+- All build assets compile clean (`yarn build` 22s, 0 warnings).
+
+**Tested**
+- `pytest tests/test_iter17_features.py -v` → **26/26 passing** (was 25/26 with 1 xfail before WS fixes).
+- Full regression: `pytest tests/` → **119 passed, 4 env-skips** (no regressions).
+- Live verified end-to-end:
+  - `GET /api/auth/oauth-providers` returns `apple:false, microsoft:false` until keys are pasted.
+  - WS A→B fan-out works; sender does NOT receive its own echo.
+  - WS with no token → close code 4401 "Invalid or missing token".
+  - `POST /api/founder/integrations/test/s3` with no keys → `{ok:false, error:"AWS S3 keys / bucket not configured"}`.
+  - `POST /api/storage/presign-upload` without keys → 503.
+  - `POST /api/sync/sales` triggers `sync.updated` event on every other connected socket for the same user.
+  - `POST /api/founder/broadcast` pushes `founder.broadcast` event to all live WS connections.
+  - Login page renders Google button only; Apple/Microsoft hidden when unconfigured.
+
+**Files added**
+- `/app/backend/routers/oauth_extra.py`
+- `/app/backend/routers/storage.py`
+- `/app/backend/routers/ws.py`
+- `/app/frontend/src/react-app/components/ExtraOAuthButtons.tsx`
+- `/app/frontend/src/react-app/components/RealtimeSync.tsx`
+- `/app/frontend/src/react-app/components/BroadcastToast.tsx`
+- `/app/backend/tests/test_iter17_features.py`
+
+**Files modified**
+- `/app/backend/routers/founder_ops.py` — 7 new key fields + 3 new test integrations
+- `/app/backend/routers/sync.py` — publishes `sync.updated` and `user-data.updated` WS events
+- `/app/backend/server.py` — registers new routers + storage_files indexes
+- `/app/frontend/src/react-app/App.tsx` — mounts RealtimeSync + BroadcastToast
+- `/app/frontend/src/react-app/components/AuthLogin.tsx` — drops in ExtraOAuthButtons
+- `/app/frontend/src/react-app/pages/FounderSimple.tsx` — 3 new key cards + auto-alert toast in HealthWatchdog
+- `/app/frontend/package.json` — engines field
+
+### Iter 16 — Founder Access overhaul (login UI + Live Ops + Audit + Broadcast + Integration Tests + Watchdog)
+- (Details captured separately — see CHANGELOG / handoff summary. This iter added Live Ops Broadcast, Audit Trail, Integration Test panel, Health Watchdog, runtime API key panel.)
+
 ### Iter 1 — Port & boot
 - Replaced `/app/frontend` with the Vite-based FuelPro app from the user's zip.
 - Adapted `vite.config.ts`, `package.json` `start` script, installed deps.

@@ -268,14 +268,13 @@ class TestWebSocket:
                 return ("reject", status if status else str(e))
             return ("unknown", None)
         result = asyncio.get_event_loop().run_until_complete(run())
-        # Spec requires close code 4401; current impl rejects with HTTP 403
-        # because websocket.close() is called BEFORE accept().
-        # Accept either, but flag in report if it's 403.
+        # Spec requires close code 4401 — accept-before-close is now wired so
+        # the custom close frame reaches the client. Lingering 403 reject is
+        # also acceptable (some proxies may still short-circuit the upgrade).
         kind, code = result
         assert (kind == "close" and code == 4401) or (kind == "reject" and code == 403), \
             f"Unexpected WS no-token result: {result}"
 
-    @pytest.mark.xfail(reason="ws.py publish_to_user does not exclude sender — see action items", strict=False)
     def test_ws_hello_and_no_self_echo(self, user_token):
         async def run():
             uri = f"{WS_BASE}/api/ws/sync?token={user_token['token']}"

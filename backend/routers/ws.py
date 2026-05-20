@@ -54,9 +54,13 @@ async def _unregister(user_id: str, ws: WebSocket) -> None:
     log.info("WS disconnect user=%s remaining=%d", user_id, len(_connections.get(user_id, [])))
 
 
-async def publish_to_user(user_id: str, event: dict[str, Any]) -> int:
+async def publish_to_user(user_id: str, event: dict[str, Any],
+                          exclude: Optional[WebSocket] = None) -> int:
     """Send an event to every WebSocket the given user has open across devices.
     Returns the number of sockets the event was successfully delivered to.
+
+    `exclude` (optional) lets the caller skip a specific socket — typically
+    the originating client, so the sender doesn't receive its own echo.
 
     Other routers should call this with `await publish_to_user(uid, {...})`.
     Failure to deliver to one socket does not prevent delivery to others; dead
@@ -68,6 +72,8 @@ async def publish_to_user(user_id: str, event: dict[str, Any]) -> int:
     async with _lock:
         sockets = list(_connections.get(user_id, []))
     for ws in sockets:
+        if exclude is not None and ws is exclude:
+            continue
         try:
             await ws.send_text(payload)
             delivered += 1
@@ -103,7 +109,10 @@ async def ws_sync(websocket: WebSocket, token: str = Query(default="")):
     """
     user_id = _decode_jwt(token)
     if not user_id:
-        await websocket.close(code=4401)
+        # Accept first so the close frame actually carries our 4401 code
+        # (Starlette short-circuits to HTTP 403 if we close before accepting).
+        await websocket.accept()
+        await websocket.close(code=4401, reason="Invalid or missing token")
         return
     await websocket.accept()
     await _register(user_id, websocket)
@@ -122,12 +131,12 @@ async def ws_sync(websocket: WebSocket, token: str = Query(default="")):
     try:
         while True:
             data = await websocket.receive_text()
-            # Echo back to all of this user's other sockets so multi-device
-            # state stays in sync. Frontend uses {"type":"sync.write","collection":"sales"} etc.
+            # Fan out to this user's OTHER sockets so multi-device state stays
+            # in sync. Sender is excluded so it doesn't receive its own echo.
             try:
                 msg = json.loads(data)
                 if isinstance(msg, dict) and msg.get("type"):
-                    await publish_to_user(user_id, msg)
+                    await publish_to_user(user_id, msg, exclude=websocket)
             except json.JSONDecodeError:
                 # ignore non-JSON
                 continue
