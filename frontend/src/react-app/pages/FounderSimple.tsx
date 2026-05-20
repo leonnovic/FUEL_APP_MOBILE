@@ -484,7 +484,7 @@ function ApiKeysSection() {
   const [form, setForm] = useState<any>({});
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [statusMsg, setStatusMsg] = useState<{ kind: 'ok' | 'err', text: string } | null>(null);
-  const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+  const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
   const token = () => localStorage.getItem('fuelpro_founder_jwt') || localStorage.getItem('founder_jwt') || '';
 

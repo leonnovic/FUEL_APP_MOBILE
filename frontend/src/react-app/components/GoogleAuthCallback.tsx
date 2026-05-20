@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { setToken } from '@/react-app/lib/backendApi';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 type Phase = 'idle' | 'exchanging' | 'success' | 'failed';
 

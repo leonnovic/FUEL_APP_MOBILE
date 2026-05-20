@@ -14,7 +14,12 @@ const SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
 // Display-only hint — actual auth is performed by the backend.
 const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+// Mirror the pattern from /lib/backendApi.ts: prefer the env var, otherwise
+// use window.location.origin so the ingress proxies /api/* correctly.
+const API_BASE = (
+  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
+  || (typeof window !== 'undefined' ? window.location.origin : '')
+).replace(/\/$/, '');
 
 // ═══════════════════════════════════════════════════
 //  FOUNDER AUTH - Local (ready for tRPC upgrade)
@@ -46,44 +51,57 @@ function useFounderAuth() {
 
   const login = async (user: string, pw: string) => {
     setError('');
+    // Defensive trim — common cause of "invalid password" is a copy-paste
+    // that brought along a trailing space / newline.
+    const cleanUser = (user || '').trim();
+    const cleanPw = (pw || '').trim();
+
     try {
       // Authenticate against the real backend so the founder gets a real
       // JWT (required by /api/founder/integrations, /system-stats, etc.)
       const r = await fetch(`${API_BASE}/api/founder/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
+        body: JSON.stringify({ password: cleanPw }),
       });
       if (r.ok) {
         const data = await r.json();
         if (data.token) {
           localStorage.setItem(FOUNDER_JWT_KEY, data.token);
           localStorage.setItem(SESSION_KEY, JSON.stringify({
-            username: user || 'FOUNDER',
+            username: cleanUser || 'FOUNDER',
             active: true,
             loginTime: Date.now(),
             must_change_password: !!data.must_change_password,
           }));
           setIsAuthenticated(true);
-          setUsername(user || 'FOUNDER');
+          setUsername(cleanUser || 'FOUNDER');
           return true;
         }
       } else if (r.status === 429) {
-        setError('Too many attempts. Try again later.');
+        setError('Too many failed attempts. Wait an hour or contact support.');
+        return false;
+      } else if (r.status === 401) {
+        // Surface the precise reason from the backend so users aren't guessing.
+        const body = await r.json().catch(() => ({}));
+        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
         return false;
       }
       // Fall through to client-side check below (back-compat for offline UX)
-    } catch {
+    } catch (e) {
       // Network error — fall back to client-side check
+      // eslint-disable-next-line no-console
+      console.warn('Founder login network error:', e);
     }
-    // Back-compat: allow local-only login when username + password match defaults
-    if (user === DEFAULT_CREDS.username && pw === DEFAULT_CREDS.password) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user, active: true, loginTime: Date.now() }));
+    // Back-compat: allow local-only login when username + password match defaults.
+    // Username is case-insensitive (e.g. "founder", "Founder", "FOUNDER" all work).
+    if (cleanUser.toUpperCase() === DEFAULT_CREDS.username && cleanPw === DEFAULT_CREDS.password) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ username: 'FOUNDER', active: true, loginTime: Date.now() }));
       setIsAuthenticated(true);
-      setUsername(user);
+      setUsername('FOUNDER');
       return true;
     }
-    setError('Invalid username or password');
+    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock + that you didn\'t paste a trailing space.');
     return false;
   };
 

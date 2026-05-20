@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
 import { ShieldCheck, AlertTriangle, Loader2, Receipt, ArrowRight, Copy, CheckCircle2 } from 'lucide-react';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 interface VerifyResult {
   verified: boolean;

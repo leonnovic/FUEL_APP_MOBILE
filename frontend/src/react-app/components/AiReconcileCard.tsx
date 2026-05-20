@@ -45,7 +45,7 @@ export default function AiReconcileCard({ inflows }: { inflows: InflowLike[] }) 
   const run = async () => {
     setBusy(true); setError(null); setResult(null);
     try {
-      const base = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+      const base = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
       const token = localStorage.getItem('fuelpro_jwt');
       if (!token) { setError('Sign in to your account first to use AI reconciliation.'); setBusy(false); return; }
       const r = await fetch(`${base}/api/ai/reconcile-mpesa`, {
