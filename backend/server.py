@@ -27,8 +27,10 @@ from core import (
     log,
 )
 from routers import auth, digest, features, founder, founder_ops, invites, misc, mpesa, payments, sync
+from routers import health as health_router
 from routers.founder import ensure_founder_seeded
 from routers.founder_ops import apply_runtime_config_to_env
+from routers.health import watchdog_scheduler
 from routers.mpesa import mpesa_stk_callback_handler
 from routers.payments import stripe_webhook_handler
 
@@ -71,6 +73,7 @@ api.include_router(invites.router)
 api.include_router(digest.router)
 api.include_router(founder.router)
 api.include_router(founder_ops.router)
+api.include_router(health_router.router)
 api.include_router(features.router)
 api.include_router(misc.router)
 
@@ -152,6 +155,9 @@ async def on_startup():
         from services.digest import digest_scheduler
         app.state.digest_task = asyncio.create_task(digest_scheduler(db))
 
+    if os.environ.get("WATCHDOG_ENABLED", "1") == "1":
+        app.state.watchdog_task = asyncio.create_task(watchdog_scheduler())
+
     try:
         await ensure_founder_seeded()
     except Exception as e:
@@ -167,7 +173,8 @@ async def on_startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    task = getattr(app.state, "digest_task", None)
-    if task and not task.done():
-        task.cancel()
+    for attr in ("digest_task", "watchdog_task"):
+        task = getattr(app.state, attr, None)
+        if task and not task.done():
+            task.cancel()
     client.close()

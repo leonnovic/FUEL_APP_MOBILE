@@ -39,7 +39,7 @@ type SectionId =
   // AI & Advanced (1)
   | 'aibatch'
   // Iter 14 — founder ops (3)
-  | 'audit' | 'sysstats' | 'broadcast';
+  | 'audit' | 'sysstats' | 'broadcast' | 'health';
 
 // ─── Auth Hook ───
 function useFounderAuth() {
@@ -779,6 +779,113 @@ function BroadcastSection() {
     </div>
   );
 }
+
+
+// Iter 15: Health Watchdog — live status of all integrations + DB + EPRA
+function HealthWatchdogSection() {
+  const [snap, setSnap] = useState<any>(null);
+  const [age, setAge] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async (forceRefresh = false) => {
+    if (forceRefresh) setRefreshing(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/health${forceRefresh ? '?refresh=true' : ''}`, { headers: _founderHeaders() });
+      const d = await r.json();
+      setSnap(d.snapshot);
+      setAge(d.age_seconds);
+    } catch { /* ignore */ }
+    finally { setLoading(false); setRefreshing(false); }
+  };
+
+  useEffect(() => {
+    load();
+    // Re-poll every 30s so the UI tracks the backend watchdog (which polls every 5 min)
+    const t = setInterval(() => load(), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const summary = snap?.summary || 'unknown';
+  const summaryColor: Record<string, string> = {
+    ok: '#22c55e', partial: '#facc15', degraded: '#f97316',
+    down: '#ef4444', not_configured: '#94a3b8', unknown: '#666',
+  };
+  const summaryLabel: Record<string, string> = {
+    ok: 'All systems operational', partial: 'Partial (some not configured)',
+    degraded: 'Degraded', down: 'Outage detected',
+    not_configured: 'No integrations configured', unknown: 'Loading…',
+  };
+
+  const statusBadge = (s: string) => {
+    const colors: Record<string, string> = {
+      ok: '#22c55e', degraded: '#f97316', down: '#ef4444', not_configured: '#94a3b8',
+    };
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+        background: `${colors[s] || '#666'}20`, color: colors[s] || '#666', border: `1px solid ${colors[s] || '#666'}40` }}>
+        <span style={{ width: 6, height: 6, borderRadius: 3, background: colors[s] || '#666' }} />
+        {s.replace('_', ' ').toUpperCase()}
+      </span>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="founder-health-section">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Health Watchdog</h2>
+          <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Live status of every integration. Auto-polls server-side every 5 min. State flips are audit-logged.</p>
+        </div>
+        <button onClick={() => load(true)} disabled={refreshing}
+          data-testid="founder-health-refresh"
+          style={{ padding: '8px 14px', background: '#1a1a1f', color: '#aaa', border: '1px solid #333', borderRadius: 8, fontSize: 12, cursor: refreshing ? 'not-allowed' : 'pointer' }}>
+          <RefreshCw size={12} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+          {refreshing ? 'Probing…' : 'Probe now'}
+        </button>
+      </div>
+
+      {/* Summary banner */}
+      <div data-testid="founder-health-summary"
+        style={{ padding: 16, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 14,
+                 background: `${summaryColor[summary]}15`, border: `1px solid ${summaryColor[summary]}30` }}>
+        <div style={{ width: 12, height: 12, borderRadius: 6, background: summaryColor[summary], boxShadow: `0 0 12px ${summaryColor[summary]}` }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: summaryColor[summary] }}>{summaryLabel[summary]}</div>
+          {snap?.ts && <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
+            Updated {age !== null ? `${age}s ago` : new Date(snap.ts).toLocaleString()}
+          </div>}
+        </div>
+      </div>
+
+      {/* Per-service cards */}
+      {loading && <div style={{ padding: 16, color: '#666' }}>Probing services…</div>}
+      {!loading && snap?.services && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          {Object.entries(snap.services).map(([name, info]: [string, any]) => (
+            <div key={name} style={{ padding: 14, background: '#111', border: '1px solid #222', borderRadius: 10 }}
+              data-testid={`founder-health-${name}`}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', textTransform: 'capitalize' }}>{name}</div>
+                {statusBadge(info.status)}
+              </div>
+              {info.hint && <div style={{ fontSize: 10, color: '#888' }}>{info.hint}</div>}
+              {info.error && <div style={{ fontSize: 10, color: '#f87171', fontFamily: 'monospace', wordBreak: 'break-word' }}>{info.error}</div>}
+              {info.source && <div style={{ fontSize: 10, color: '#666' }}>source: {info.source}</div>}
+              {info.env && <div style={{ fontSize: 10, color: '#666' }}>env: {info.env}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{ fontSize: 11, color: '#555', margin: 0 }}>
+        Backend auto-probes every <code style={{ background: '#1a1a1f', padding: '1px 5px', borderRadius: 3, color: '#aaa' }}>WATCHDOG_INTERVAL_SECONDS</code> (default 300s).
+        Status flips green↔red are recorded in the Audit Trail as <code style={{ background: '#1a1a1f', padding: '1px 5px', borderRadius: 3, color: '#aaa' }}>founder.health_changed</code>.
+      </p>
+    </div>
+  );
+}
+
 
 
 
@@ -1998,6 +2105,7 @@ const SECTIONS: { id: SectionId; label: string; icon: any; category: string }[] 
   { id: 'audit', label: 'Audit Trail', icon: History, category: 'Live Ops' },
   { id: 'sysstats', label: 'System Stats', icon: Activity, category: 'Live Ops' },
   { id: 'broadcast', label: 'Broadcast', icon: Megaphone, category: 'Live Ops' },
+  { id: 'health', label: 'Health Watchdog', icon: Activity, category: 'Live Ops' },
 ];
 
 function renderSection(id: SectionId) {
@@ -2034,6 +2142,7 @@ function renderSection(id: SectionId) {
     case 'audit': return <AuditTrailSection />;
     case 'sysstats': return <SystemStatsSection />;
     case 'broadcast': return <BroadcastSection />;
+    case 'health': return <HealthWatchdogSection />;
     default: return <DashboardSection />;
   }
 }

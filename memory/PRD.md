@@ -181,6 +181,28 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
 - `Continue with Google` button rendered on AuthLogin (screenshot captured).
 
+### Iter 15 — Health Watchdog
+
+**🩺 Auto-polling integration health monitor**
+- New backend module `routers/health.py` with parallel probes for: MongoDB ping, Resend (key + sender check), Twilio (live account API ping), Daraja (OAuth token round-trip), Stripe (account endpoint ping), EPRA (RSS reachability).
+- Background scheduler `watchdog_scheduler()` polls every `WATCHDOG_INTERVAL_SECONDS` (default 300s). State flips green↔red are recorded as `founder.health_changed` audit entries.
+- Persisted history in `health_snapshots` collection.
+- New endpoints:
+  - `GET /api/founder/health?refresh=true` — current snapshot + age
+  - `GET /api/founder/health/history?limit=N` — last N snapshots
+
+**📊 Founder UI — Health Watchdog section**
+- New sidebar entry under **Live Ops** → "Health Watchdog"
+- Color-coded summary banner (ok/partial/degraded/down/not_configured)
+- Per-service cards with status badge, hint, error detail, source/env
+- "Probe now" button forces a fresh probe; auto-refreshes every 30s
+- testids: `founder-health-section`, `founder-health-summary`, `founder-health-{service}`, `founder-health-refresh`
+
+**🧪 Verified live**
+- Forced probe returns: mongo=ok, epra=ok, resend/twilio/daraja=not_configured, stripe=degraded (Emergent sandbox key returns 401 from Stripe — known proxy issue).
+- Watchdog scheduler boots on backend startup: `INFO: Health watchdog scheduler running every 300 seconds`.
+- 59/59 backend tests still pass.
+
 ### Iter 14 — Founder login fixes + 3 new ops sections + integration tests
 
 **🐛 Critical bugs fixed**
