@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Save, Trash2, MessageCircle, Bot, Send, Building2 } from 'lucide-react';
 import { useFuel } from '@/react-app/context/FuelContext';
 import ExportDropdown from '@/react-app/components/ExportDropdown';
+import InvoiceArchiveButton from '@/react-app/components/InvoiceArchiveButton';
 import { exportInvoicePDF, exportInvoiceExcel, exportInvoiceTXT } from '@/react-app/utils/exportUtils';
 import { formatNumber } from '@/react-app/utils/formatUtils';
 
@@ -537,6 +538,16 @@ export default function Invoice() {
           <ExportDropdown
             onExport={exportHandlers}
             title="Export Invoice"
+          />
+          <InvoiceArchiveButton
+            getInvoicePayload={() => ({
+              ...state,
+              customerName, customerAddress, customerPhone,
+              invoiceDate, totalDue,
+              invoiceNumber: getInvoiceNumber(),
+              invoiceItems: state.invoiceItems,
+              quantityLabel,
+            })}
           />
         </div>
 

@@ -144,6 +144,32 @@ async def identity_stats(_=Depends(require_founder)):
     }
 
 
+@router.get("/founder/identity-stats/trend")
+async def identity_stats_trend(_=Depends(require_founder), days: int = 30):
+    """Daily counts of identity-link merges for the last N days. Used by the
+    Founder Stats sparkline to visualise stitch-rate over time."""
+    from datetime import datetime, timedelta, timezone
+    days = max(1, min(days, 365))
+    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=days - 1)
+    pipeline = [
+        {"$match": {"merged_at": {"$gte": start.isoformat()}}},
+        {"$project": {
+            "day": {"$substr": ["$merged_at", 0, 10]},
+        }},
+        {"$group": {"_id": "$day", "count": {"$sum": 1}}},
+    ]
+    raw = {r["_id"]: r["count"] async for r in db.identity_links.aggregate(pipeline)}
+    series: list[dict[str, Any]] = []
+    cursor = start
+    while cursor <= end:
+        key = cursor.strftime("%Y-%m-%d")
+        series.append({"date": key, "count": raw.get(key, 0)})
+        cursor += timedelta(days=1)
+    return {"ok": True, "days": days, "series": series,
+            "total": sum(p["count"] for p in series)}
+
+
 @router.get("/identity/me/devices")
 async def my_devices(user: dict = Depends(get_current_user)):
     """Return live WS device count for the current user."""

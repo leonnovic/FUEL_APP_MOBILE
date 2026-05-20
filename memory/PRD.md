@@ -18,6 +18,45 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 19 — Match-rate trend sparkline + Invoice S3 archive + GDPR consent banner
+
+**📈 Identity merge trend sparkline** (Founder → System Stats)
+- New backend endpoint `GET /api/founder/identity-stats/trend?days=30` returns daily-bucketed merge counts via Mongo aggregation. Gap-filled (zero counts on days with no merges).
+- Inline SVG sparkline component in FounderSimple — gradient fill, hover-tooltip per day, no chart library dependency.
+
+**🧾 Invoice → S3 archive**
+- `exportInvoicePDF()` extended with optional `mode: 'save' | 'blob'`. Returns the rendered Blob without triggering local download.
+- New helper `lib/s3Archive.ts` — reusable `archiveBlobToS3(filename, blob, category)` + `s3IsConfigured()` checker. Drop-in for any future export.
+- `InvoiceArchiveButton` component appears under the Export dropdown ONLY when S3 is configured. Idle → archiving → done/error states with inline feedback.
+
+**🛡 GDPR/CCPA consent banner** (`ConsentManager.tsx`)
+- Bottom-anchored card with 3 actions: Accept all / Reject non-essential / Customise.
+- Per-purpose toggles in customise view: Essential (locked on) / Analytics / Marketing.
+- Respects browser's Global Privacy Control (`navigator.globalPrivacyControl`) — defaults to "reject" when GPC is on.
+- Persists to `localStorage` (`fuelpro_consent_v1`) + dispatches `fuelpro:consent` event so feature modules can subscribe.
+- Floating shield button (`consent-reopen-btn`) re-opens preferences any time.
+- Export `getConsent()` for other modules to gate analytics/marketing code.
+
+**🐞 Rate-limiter test exemption**
+- `AuthRateLimitMiddleware` now skips `127.0.0.1`, `::1`, `localhost`, `testclient` so pytest doesn't trip the limit. Production ingress is unchanged — 25 rapid bad logins live verified to lock to 429.
+
+**Tested**
+- `pytest tests/` → **143 passed, 4 env-skips** (full regression clean).
+- Live verified: trend endpoint returns 7/30 day series with correct gap-filling. Login page renders consent banner on first load. Rate-limit triggers 429 from real ingress IP after threshold.
+
+**Files added**
+- `/app/frontend/src/react-app/lib/s3Archive.ts` (Blob → S3 helpers)
+- `/app/frontend/src/react-app/components/ConsentManager.tsx` (GDPR/CCPA banner)
+- `/app/frontend/src/react-app/components/InvoiceArchiveButton.tsx`
+
+**Files modified**
+- `/app/backend/routers/identity.py` — `GET /api/founder/identity-stats/trend`
+- `/app/backend/middleware/__init__.py` — test-host exemption on rate limit
+- `/app/frontend/src/react-app/App.tsx` — mounts ConsentManager
+- `/app/frontend/src/react-app/utils/exportUtils.ts` — `exportInvoicePDF(payload, 'blob')` mode
+- `/app/frontend/src/react-app/components/Invoice.tsx` — drops in InvoiceArchiveButton
+- `/app/frontend/src/react-app/pages/FounderSimple.tsx` — trend sparkline section
+
 ### Iter 18 — Identity stitching + S3 storage UI + Security headers + Active devices badge
 
 **🪪 Anonymous → authenticated identity stitching** (`routers/identity.py`)

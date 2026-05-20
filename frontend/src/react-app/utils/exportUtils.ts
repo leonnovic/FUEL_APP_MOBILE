@@ -436,7 +436,7 @@ export function exportSalesTXT(state: any) {
 }
 
 // Enhanced Invoice Export Functions - Matching CAR HIRE INVOICE Format Exactly
-export function exportInvoicePDF(invoiceData: any) {
+export function exportInvoicePDF(invoiceData: any, mode: 'save' | 'blob' = 'save'): Blob | void {
   const doc = new jsPDF();
   
   let y = 20;
@@ -607,6 +607,9 @@ export function exportInvoicePDF(invoiceData: any) {
   
   // Save with descriptive filename
   const filename = `Invoice_${invoiceData.invoiceNumber}_${invoiceData.customerName?.replace(/\s+/g, '_') || 'Customer'}.pdf`;
+  if (mode === 'blob') {
+    return doc.output('blob');
+  }
   doc.save(filename);
 }
 

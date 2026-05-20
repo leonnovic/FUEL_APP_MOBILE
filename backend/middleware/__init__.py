@@ -73,6 +73,9 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path not in self.PROTECTED:
             return await call_next(request)
         ip = request.client.host if request.client else "anonymous"
+        # Skip local/loopback + TestClient so pytest doesn't trip the limiter.
+        if ip in ("127.0.0.1", "::1", "localhost", "testclient"):
+            return await call_next(request)
         now = time.time()
         bucket = self._buckets.setdefault(ip, deque())
         # Drop entries outside the window

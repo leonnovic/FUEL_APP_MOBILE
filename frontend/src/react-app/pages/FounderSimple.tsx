@@ -671,9 +671,48 @@ function AuditTrailSection() {
   );
 }
 
+function MatchRateSparkline({ series }: { series: { date: string; count: number }[] }) {
+  const width = 600;
+  const height = 64;
+  const padding = 4;
+  const maxV = Math.max(1, ...series.map(p => p.count));
+  const stepX = (width - padding * 2) / Math.max(1, series.length - 1);
+  const points = series.map((p, i) => {
+    const x = padding + i * stepX;
+    const y = height - padding - (p.count / maxV) * (height - padding * 2);
+    return { x, y, ...p };
+  });
+  const pathD = points.length > 1
+    ? `M ${points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')}`
+    : '';
+  const fillD = pathD
+    ? `${pathD} L ${points[points.length - 1].x.toFixed(1)},${height - padding} L ${points[0].x.toFixed(1)},${height - padding} Z`
+    : '';
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none"
+      style={{ width: '100%', height: 64, display: 'block' }}
+      data-testid="founder-identity-trend-svg">
+      <defs>
+        <linearGradient id="matchrate-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {fillD && <path d={fillD} fill="url(#matchrate-fill)" />}
+      {pathD && <path d={pathD} stroke="#a5b4fc" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+      {points.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="1.6" fill={p.count > 0 ? '#c7d2fe' : 'transparent'}>
+          <title>{p.date}: {p.count} merge{p.count === 1 ? '' : 's'}</title>
+        </circle>
+      ))}
+    </svg>
+  );
+}
+
 function SystemStatsSection() {
   const [stats, setStats] = useState<any>(null);
   const [identityStats, setIdentityStats] = useState<any>(null);
+  const [trend, setTrend] = useState<{ date: string; count: number }[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -683,10 +722,13 @@ function SystemStatsSection() {
       fetch(`${API_BASE}/api/founder/system-stats`, { headers: _founderHeaders() }).then(r => r.json()),
       fetch(`${API_BASE}/api/founder/identity-stats`, { headers: _founderHeaders() })
         .then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/api/founder/identity-stats/trend?days=30`, { headers: _founderHeaders() })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
     ])
-      .then(([sys, id]) => {
+      .then(([sys, id, tr]) => {
         setStats(sys.stats);
         setIdentityStats(id);
+        setTrend(tr?.series || null);
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
@@ -733,6 +775,19 @@ function SystemStatsSection() {
             <div style={{ fontSize: 22, color: '#fbbf24', fontWeight: 700, fontFamily: 'monospace', marginTop: 4 }}>{identityStats.anonymous_blobs}</div>
             <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>unlinked data blobs</div>
           </div>
+        </div>
+      )}
+
+      {/* Match rate trend (30-day sparkline) */}
+      {!loading && trend && trend.length > 1 && (
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }} data-testid="founder-identity-trend">
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+            <h3 style={{ fontSize: 13, color: '#aaa', margin: 0 }}>Identity merges — last 30 days</h3>
+            <span style={{ fontSize: 11, color: '#666' }}>
+              {trend.reduce((s, p) => s + p.count, 0)} total
+            </span>
+          </div>
+          <MatchRateSparkline series={trend} />
         </div>
       )}
 
