@@ -14,6 +14,8 @@ import SubscriptionChecker from "@/react-app/components/SubscriptionChecker";
 import TrialGate from "@/react-app/components/TrialGate";
 import StripeReturnHandler from "@/react-app/components/StripeReturnHandler";
 import GoogleAuthCallback from "@/react-app/components/GoogleAuthCallback";
+import RealtimeSync from "@/react-app/components/RealtimeSync";
+import BroadcastToast from "@/react-app/components/BroadcastToast";
 import TeamManagement from "@/react-app/pages/TeamManagement";
 import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
 import VerifyReceipt from "@/react-app/pages/VerifyReceipt";
@@ -109,6 +111,8 @@ export default function App() {
               <Router>
                 <StripeReturnHandler />
                 <GoogleAuthCallback />
+                <RealtimeSync />
+                <BroadcastToast />
                 <Routes>
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route path="/founder" element={

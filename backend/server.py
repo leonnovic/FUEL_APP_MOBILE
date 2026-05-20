@@ -26,7 +26,7 @@ from core import (
     db,
     log,
 )
-from routers import auth, digest, features, founder, founder_ops, invites, misc, mpesa, payments, sync
+from routers import auth, digest, features, founder, founder_ops, invites, misc, mpesa, oauth_extra, payments, storage, sync, ws
 from routers import health as health_router
 from routers.founder import ensure_founder_seeded
 from routers.founder_ops import apply_runtime_config_to_env
@@ -66,9 +66,12 @@ async def health():
 # Compose routers under the /api prefix
 # ---------------------------------------------------------------------------
 api.include_router(auth.router)
+api.include_router(oauth_extra.router)
 api.include_router(payments.router)
 api.include_router(mpesa.router)
 api.include_router(sync.router)
+api.include_router(storage.router)
+api.include_router(ws.router)
 api.include_router(invites.router)
 api.include_router(digest.router)
 api.include_router(founder.router)
@@ -140,6 +143,8 @@ async def on_startup():
         await db.daily_digests.create_index([("user_id", 1), ("date", -1)])
         await db.password_resets_log.create_index([("ip", 1), ("at", -1)])
         await db.password_resets_log.create_index([("email", 1), ("at", -1)])
+        await db.storage_files.create_index([("user_id", 1), ("created_at", -1)])
+        await db.storage_files.create_index("key", unique=True)
         await db.invites.create_index(
             [("email", 1), ("status", 1)],
             unique=True,

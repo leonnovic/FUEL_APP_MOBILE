@@ -39,6 +39,16 @@ class IntegrationKeys(BaseModel):
     mpesa_consumer_secret: Optional[str] = Field(default=None, max_length=512)
     mpesa_passkey: Optional[str] = Field(default=None, max_length=512)
     mpesa_shortcode: Optional[str] = Field(default=None, max_length=16)
+    # Apple Sign-In
+    apple_client_id: Optional[str] = Field(default=None, max_length=256)
+    # Microsoft Sign-In (Azure AD)
+    microsoft_client_id: Optional[str] = Field(default=None, max_length=256)
+    microsoft_tenant: Optional[str] = Field(default=None, max_length=128)
+    # AWS S3 cloud storage
+    aws_access_key_id: Optional[str] = Field(default=None, max_length=256)
+    aws_secret_access_key: Optional[str] = Field(default=None, max_length=512)
+    aws_region: Optional[str] = Field(default=None, max_length=64)
+    aws_s3_bucket: Optional[str] = Field(default=None, max_length=128)
 
 
 # Map Pydantic field → env var name (KEY UPPERCASE)
@@ -55,6 +65,13 @@ _KEY_TO_ENV = {
     "mpesa_consumer_secret": "MPESA_CONSUMER_SECRET",
     "mpesa_passkey": "MPESA_PASSKEY",
     "mpesa_shortcode": "MPESA_SHORTCODE",
+    "apple_client_id": "APPLE_CLIENT_ID",
+    "microsoft_client_id": "MICROSOFT_CLIENT_ID",
+    "microsoft_tenant": "MICROSOFT_TENANT",
+    "aws_access_key_id": "AWS_ACCESS_KEY_ID",
+    "aws_secret_access_key": "AWS_SECRET_ACCESS_KEY",
+    "aws_region": "AWS_REGION",
+    "aws_s3_bucket": "AWS_S3_BUCKET",
 }
 
 
@@ -185,6 +202,17 @@ async def broadcast_message(body: dict, _=Depends(require_founder)):
     } for u in users]
     if docs:
         await db.audit_log.insert_many(docs)
+    # Realtime broadcast — pushes the message to anyone currently connected
+    # so the toast appears instantly rather than on next page-load.
+    try:
+        from routers.ws import broadcast_all
+        await broadcast_all({
+            "type": "founder.broadcast",
+            "message": msg,
+            "severity": severity,
+        })
+    except Exception:
+        pass
     return {"ok": True, "sent_to": len(docs)}
 
 
@@ -301,6 +329,35 @@ async def test_integration(service: str, body: dict, _=Depends(require_founder))
         return {"ok": bool(key), "key_present": bool(key),
                 "key_preview": (key[:7] + "…" + key[-4:]) if key else None,
                 "trust_redirect": os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"}
+
+    if service == "s3":
+        if not (os.environ.get("AWS_ACCESS_KEY_ID")
+                and os.environ.get("AWS_SECRET_ACCESS_KEY")
+                and os.environ.get("AWS_S3_BUCKET")):
+            return {"ok": False, "error": "AWS S3 keys / bucket not configured"}
+        try:
+            import boto3
+            client = boto3.client(
+                "s3",
+                region_name=os.environ.get("AWS_REGION", "us-east-1"),
+                aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+                aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+            )
+            bucket = os.environ["AWS_S3_BUCKET"]
+            client.head_bucket(Bucket=bucket)
+            return {"ok": True, "bucket": bucket,
+                    "region": os.environ.get("AWS_REGION", "us-east-1")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    if service == "apple":
+        cid = os.environ.get("APPLE_CLIENT_ID", "")
+        return {"ok": bool(cid), "client_id_present": bool(cid)}
+
+    if service == "microsoft":
+        cid = os.environ.get("MICROSOFT_CLIENT_ID", "")
+        tenant = os.environ.get("MICROSOFT_TENANT", "common")
+        return {"ok": bool(cid), "client_id_present": bool(cid), "tenant": tenant}
 
     raise HTTPException(status_code=400, detail=f"Unknown service: {service}")
 

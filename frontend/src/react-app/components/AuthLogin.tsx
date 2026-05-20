@@ -1,6 +1,7 @@
 import { useAuth } from '@/react-app/context/AuthContext';
 import { useI18n } from '@/react-app/context/I18nContext';
 import LanguagePicker from '@/react-app/components/LanguagePicker';
+import ExtraOAuthButtons from '@/react-app/components/ExtraOAuthButtons';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
@@ -225,7 +226,9 @@ export default function AuthLogin() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               {t('auth.continue_google')}
-            </button>            <div className="relative mb-4">
+            </button>
+            <ExtraOAuthButtons />
+            <div className="relative mb-4">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div>
               <div className="relative flex justify-center"><span className="px-3 bg-gray-900 text-[10px] text-gray-500 uppercase tracking-wider">{t('auth.or_with_email')}</span></div>
             </div>

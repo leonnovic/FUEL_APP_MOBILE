@@ -88,6 +88,9 @@
     "cap:add:android": "npx cap add android",
     "cap:build": "npm run build && npx cap sync && cd android && ./gradlew assembleRelease"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "build": {
     "appId": "com.fuelpro.app",
     "productName": "FuelPro",

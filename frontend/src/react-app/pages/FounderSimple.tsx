@@ -531,9 +531,9 @@ function ConfigSection() {
 
 // ───────────────────────────────────────────────────────────────────
 
-// Iter 14: Test integrations live (Resend / Twilio / Daraja / Stripe)
+// Iter 14: Test integrations live (Resend / Twilio / Daraja / Stripe / S3 / Apple / Microsoft)
 function IntegrationTestPanel() {
-  const [service, setService] = useState<'resend' | 'twilio' | 'daraja' | 'stripe'>('resend');
+  const [service, setService] = useState<'resend' | 'twilio' | 'daraja' | 'stripe' | 's3' | 'apple' | 'microsoft'>('resend');
   const [to, setTo] = useState('');
   const [msg, setMsg] = useState('FuelPro test message from founder console');
   const [result, setResult] = useState<any>(null);
@@ -558,6 +558,9 @@ function IntegrationTestPanel() {
     twilio: '+254712345678',
     daraja: '(not needed — checks token)',
     stripe: '(not needed — checks key presence)',
+    s3: '(not needed — checks bucket access)',
+    apple: '(not needed — checks client id)',
+    microsoft: '(not needed — checks client id)',
   };
 
   return (
@@ -574,6 +577,9 @@ function IntegrationTestPanel() {
             <option value="twilio">📱 Twilio</option>
             <option value="daraja">💰 Daraja</option>
             <option value="stripe">💳 Stripe</option>
+            <option value="s3">☁️ AWS S3</option>
+            <option value="apple">🍎 Apple Sign-In</option>
+            <option value="microsoft">🪟 Microsoft Sign-In</option>
           </select>
         </div>
         <div>
@@ -787,6 +793,8 @@ function HealthWatchdogSection() {
   const [age, setAge] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [alert, setAlert] = useState<string | null>(null);
+  const lastSummary = useRef<string | null>(null);
 
   const load = async (forceRefresh = false) => {
     if (forceRefresh) setRefreshing(true);
@@ -795,6 +803,14 @@ function HealthWatchdogSection() {
       const d = await r.json();
       setSnap(d.snapshot);
       setAge(d.age_seconds);
+      const newSummary = d.snapshot?.summary;
+      // Auto-toast on degradation transitions (green → not-green)
+      if (lastSummary.current && newSummary && newSummary !== lastSummary.current
+          && newSummary !== 'ok' && newSummary !== 'not_configured') {
+        setAlert(`Integration health changed: ${lastSummary.current} → ${newSummary}`);
+        setTimeout(() => setAlert(null), 8000);
+      }
+      lastSummary.current = newSummary || lastSummary.current;
     } catch { /* ignore */ }
     finally { setLoading(false); setRefreshing(false); }
   };
@@ -832,6 +848,12 @@ function HealthWatchdogSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} data-testid="founder-health-section">
+      {alert && (
+        <div data-testid="founder-health-alert"
+          style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fecaca', fontSize: 12, fontWeight: 600 }}>
+          ⚠ {alert}
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Health Watchdog</h2>
@@ -1061,6 +1083,37 @@ function ApiKeysSection() {
         <Field label="MPESA_CONSUMER_SECRET" field="mpesa_consumer_secret" type="password" />
         <Field label="MPESA_PASSKEY" field="mpesa_passkey" type="password" />
         <Field label="MPESA_SHORTCODE" field="mpesa_shortcode" placeholder="174379 (sandbox default)" />
+      </div>
+
+      {/* Apple Sign-In */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>🍎 Apple Sign-In</h3>
+        <p style={{ fontSize: 11, color: '#666', margin: '0 0 10px' }}>
+          Apple Service ID (e.g. <code style={{ color: '#aaa' }}>com.fuelpro.signin.web</code>). Configure at developer.apple.com → Identifiers → Services IDs. The Apple button on the login page appears the moment this is saved.
+        </p>
+        <Field label="APPLE_CLIENT_ID" field="apple_client_id" placeholder="com.yourcompany.web" />
+      </div>
+
+      {/* Microsoft Sign-In */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>🪟 Microsoft Sign-In</h3>
+        <p style={{ fontSize: 11, color: '#666', margin: '0 0 10px' }}>
+          Azure AD Application (client) ID. Tenant defaults to <code style={{ color: '#aaa' }}>common</code> (any Microsoft account). Use a specific tenant id to lock to one org.
+        </p>
+        <Field label="MICROSOFT_CLIENT_ID" field="microsoft_client_id" placeholder="00000000-0000-0000-0000-000000000000" />
+        <Field label="MICROSOFT_TENANT" field="microsoft_tenant" placeholder="common | organizations | <tenant-id>" />
+      </div>
+
+      {/* AWS S3 cloud storage */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>☁️ AWS S3 (Cloud storage)</h3>
+        <p style={{ fontSize: 11, color: '#666', margin: '0 0 10px' }}>
+          Used for receipts, station photos, and payroll exports. Files are uploaded directly browser → S3 using pre-signed URLs (no proxy size limits).
+        </p>
+        <Field label="AWS_ACCESS_KEY_ID" field="aws_access_key_id" placeholder="AKIA…" type="password" />
+        <Field label="AWS_SECRET_ACCESS_KEY" field="aws_secret_access_key" type="password" />
+        <Field label="AWS_REGION" field="aws_region" placeholder="us-east-1" />
+        <Field label="AWS_S3_BUCKET" field="aws_s3_bucket" placeholder="fuelpro-prod-assets" />
       </div>
 
       {/* Iter 14: Test integrations live */}

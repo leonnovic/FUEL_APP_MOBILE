@@ -45,6 +45,12 @@ async def save_user_data(
         {"$set": {"user_id": uid, "data": data, "updated_at": now}},
         upsert=True,
     )
+    # Realtime — fan out to other devices on the same account
+    try:
+        from routers.ws import publish_to_user
+        await publish_to_user(uid, {"type": "user-data.updated", "updated_at": now})
+    except Exception:
+        pass
     return {"ok": True, "updated_at": now}
 
 
@@ -70,6 +76,16 @@ async def sync_put(collection: str, request: Request, user: dict = Depends(get_c
     if items:
         scoped = [{**it, "user_id": user["id"]} for it in items]
         await coll.insert_many(scoped)
+    # Realtime broadcast — push to other devices for this user
+    try:
+        from routers.ws import publish_to_user
+        await publish_to_user(user["id"], {
+            "type": "sync.updated",
+            "collection": collection,
+            "count": len(items),
+        })
+    except Exception:
+        pass
     return {"ok": True, "saved": len(items), "collection": collection}
 
 
