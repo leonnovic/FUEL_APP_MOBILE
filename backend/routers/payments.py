@@ -116,9 +116,68 @@ async def stripe_checkout(
     return {"url": session.url, "session_id": session.session_id}
 
 
+async def _resolve_stripe_status(sc, session_id: str, tx: dict) -> tuple[str, str, int, str, Optional[str], bool]:
+    """Look up the Stripe session, falling back to local trust if Emergent's
+    retrieve proxy is unavailable. Returns:
+    (status_str, payment_status, amount_total, currency, stripe_error, from_live).
+    Raises HTTPException(502) if Stripe lookup fails and trust-redirect is off.
+    """
+    stripe_error: Optional[str] = None
+    try:
+        cs: Optional[CheckoutStatusResponse] = await sc.get_checkout_status(session_id)
+    except Exception as e:
+        cs = None
+        stripe_error = str(e)
+        log.info("Stripe status lookup failed for %s (%s) — falling back to local trust",
+                 session_id, stripe_error)
+
+    if cs is not None:
+        return cs.status, cs.payment_status, cs.amount_total, cs.currency, stripe_error, True
+    if _stripe_trust_redirect():
+        return (
+            "complete", "paid",
+            int(float(tx.get("amount", 0)) * 100),
+            tx.get("currency", "usd"),
+            stripe_error, False,
+        )
+    raise HTTPException(status_code=502, detail=f"Stripe status lookup failed: {stripe_error}")
+
+
+async def _activate_subscription_from_stripe(tx: dict, session_id: str, from_live: bool) -> None:
+    """Flip user → active, upsert subscription doc, write audit-log entry."""
+    plan = tx.get("plan", "starter")
+    user_id = (tx.get("metadata") or {}).get("user_id")
+    if not user_id:
+        return
+    billing_cycle = tx.get("billing_cycle", "monthly")
+    period_days = 365 if billing_cycle == "yearly" else 31
+    period_end = (datetime.now(timezone.utc) + timedelta(days=period_days)).isoformat()
+    now = now_iso()
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"tier": plan, "subscription_status": "active",
+                  "subscription_period_end": period_end, "updated_at": now}},
+    )
+    await db.subscriptions.update_one(
+        {"user_id": user_id},
+        {"$set": {"user_id": user_id, "tier": plan, "status": "active",
+                  "provider": "stripe", "session_id": session_id,
+                  "billing_cycle": billing_cycle, "period_end": period_end,
+                  "updated_at": now}},
+        upsert=True,
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": user_id, "action": "subscription.activated",
+        "at": now,
+        "meta": {"plan": plan, "provider": "stripe", "session_id": session_id,
+                 "source": "status_lookup" if from_live else "redirect_trust"},
+    })
+
+
 @router.get("/payments/stripe/status/{session_id}")
 async def stripe_status(session_id: str, request: Request):
-    """See server.py history: trusts redirect when Emergent proxy can't retrieve."""
+    """Lookup + apply Stripe checkout status. Trusts the redirect if Emergent
+    proxy can't retrieve (toggleable via STRIPE_TRUST_REDIRECT)."""
     if not _stripe_key():
         raise HTTPException(status_code=503, detail="Stripe not configured")
 
@@ -126,58 +185,11 @@ async def stripe_status(session_id: str, request: Request):
     if not tx:
         raise HTTPException(status_code=404, detail="Checkout session not found")
 
-    cs: Optional[CheckoutStatusResponse] = None
-    stripe_error: Optional[str] = None
-    sc = get_stripe(request)
-    try:
-        cs = await sc.get_checkout_status(session_id)
-    except Exception as e:
-        stripe_error = str(e)
-        log.info("Stripe status lookup failed for %s (%s) — falling back to local trust", session_id, stripe_error)
+    (status_str, payment_status, amount_total, currency,
+     stripe_error, from_live) = await _resolve_stripe_status(get_stripe(request), session_id, tx)
 
-    if cs is not None:
-        status_str = cs.status
-        payment_status = cs.payment_status
-        amount_total = cs.amount_total
-        currency = cs.currency
-    elif _stripe_trust_redirect():
-        # Fallback: Emergent proxy retrieve is broken — trust the redirect.
-        # Toggle STRIPE_TRUST_REDIRECT=0 in /app/backend/.env to disable.
-        status_str = "complete"
-        payment_status = "paid"
-        amount_total = int(float(tx.get("amount", 0)) * 100)
-        currency = tx.get("currency", "usd")
-    else:
-        raise HTTPException(status_code=502, detail=f"Stripe status lookup failed: {stripe_error}")
-
-    already_processed = tx.get("payment_status") == "paid"
-    if payment_status == "paid" and not already_processed:
-        plan = tx.get("plan", "starter")
-        meta = tx.get("metadata", {})
-        user_id = meta.get("user_id")
-        billing_cycle = tx.get("billing_cycle", "monthly")
-        period_days = 365 if billing_cycle == "yearly" else 31
-        period_end = (datetime.now(timezone.utc) + timedelta(days=period_days)).isoformat()
-        if user_id:
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"tier": plan, "subscription_status": "active",
-                          "subscription_period_end": period_end, "updated_at": now_iso()}},
-            )
-            await db.subscriptions.update_one(
-                {"user_id": user_id},
-                {"$set": {"user_id": user_id, "tier": plan, "status": "active",
-                          "provider": "stripe", "session_id": session_id,
-                          "billing_cycle": billing_cycle, "period_end": period_end,
-                          "updated_at": now_iso()}},
-                upsert=True,
-            )
-            await db.audit_log.insert_one({
-                "id": new_id(), "user_id": user_id, "action": "subscription.activated",
-                "at": now_iso(),
-                "meta": {"plan": plan, "provider": "stripe", "session_id": session_id,
-                         "source": "status_lookup" if cs else "redirect_trust"},
-            })
+    if payment_status == "paid" and tx.get("payment_status") != "paid":
+        await _activate_subscription_from_stripe(tx, session_id, from_live)
 
     await db.payment_transactions.update_one(
         {"session_id": session_id},

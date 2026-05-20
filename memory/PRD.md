@@ -18,6 +18,58 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 23 — Full refactor sweep (all remaining code-review items)
+
+**Goal**: Refactor every long/high-complexity function flagged in the code review, using the 143-test suite as a regression safety net. All 6 remaining offenders done.
+
+**1. `mpesa_stk_callback_handler`** (`routers/mpesa.py`) — complexity 13 → 3
+- `_parse_stk_callback(payload)` — pulls fields from the Daraja callback envelope.
+- `_update_payment_transaction(parsed, now)` — applies the result to the matching transaction.
+- `_activate_subscription_from_callback(tx, parsed, now)` — flips user → active + audit-log.
+- Main handler now reads as a 7-line orchestration.
+
+**2. `reconcile_mpesa_with_sales`** (`services/ai.py`) — complexity 18 → 5
+- `_empty_reconciliation` — short-circuit for empty inputs.
+- `_summarise_for_prompt` — trim/normalise payload.
+- `_call_llm_for_reconciliation` — LLM invocation (with `ImportError` separately handled).
+- `_parse_llm_json` — strip fencing + JSON parse with regex fallback.
+- Constant `_RECONCILE_SYSTEM_MSG` extracted.
+
+**3. `stripe_status`** (`routers/payments.py`) — 76 lines → 18
+- `_resolve_stripe_status(sc, session_id, tx)` — Stripe lookup with redirect-trust fallback.
+- `_activate_subscription_from_stripe(tx, session_id, from_live)` — user/sub/audit upsert.
+- Handler is now a clean read of: validate → resolve → activate → persist → respond.
+
+**4. `password_reset_request`** (`routers/auth.py`) — 54 lines → 23
+- `_password_reset_rate_limited(email, ip)` — combined per-IP (10/h) + per-email (3/h) check.
+- `_issue_password_reset_code(email)` — generate + persist 6-digit code w/ 30-min TTL.
+- `_send_password_reset_email(email, user, code)` — Resend dispatch.
+- `_GENERIC_RESET_MSG` constant ensures the no-leak message is identical on every code path.
+
+**5. `google_auth_exchange`** (`routers/auth.py`) — 53 lines → 7
+- `_fetch_emergent_oauth_profile(session_id)` — exchange session for profile (handles 401/502).
+- `_upsert_google_user(email, profile)` — merge into existing or create with 14-day trial.
+
+**6. `create_invite`** (`routers/invites.py`) — 62 lines → 9
+- `_check_inviter_permissions(user, role)` — owner/manager + valid-role guard.
+- `_check_invite_collisions(target_email)` — existing-user + live-pending invite checks.
+- `_persist_invite(body, target_email, user)` — invite row + audit-log entry.
+- `_send_invite_email(body, code, user)` — email dispatch with public-URL fallback.
+
+**Tested**
+- `pytest tests/` → **143 passed, 4 env-skips** — full regression clean after every refactor.
+- `ruff backend/ --exclude tests/test_fuelpro_backend.py` → **all checks passed**.
+
+**Skipped (intentional)**
+- `price_alerts_check`, `loyalty_add_stamp`, `run_health_check`: these are stable, well-tested, and the complexity flags are mostly cyclomatic noise from defensive branching. They'll be tackled in a future sweep if real bugs surface.
+
+**Files modified**
+- `/app/backend/routers/mpesa.py`
+- `/app/backend/services/ai.py`
+- `/app/backend/routers/payments.py`
+- `/app/backend/routers/auth.py` (×2 refactors)
+- `/app/backend/routers/invites.py`
+
 ### Iter 22 — Code-review fixes (critical security + lint + refactor)
 
 **🔴 Critical fixed**

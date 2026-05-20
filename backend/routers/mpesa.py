@@ -171,61 +171,80 @@ async def mpesa_stk_push(body: STKBody, user: dict = Depends(get_current_user)):
     return {"ok": True, "tx_id": tx_id, **{k: v for k, v in update.items() if k != "updated_at"}}
 
 
+def _parse_stk_callback(payload: dict) -> dict:
+    """Pull the bits we care about out of a Daraja STK callback envelope."""
+    cb = payload.get("Body", {}).get("stkCallback", {})
+    items = (cb.get("CallbackMetadata") or {}).get("Item", []) or []
+    parsed = {
+        "checkout_request_id": cb.get("CheckoutRequestID"),
+        "result_code": cb.get("ResultCode"),
+        "result_desc": cb.get("ResultDesc"),
+        "amount": None, "receipt": None, "phone": None, "txn_date": None,
+    }
+    key_map = {
+        "Amount": "amount", "MpesaReceiptNumber": "receipt",
+        "PhoneNumber": "phone", "TransactionDate": "txn_date",
+    }
+    for it in items:
+        target = key_map.get(it.get("Name"))
+        if target:
+            parsed[target] = it.get("Value")
+    parsed["status_str"] = "paid" if str(parsed["result_code"]) == "0" else "failed"
+    return parsed
+
+
+async def _update_payment_transaction(parsed: dict, now: str) -> None:
+    """Apply the callback result to the matching transaction row."""
+    await db.payment_transactions.update_one(
+        {"checkout_request_id": parsed["checkout_request_id"]},
+        {"$set": {
+            "payment_status": parsed["status_str"],
+            "status": "complete" if parsed["status_str"] == "paid" else "failed",
+            "result_code": parsed["result_code"],
+            "result_desc": parsed["result_desc"],
+            "mpesa_receipt": parsed["receipt"],
+            "mpesa_amount": parsed["amount"],
+            "mpesa_phone": parsed["phone"],
+            "transaction_date": parsed["txn_date"],
+            "updated_at": now,
+        }},
+    )
+
+
+async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str) -> None:
+    """Flip the user to `active` + write subscription + audit-log entry."""
+    uid = tx.get("user_id")
+    plan = tx.get("plan", "starter")
+    period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {"tier": plan, "subscription_status": "active",
+                  "subscription_period_end": period_end, "updated_at": now}},
+    )
+    await db.subscriptions.update_one(
+        {"user_id": uid},
+        {"$set": {"user_id": uid, "tier": plan, "status": "active",
+                  "provider": "mpesa", "mpesa_receipt": parsed["receipt"],
+                  "period_end": period_end, "updated_at": now}},
+        upsert=True,
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": uid, "action": "subscription.activated",
+        "at": now, "meta": {"plan": plan, "provider": "mpesa", "receipt": parsed["receipt"]},
+    })
+
+
 async def mpesa_stk_callback_handler(request: Request):
     """Mounted on the FastAPI app at /api/mpesa/stk-callback by server.py."""
-    payload = await request.json()
-    cb = payload.get("Body", {}).get("stkCallback", {})
-    checkout_request_id = cb.get("CheckoutRequestID")
-    result_code = cb.get("ResultCode")
-    result_desc = cb.get("ResultDesc")
-    items = (cb.get("CallbackMetadata") or {}).get("Item", []) or []
-    amount = receipt = phone = txn_date = None
-    for it in items:
-        n = it.get("Name")
-        v = it.get("Value")
-        if n == "Amount":
-            amount = v
-        elif n == "MpesaReceiptNumber":
-            receipt = v
-        elif n == "PhoneNumber":
-            phone = v
-        elif n == "TransactionDate":
-            txn_date = v
-
-    status_str = "paid" if str(result_code) == "0" else "failed"
-    now = now_iso()
-
-    tx = await db.payment_transactions.find_one({"checkout_request_id": checkout_request_id}, {"_id": 0})
+    parsed = _parse_stk_callback(await request.json())
+    tx = await db.payment_transactions.find_one(
+        {"checkout_request_id": parsed["checkout_request_id"]}, {"_id": 0},
+    )
     if tx and tx.get("payment_status") != "paid":
-        await db.payment_transactions.update_one(
-            {"checkout_request_id": checkout_request_id},
-            {"$set": {
-                "payment_status": status_str, "status": "complete" if status_str == "paid" else "failed",
-                "result_code": result_code, "result_desc": result_desc,
-                "mpesa_receipt": receipt, "mpesa_amount": amount, "mpesa_phone": phone,
-                "transaction_date": txn_date, "updated_at": now,
-            }},
-        )
-        if status_str == "paid":
-            uid = tx.get("user_id")
-            plan = tx.get("plan", "starter")
-            period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
-            await db.users.update_one(
-                {"id": uid},
-                {"$set": {"tier": plan, "subscription_status": "active",
-                          "subscription_period_end": period_end, "updated_at": now}},
-            )
-            await db.subscriptions.update_one(
-                {"user_id": uid},
-                {"$set": {"user_id": uid, "tier": plan, "status": "active",
-                          "provider": "mpesa", "mpesa_receipt": receipt,
-                          "period_end": period_end, "updated_at": now}},
-                upsert=True,
-            )
-            await db.audit_log.insert_one({
-                "id": new_id(), "user_id": uid, "action": "subscription.activated",
-                "at": now, "meta": {"plan": plan, "provider": "mpesa", "receipt": receipt},
-            })
+        now = now_iso()
+        await _update_payment_transaction(parsed, now)
+        if parsed["status_str"] == "paid":
+            await _activate_subscription_from_callback(tx, parsed, now)
     return {"ResultCode": 0, "ResultDesc": "Callback received"}
 
 
