@@ -181,11 +181,16 @@ async def mpesa_stk_callback_handler(request: Request):
     items = (cb.get("CallbackMetadata") or {}).get("Item", []) or []
     amount = receipt = phone = txn_date = None
     for it in items:
-        n = it.get("Name"); v = it.get("Value")
-        if n == "Amount": amount = v
-        elif n == "MpesaReceiptNumber": receipt = v
-        elif n == "PhoneNumber": phone = v
-        elif n == "TransactionDate": txn_date = v
+        n = it.get("Name")
+        v = it.get("Value")
+        if n == "Amount":
+            amount = v
+        elif n == "MpesaReceiptNumber":
+            receipt = v
+        elif n == "PhoneNumber":
+            phone = v
+        elif n == "TransactionDate":
+            txn_date = v
 
     status_str = "paid" if str(result_code) == "0" else "failed"
     now = now_iso()
@@ -202,7 +207,8 @@ async def mpesa_stk_callback_handler(request: Request):
             }},
         )
         if status_str == "paid":
-            uid = tx.get("user_id"); plan = tx.get("plan", "starter")
+            uid = tx.get("user_id")
+            plan = tx.get("plan", "starter")
             period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
             await db.users.update_one(
                 {"id": uid},

@@ -66,7 +66,8 @@ def _parse_rss_for_prices(feed_text: str) -> Optional[dict[str, Any]]:
             # Replicate Nairobi pricing to other towns adjusted by the baseline deltas
             base_n = BASELINE["prices"]["nairobi"]
             for town, p in BASELINE["prices"].items():
-                if town == "nairobi": continue
+                if town == "nairobi":
+                    continue
                 prices[town] = {
                     fuel: round(prices["nairobi"][fuel] + (p[fuel] - base_n[fuel]), 2)
                     for fuel in ("petrol", "diesel", "kerosene")

@@ -34,6 +34,44 @@ class LinkBody(BaseModel):
     anonymous_id: str = Field(min_length=4, max_length=128)
 
 
+async def _merge_user_data(anon_id: str, user_id: str, counts: dict[str, Any]) -> None:
+    """Move the anonymous `user_data` blob over — only if the authenticated user
+    doesn't already have one (we never silently overwrite user data)."""
+    anon_blob = await db.user_data.find_one({"user_id": anon_id}, {"_id": 0})
+    if not anon_blob:
+        return
+    user_blob = await db.user_data.find_one({"user_id": user_id}, {"_id": 0})
+    if user_blob:
+        counts["user_data"] = "kept_authenticated_copy"
+        return
+    await db.user_data.update_one(
+        {"user_id": anon_id},
+        {"$set": {"user_id": user_id, "merged_from": anon_id, "merged_at": now_iso()}},
+    )
+    counts["user_data"] = "moved"
+
+
+async def _merge_sync_collections(anon_id: str, user_id: str, counts: dict[str, Any]) -> None:
+    """Re-key every row in every sync_* collection from anonymous → authenticated."""
+    for c in ALLOWED_COLLECTIONS:
+        moved = await db[f"sync_{c}"].update_many(
+            {"user_id": anon_id}, {"$set": {"user_id": user_id}},
+        )
+        if moved.modified_count:
+            counts[f"sync_{c}"] = moved.modified_count
+
+
+async def _merge_simple_collection(coll_name: str, anon_id: str, user_id: str,
+                                   counts: dict[str, Any], count_key: str) -> None:
+    """Re-key rows in a single top-level collection. Used for audit_log and
+    storage_files where there's no per-collection projection — just `user_id`."""
+    moved = await db[coll_name].update_many(
+        {"user_id": anon_id}, {"$set": {"user_id": user_id}},
+    )
+    if moved.modified_count:
+        counts[count_key] = moved.modified_count
+
+
 @router.post("/identity/link")
 async def link_anonymous(body: LinkBody, user: dict = Depends(get_current_user)):
     """Move all activity keyed by `anonymous_id` over to the authenticated
@@ -50,60 +88,22 @@ async def link_anonymous(body: LinkBody, user: dict = Depends(get_current_user))
         return {"ok": True, "noop": True, "merged_at": existing.get("merged_at")}
 
     counts: dict[str, Any] = {}
+    await _merge_user_data(anon_id, user["id"], counts)
+    await _merge_sync_collections(anon_id, user["id"], counts)
+    await _merge_simple_collection("audit_log", anon_id, user["id"], counts, "audit_log")
+    await _merge_simple_collection("storage_files", anon_id, user["id"], counts, "storage_files")
 
-    # 1. user_data blob — move only if the user doesn't already have one.
-    anon_blob = await db.user_data.find_one({"user_id": anon_id}, {"_id": 0})
-    if anon_blob:
-        user_blob = await db.user_data.find_one({"user_id": user["id"]}, {"_id": 0})
-        if not user_blob:
-            await db.user_data.update_one(
-                {"user_id": anon_id},
-                {"$set": {"user_id": user["id"], "merged_from": anon_id, "merged_at": now_iso()}},
-            )
-            counts["user_data"] = "moved"
-        else:
-            counts["user_data"] = "kept_authenticated_copy"
-
-    # 2. sync_* collections — append anonymous rows to the authenticated user's
-    # rows (or move if the user has none for that collection).
-    for c in ALLOWED_COLLECTIONS:
-        coll = db[f"sync_{c}"]
-        moved = await coll.update_many(
-            {"user_id": anon_id},
-            {"$set": {"user_id": user["id"]}},
-        )
-        if moved.modified_count:
-            counts[f"sync_{c}"] = moved.modified_count
-
-    # 3. audit_log entries
-    audit_moved = await db.audit_log.update_many(
-        {"user_id": anon_id}, {"$set": {"user_id": user["id"]}},
-    )
-    if audit_moved.modified_count:
-        counts["audit_log"] = audit_moved.modified_count
-
-    # 4. storage_files
-    files_moved = await db.storage_files.update_many(
-        {"user_id": anon_id}, {"$set": {"user_id": user["id"]}},
-    )
-    if files_moved.modified_count:
-        counts["storage_files"] = files_moved.modified_count
-
-    link = {
-        "id": new_id(),
-        "anonymous_id": anon_id,
-        "user_id": user["id"],
-        "merged_at": now_iso(),
-        "counts": counts,
-    }
-    await db.identity_links.insert_one(link)
+    merged_at = now_iso()
+    await db.identity_links.insert_one({
+        "id": new_id(), "anonymous_id": anon_id, "user_id": user["id"],
+        "merged_at": merged_at, "counts": counts,
+    })
     await db.audit_log.insert_one({
         "id": new_id(), "user_id": user["id"], "action": "identity.link",
-        "at": now_iso(), "meta": {"anonymous_id": anon_id, "counts": counts},
+        "at": merged_at, "meta": {"anonymous_id": anon_id, "counts": counts},
     })
     log.info("Identity link: anon=%s → user=%s counts=%s", anon_id, user["id"], counts)
-    link.pop("_id", None)
-    return {"ok": True, "merged_at": link["merged_at"], "counts": counts}
+    return {"ok": True, "merged_at": merged_at, "counts": counts}
 
 
 @router.get("/founder/identity-stats")

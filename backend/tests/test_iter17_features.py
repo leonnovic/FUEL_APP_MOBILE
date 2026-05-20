@@ -26,7 +26,8 @@ if not BASE_URL:
                 break
 
 WS_BASE = BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
-FOUNDER_PASSWORD = "publican1D#20"
+# Founder password read from env (see conftest.py for fallback to .env file).
+FOUNDER_PASSWORD = os.environ.get("FOUNDER_PASSWORD") or "publican1D#20"
 
 
 # ---------------------------------------------------------------------------

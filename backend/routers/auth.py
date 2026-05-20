@@ -214,7 +214,7 @@ async def auth_quick_start(request: Request):
 
 @router.post("/auth/claim-guest")
 async def auth_claim_guest(
-    body: RegisterBody,
+    body: UserCreate,
     request: Request,
     user: dict = Depends(get_current_user),
 ):

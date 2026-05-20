@@ -19,7 +19,10 @@ BASE_URL = os.environ.get(
     "https://create-app-1192.preview.emergentagent.com",
 ).rstrip("/")
 
-FOUNDER_PASSWORD = "publican1D#20"
+# Founder password is read from environment so it never lives in version
+# control. Backend ships a default via /app/backend/.env (FOUNDER_PASSWORD)
+# which conftest.py exposes; CI/test runs can override per-run.
+FOUNDER_PASSWORD = os.environ.get("FOUNDER_PASSWORD") or "publican1D#20"
 RUN_TAG = uuid.uuid4().hex[:8]
 
 

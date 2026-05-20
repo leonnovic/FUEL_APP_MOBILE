@@ -56,8 +56,10 @@ async def send_email(
             "to": recipients,
             "subject": subject,
         }
-        if html: params["html"] = html
-        if text: params["text"] = text
+        if html:
+            params["html"] = html
+        if text:
+            params["text"] = text
         result = await asyncio.to_thread(resend.Emails.send, params)
         return {"ok": True, "id": result.get("id")}
     except Exception as e:

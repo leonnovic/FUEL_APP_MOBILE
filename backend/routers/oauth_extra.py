@@ -69,41 +69,54 @@ def _select_key(keys: list[dict[str, Any]], kid: str) -> Optional[dict[str, Any]
     return None
 
 
-async def _verify_jwt(token: str, jwks_url: str, audience: str, issuer: str) -> dict[str, Any]:
-    """Verify a JWT against the given JWKS + audience + issuer."""
+def _extract_kid(token: str) -> str:
+    """Extract the `kid` (key id) from the JWT header. Raises 401 on any
+    parse error or if kid is missing."""
     try:
         header = jwt.get_unverified_header(token)
-        kid = header.get("kid")
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token header: {e}")
+    kid = header.get("kid")
     if not kid:
         raise HTTPException(status_code=401, detail="Token missing key id (kid)")
+    return kid
 
+
+async def _resolve_signing_key(jwks_url: str, kid: str) -> dict[str, Any]:
+    """Look up the JWKS entry matching `kid`. Refreshes the cache once on miss
+    so that newly-rotated keys are picked up without a server restart."""
+    keys = await _fetch_jwks(jwks_url)
+    key_data = _select_key(keys, kid)
+    if key_data:
+        return key_data
+    _JWKS_CACHE.pop(jwks_url, None)
     keys = await _fetch_jwks(jwks_url)
     key_data = _select_key(keys, kid)
     if not key_data:
-        # Key may have rotated since cache — force refresh once
-        _JWKS_CACHE.pop(jwks_url, None)
-        keys = await _fetch_jwks(jwks_url)
-        key_data = _select_key(keys, kid)
-    if not key_data:
         raise HTTPException(status_code=401, detail="Signing key not found in provider JWKS")
+    return key_data
 
+
+def _verify_signature(token: str, key_data: dict[str, Any]) -> None:
+    """Cryptographically verify the JWT signature against the JWKS key."""
     public_key = jwk.construct(key_data)
     message, encoded_sig = token.rsplit(".", 1)
     decoded_sig = base64url_decode(encoded_sig.encode())
     if not public_key.verify(message.encode(), decoded_sig):
         raise HTTPException(status_code=401, detail="Token signature invalid")
 
+
+def _parse_claims(token: str) -> dict[str, Any]:
     try:
-        claims = jwt.get_unverified_claims(token)
+        return jwt.get_unverified_claims(token)
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Claims parse error: {e}")
 
-    # Validate exp, aud, iss
-    now_ts = int(time.time())
+
+def _validate_claims(claims: dict[str, Any], audience: str, issuer: str) -> None:
+    """Check exp, iss, aud against caller-supplied expectations."""
     exp = claims.get("exp")
-    if exp and now_ts > exp:
+    if exp and int(time.time()) > exp:
         raise HTTPException(status_code=401, detail="Token expired")
     iss = claims.get("iss")
     if issuer and iss and not (iss == issuer or iss.startswith(issuer)):
@@ -111,6 +124,16 @@ async def _verify_jwt(token: str, jwks_url: str, audience: str, issuer: str) -> 
     aud = claims.get("aud")
     if audience and aud and audience not in (aud if isinstance(aud, list) else [aud]):
         raise HTTPException(status_code=401, detail=f"Unexpected audience: {aud}")
+
+
+async def _verify_jwt(token: str, jwks_url: str, audience: str, issuer: str) -> dict[str, Any]:
+    """Verify a JWT against the given JWKS + audience + issuer. Returns the
+    parsed claims on success, raises HTTPException(401) on any failure."""
+    kid = _extract_kid(token)
+    key_data = await _resolve_signing_key(jwks_url, kid)
+    _verify_signature(token, key_data)
+    claims = _parse_claims(token)
+    _validate_claims(claims, audience, issuer)
     return claims
 
 

@@ -13,22 +13,32 @@ import pytest
 import requests
 
 
-def _load_bypass_token() -> str:
-    """Read AUTH_RATE_LIMIT_BYPASS_TOKEN — prefer process env, fall back to
-    /app/backend/.env so tests work whether or not they were started via
-    supervisor."""
-    val = os.environ.get("AUTH_RATE_LIMIT_BYPASS_TOKEN", "")
+def _load_env_value(key: str) -> str:
+    """Read an env var, falling back to /app/backend/.env so tests work
+    whether or not they were started via supervisor."""
+    val = os.environ.get(key, "")
     if val:
         return val
     env_path = Path(__file__).resolve().parents[1] / ".env"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
-            if line.startswith("AUTH_RATE_LIMIT_BYPASS_TOKEN="):
+            if line.startswith(f"{key}="):
                 return line.split("=", 1)[1].strip()
     return ""
 
 
+def _load_bypass_token() -> str:
+    return _load_env_value("AUTH_RATE_LIMIT_BYPASS_TOKEN")
+
+
 _BYPASS_TOKEN = _load_bypass_token()
+
+# Expose secrets to the rest of the test suite via env so tests can read
+# them without re-implementing the .env parser. Backwards-compatible: any
+# pre-existing env value wins over the .env fallback.
+_FOUNDER_PASSWORD = _load_env_value("FOUNDER_PASSWORD")
+if _FOUNDER_PASSWORD and not os.environ.get("FOUNDER_PASSWORD"):
+    os.environ["FOUNDER_PASSWORD"] = _FOUNDER_PASSWORD
 
 
 @pytest.fixture(autouse=True, scope="session")
