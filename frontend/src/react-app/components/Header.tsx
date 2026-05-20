@@ -33,9 +33,11 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
   const [showStationMenu, setShowStationMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showTabConfig, setShowTabConfig] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [editData, setEditData] = useState({ ...state.companyData });
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || '');
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
 
   // Sync local edit/preview state when the FuelContext finishes hydrating from
   // localStorage on page reload (otherwise `logoPreview` stays as the initial-
@@ -51,6 +53,9 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
     function handleClickOutside(e: MouseEvent) {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
         setShowMobileMenu(false);
+      }
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
+        setShowToolsMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -165,27 +170,45 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             <button onClick={() => setShowQRCode(true)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><QrCode size={12} /><span className="hidden lg:inline">QR</span></button>
             <SyncStatusIndicator countryCode={location.currentCountry.id} compact />
             <RoleSelector />
-            <button onClick={() => navigate('/team')} data-testid="header-team-btn" className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg text-xs text-indigo-300 transition-colors flex items-center gap-1.5 border border-indigo-500/20" title="Team Members">
-              <User size={12} /><span className="hidden lg:inline">Team</span>
-            </button>
-            <button onClick={() => navigate('/digest')} data-testid="header-digest-btn" className="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg text-xs text-blue-300 transition-colors flex items-center gap-1.5 border border-blue-500/20" title="Daily Digest">
-              <Sparkles size={12} /><span className="hidden lg:inline">Digest</span>
-            </button>
-            <button onClick={() => navigate('/loyalty')} data-testid="header-loyalty-btn" className="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-300 transition-colors flex items-center gap-1.5 border border-purple-500/20" title="Customer Loyalty">
-              <Award size={12} /><span className="hidden xl:inline">Loyalty</span>
-            </button>
-            <button onClick={() => navigate('/import')} data-testid="header-import-btn" className="px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg text-xs text-cyan-300 transition-colors flex items-center gap-1.5 border border-cyan-500/20" title="Bulk Import">
-              <Database size={12} /><span className="hidden xl:inline">Import</span>
-            </button>
-            <button onClick={() => navigate('/audit')} data-testid="header-audit-btn" className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg text-xs text-rose-300 transition-colors flex items-center gap-1.5 border border-rose-500/20" title="Audit Log">
-              <History size={12} /><span className="hidden xl:inline">Audit</span>
-            </button>
-            <button onClick={() => navigate('/verify')} data-testid="header-verify-btn" className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg text-xs text-emerald-300 transition-colors flex items-center gap-1.5 border border-emerald-500/20" title="Verify Receipt">
-              <ShieldCheck size={12} /><span className="hidden xl:inline">Verify</span>
-            </button>
-            <button onClick={() => navigate('/storage')} data-testid="header-storage-btn" className="px-2.5 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg text-xs text-sky-300 transition-colors flex items-center gap-1.5 border border-sky-500/20" title="Cloud Storage (S3)">
-              <Cloud size={12} /><span className="hidden xl:inline">Storage</span>
-            </button>
+            {/* Consolidated Tools dropdown (was 7 separate pills) */}
+            <div className="relative" ref={toolsMenuRef}>
+              <button
+                onClick={() => setShowToolsMenu(v => !v)}
+                data-testid="header-tools-btn"
+                className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg text-xs text-indigo-300 transition-colors flex items-center gap-1.5 border border-indigo-500/20"
+                title="Tools"
+                aria-expanded={showToolsMenu}
+              >
+                <LayoutDashboard size={12} />
+                <span className="hidden lg:inline">Tools</span>
+                <ChevronDown size={10} className={`transition-transform ${showToolsMenu ? 'rotate-180' : ''}`} />
+              </button>
+              {showToolsMenu && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-slate-900/95 backdrop-blur-lg rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50" data-testid="header-tools-menu">
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/team'); }} data-testid="tools-team-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-indigo-500/15 hover:text-indigo-200 transition-colors">
+                    <User size={13} className="text-indigo-300" /> Team
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/digest'); }} data-testid="tools-digest-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-blue-500/15 hover:text-blue-200 transition-colors">
+                    <Sparkles size={13} className="text-blue-300" /> Daily Digest
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/loyalty'); }} data-testid="tools-loyalty-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-purple-500/15 hover:text-purple-200 transition-colors">
+                    <Award size={13} className="text-purple-300" /> Loyalty
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/import'); }} data-testid="tools-import-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-cyan-500/15 hover:text-cyan-200 transition-colors">
+                    <Database size={13} className="text-cyan-300" /> Bulk Import
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/audit'); }} data-testid="tools-audit-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-rose-500/15 hover:text-rose-200 transition-colors">
+                    <History size={13} className="text-rose-300" /> Audit Log
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/verify'); }} data-testid="tools-verify-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-emerald-500/15 hover:text-emerald-200 transition-colors">
+                    <ShieldCheck size={13} className="text-emerald-300" /> Verify Receipt
+                  </button>
+                  <button onClick={() => { setShowToolsMenu(false); navigate('/storage'); }} data-testid="tools-storage-btn" className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-200 hover:bg-sky-500/15 hover:text-sky-200 transition-colors border-t border-white/5">
+                    <Cloud size={13} className="text-sky-300" /> Cloud Storage
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={() => navigate('/founder')} className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-xs text-amber-400 transition-colors flex items-center gap-1.5 border border-amber-500/20">
               <Crown size={12} /><span className="hidden lg:inline">Admin</span>
             </button>

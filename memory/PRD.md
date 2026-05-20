@@ -18,6 +18,18 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 27 — Header consolidation + scroll-overshoot fix (Feb 2026)
+
+**🐞 Fixed (P0 from `organize22.png` feedback)**
+- Desktop header had 7 separate pill-buttons (Team, Digest, Loyalty, Import, Audit, Verify, Storage) that wrapped onto a 2nd row at narrower widths → "takes up much space". Consolidated into a **single "Tools" dropdown** (`data-testid="header-tools-btn"` + `header-tools-menu`). Header now fits comfortably on one row even at lg breakpoints.
+- **Scroll-wheel over-shooting**: added `overscroll-behavior: none` to `html`, `overscroll-behavior-y: contain` to `body`, plus `overscroll-behavior: contain` on `.table-container` and `.history-panel`. Prevents rubber-band / wheel chain-scroll to ancestor containers.
+
+**Files modified**
+- `/app/frontend/src/react-app/components/Header.tsx` — Tools dropdown (7 items) with click-outside; removed 7 individual pills
+- `/app/frontend/src/react-app/index.css` — overscroll-behavior containment
+
+**Note**: Mobile hamburger menu still has all routes individually — left as-is because the mobile drawer pattern works well for touch.
+
 ### Iter 26 — Header pill row overshoot + mobile menu density
 
 **🐞 Fixed**

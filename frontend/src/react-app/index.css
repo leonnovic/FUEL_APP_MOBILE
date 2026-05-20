@@ -43,6 +43,8 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 
 html {
   scroll-behavior: smooth;
+  /* Prevent scroll-wheel overshoot / rubber-band chaining */
+  overscroll-behavior: none;
 }
 
 /* ======================== */
@@ -57,6 +59,8 @@ body {
   min-height: 100vh;
   position: relative;
   scroll-behavior: smooth;
+  /* Prevent scroll-wheel overshoot beyond document edges */
+  overscroll-behavior-y: contain;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -216,6 +220,7 @@ html.dark .form-group textarea {
 /* Table styles */
 .table-container {
   overflow-x: auto;
+  overscroll-behavior: contain;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
@@ -272,6 +277,7 @@ html.dark canvas {
 .history-panel {
   max-height: 300px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-light);
   border-radius: 12px;
   padding: 10px;
