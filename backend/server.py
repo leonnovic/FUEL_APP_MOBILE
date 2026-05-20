@@ -60,6 +60,9 @@ MPESA_SHORTCODE = os.environ.get("MPESA_SHORTCODE", "174379")
 MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", "")
 MPESA_CALLBACK_BASE_URL = os.environ.get("MPESA_CALLBACK_BASE_URL", "")
 
+FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "publican1D#20")
+FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
+
 # Subscription tiers — server-authoritative pricing (frontend MUST NOT send prices)
 PLANS: dict[str, dict[str, Any]] = {
     "free": {
@@ -1179,19 +1182,19 @@ async def ai_reconcile(body: ReconcileBody, user: dict = Depends(get_current_use
 # Daily Reconciliation Digest
 # ---------------------------------------------------------------------------
 @api.post("/digest/preview")
-async def digest_preview(user: dict = Depends(get_current_user)):
+async def digest_preview(user: dict = Depends(get_current_user), date: Optional[str] = None):
     """Build the user's digest right now WITHOUT emailing it. Lets the UI show
-    a 'preview my daily digest' button."""
+    a 'preview my daily digest' button. Optional `?date=YYYY-MM-DD` for back-fill."""
     from services.digest import build_digest_for_user, render_digest_html
-    d = await build_digest_for_user(db, user)
+    d = await build_digest_for_user(db, user, override_date=date)
     return {"ok": True, "digest": d, "html": render_digest_html(d)}
 
 
 @api.post("/digest/send")
-async def digest_send_now(user: dict = Depends(get_current_user)):
-    """Force-send the user's digest right now. Useful for testing the email pipeline."""
+async def digest_send_now(user: dict = Depends(get_current_user), date: Optional[str] = None):
+    """Force-send the user's digest right now. Optional `?date=YYYY-MM-DD`."""
     from services.digest import send_digest_to_user
-    return await send_digest_to_user(db, user)
+    return await send_digest_to_user(db, user, override_date=date)
 
 
 @api.get("/digest/history")
@@ -1244,6 +1247,206 @@ async def verify_receipt(receipt: str):
         "date": tx.get("transaction_date") or tx.get("updated_at"),
         "provider": tx.get("provider"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Founder Access + Role Management
+# ---------------------------------------------------------------------------
+class FounderLoginBody(BaseModel):
+    password: str
+
+
+class FounderChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class RoleChangeBody(BaseModel):
+    role: str
+
+
+async def _ensure_founder_seeded():
+    """Idempotent founder seed. Runs on startup."""
+    existing = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if existing:
+        return
+    await db.founder.insert_one({
+        "id": "founder",
+        "email": FOUNDER_EMAIL,
+        "password_hash": _hash_pw(FOUNDER_DEFAULT_PASSWORD),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "password_set_by_user": False,
+    })
+    log.info("Founder access seeded (default password from FOUNDER_DEFAULT_PASSWORD env)")
+
+
+@api.post("/founder/login")
+async def founder_login(body: FounderLoginBody, request: Request):
+    """Founder access verification. Rate-limited 5/h per IP."""
+    ip = request.client.host if request.client else "anonymous"
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    attempts = await db.founder_login_log.count_documents({"ip": ip, "at": {"$gt": one_hour_ago}})
+    if attempts >= 5:
+        await asyncio.sleep(0.5)
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+
+    await db.founder_login_log.insert_one(
+        {"ip": ip, "at": datetime.now(timezone.utc).isoformat()},
+    )
+
+    founder = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if not founder or not _verify_pw(body.password, founder.get("password_hash", "")):
+        await asyncio.sleep(0.4)  # constant-time
+        raise HTTPException(status_code=401, detail="Invalid founder password")
+
+    # Issue a short-lived JWT scoped to founder
+    exp = datetime.now(timezone.utc) + timedelta(hours=4)
+    token = jwt.encode({"sub": "founder", "exp": exp, "scope": "founder"},
+                       JWT_SECRET, algorithm=JWT_ALG)
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()), "user_id": "founder", "action": "founder.login",
+        "at": datetime.now(timezone.utc).isoformat(), "meta": {"ip": ip},
+    })
+    return {
+        "ok": True, "token": token,
+        "must_change_password": not founder.get("password_set_by_user", False),
+    }
+
+
+def _require_founder(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
+    if not creds:
+        raise HTTPException(status_code=401, detail="Founder token required")
+    try:
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+    if payload.get("scope") != "founder":
+        raise HTTPException(status_code=403, detail="Founder scope required")
+    return payload
+
+
+@api.post("/founder/change-password")
+async def founder_change_password(body: FounderChangePasswordBody, _=Depends(_require_founder)):
+    founder = await db.founder.find_one({"id": "founder"}, {"_id": 0})
+    if not founder or not _verify_pw(body.current_password, founder.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Current password is wrong")
+    await db.founder.update_one(
+        {"id": "founder"},
+        {"$set": {"password_hash": _hash_pw(body.new_password),
+                  "password_set_by_user": True,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()), "user_id": "founder", "action": "founder.password_changed",
+        "at": datetime.now(timezone.utc).isoformat(), "meta": {},
+    })
+    return {"ok": True}
+
+
+@api.get("/founder/users")
+async def founder_list_users(_=Depends(_require_founder)):
+    """Founder-only: list all users with their roles + tiers."""
+    rows = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(2000)
+    return {"users": rows, "ok": True, "total": len(rows)}
+
+
+@api.patch("/users/{user_id}/role")
+async def update_user_role(user_id: str, body: RoleChangeBody,
+                            caller: dict = Depends(get_current_user)):
+    """Owner or founder can change a user's role. Replaces the old invite-based downgrade flow."""
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    if caller.get("role") not in {"owner"}:
+        raise HTTPException(status_code=403, detail="Only owners can change roles")
+
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": body.role, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await db.audit_log.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": caller["id"],
+        "action": "user.role_changed",
+        "at": datetime.now(timezone.utc).isoformat(),
+        "meta": {"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
+    })
+    return {"ok": True, "user_id": user_id, "role": body.role}
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth (Emergent-managed)
+# ---------------------------------------------------------------------------
+class GoogleAuthBody(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/google", response_model=TokenResponse)
+async def google_auth_exchange(body: GoogleAuthBody):
+    """Exchange the Emergent-managed Google OAuth session_id for our own JWT.
+
+    The frontend redirects to https://auth.emergentagent.com/?redirect=<origin>/dashboard
+    and lands back at <origin>/dashboard#session_id=<id>. We call Emergent's
+    session-data endpoint server-side (never expose the session_id to clients),
+    upsert the user, and return a normal FuelPro JWT.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": body.session_id},
+            )
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail=f"OAuth exchange failed: {r.text}")
+        profile = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OAuth server unreachable: {e}")
+
+    email = (profile.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="OAuth profile missing email")
+
+    now = datetime.now(timezone.utc)
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        # Mark as Google-linked; keep existing role/tier/trial
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {
+                "google_picture": profile.get("picture"),
+                "auth_methods": list(set((existing.get("auth_methods") or []) + ["google"])),
+                "last_oauth_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }},
+        )
+        user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    else:
+        # Create new user with trial
+        user_doc = {
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "name": profile.get("name") or email.split("@")[0],
+            "password_hash": "",  # No password — OAuth-only
+            "role": "owner", "tier": "free",
+            "subscription_status": "trial",
+            "trial_started_at": now.isoformat(),
+            "trial_ends_at": (now + timedelta(days=14)).isoformat(),
+            "google_picture": profile.get("picture"),
+            "auth_methods": ["google"],
+            "created_at": now.isoformat(), "updated_at": now.isoformat(),
+        }
+        await db.users.insert_one(user_doc)
+        await db.audit_log.insert_one({
+            "id": str(uuid.uuid4()), "user_id": user_doc["id"], "action": "user.register",
+            "at": now.isoformat(), "meta": {"provider": "google", "email": email},
+        })
+
+    return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))
 
 
 # ---------------------------------------------------------------------------
@@ -1360,6 +1563,12 @@ async def on_startup():
     if os.environ.get("DIGEST_ENABLED", "1") == "1":
         from services.digest import digest_scheduler
         app.state.digest_task = asyncio.create_task(digest_scheduler(db))
+
+    # Seed founder (idempotent)
+    try:
+        await _ensure_founder_seeded()
+    except Exception as e:
+        log.warning("Founder seed failed: %s", e)
 
 
 @app.on_event("shutdown")

@@ -27,11 +27,19 @@ def _yesterday_iso(tz_offset_minutes: int = 180) -> tuple[str, str]:
     return y.date().isoformat(), y.strftime("%A, %d %B %Y")
 
 
-async def build_digest_for_user(db, user: dict) -> dict[str, Any]:
-    """Pull the user's yesterday data and run AI reconciliation."""
+async def build_digest_for_user(db, user: dict, *, override_date: str | None = None) -> dict[str, Any]:
+    """Pull the user's data for `override_date` (default: yesterday) and run AI reconciliation."""
     from services.ai import reconcile_mpesa_with_sales
 
-    date_str, friendly = _yesterday_iso()
+    if override_date:
+        try:
+            dt = datetime.fromisoformat(override_date).date()
+            date_str = dt.isoformat()
+            friendly = dt.strftime("%A, %d %B %Y")
+        except ValueError:
+            date_str, friendly = _yesterday_iso()
+    else:
+        date_str, friendly = _yesterday_iso()
 
     user_id = user["id"]
 
@@ -149,10 +157,10 @@ def render_digest_html(d: dict[str, Any]) -> str:
     )
 
 
-async def send_digest_to_user(db, user: dict) -> dict[str, Any]:
+async def send_digest_to_user(db, user: dict, *, override_date: str | None = None) -> dict[str, Any]:
     import uuid as _uuid
     from services.notifications import send_email
-    d = await build_digest_for_user(db, user)
+    d = await build_digest_for_user(db, user, override_date=override_date)
 
     subject = (
         f"FuelPro Digest · {d['label']} · {d['matched']}/{max(d['sales_count'], d['inflows_count']) or 0} matched"

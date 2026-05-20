@@ -154,6 +154,33 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - Frontend: no refresh loop after Quick Start (URL stable for 6s+) ✅
 - `yarn build` → zero warnings, clean ✅
 
+### Iter 8 — Founder backend + Google OAuth + Role mgmt + Date-param digest
+
+**👑 Founder access — real backend**
+- New `db.founder` collection seeded on startup with `publican1D#20` (configurable via `FOUNDER_DEFAULT_PASSWORD` env). Idempotent — won't overwrite a user-set password.
+- `POST /api/founder/login` — bcrypt-verified, rate-limited 5/h per IP, returns a short-lived (4h) JWT with `scope:"founder"`.
+- `POST /api/founder/change-password` — requires founder JWT + current password, flips `password_set_by_user:true` so the must-change prompt stops firing.
+- `GET /api/founder/users` — founder-only list of every user (with password_hash projected out) for the admin dashboard.
+- Audit log entries: `founder.login`, `founder.password_changed`.
+
+**🔐 Role management — closing the iteration-6 backlog**
+- `PATCH /api/users/{user_id}/role` — owner-only endpoint. Replaces the invite-based role-change vector that was closed in iter 7. Body: `{role}` from the `ALLOWED_ROLES` set. Audit-logged with old/new role.
+
+**🟢 Google Sign-In (Emergent-managed OAuth)**
+- Backend: `POST /api/auth/google` exchanges an Emergent session_id for a FuelPro JWT, upserts the user (carrying `google_picture`, `auth_methods:['google']`), keeps existing role/tier on returning logins, audit-logs new registrations as `user.register` with `provider:'google'`.
+- Frontend: `Continue with Google` button on AuthLogin redirects to `https://auth.emergentagent.com/?redirect=…`. New `GoogleAuthCallback` component (mounted at app root) detects the `session_id=` fragment, calls the backend, sets the JWT, mirrors the user into the existing AuthContext shape, and routes back to `/`. Idempotency via `useRef` latch (StrictMode-safe).
+
+**📅 Digest date param**
+- Both `POST /api/digest/preview` and `POST /api/digest/send` now accept `?date=YYYY-MM-DD` for back-fill testing. `services/digest.build_digest_for_user` takes an `override_date` kwarg, falls back to yesterday for the scheduler.
+
+**🐛 Bug fixes**
+- The 6th iter screenshot showed Auth login → Google OAuth → callback → JWT issued in a clean dark overlay with spinner & success states.
+
+**Verified live**
+- Founder login w/ `publican1D#20` → 200 + `must_change_password:true`. Wrong password → 401.
+- `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
+- `Continue with Google` button rendered on AuthLogin (screenshot captured).
+
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
 - ✅ Server-side auth (register/login/me with bcrypt+JWT) with localStorage offline fallback

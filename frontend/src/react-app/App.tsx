@@ -12,6 +12,7 @@ import PasswordReset from "@/react-app/pages/PasswordReset";
 import SubscriptionChecker from "@/react-app/components/SubscriptionChecker";
 import TrialGate from "@/react-app/components/TrialGate";
 import StripeReturnHandler from "@/react-app/components/StripeReturnHandler";
+import GoogleAuthCallback from "@/react-app/components/GoogleAuthCallback";
 import TeamManagement from "@/react-app/pages/TeamManagement";
 import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
 import { lazy, Suspense, useMemo } from "react";
@@ -100,6 +101,8 @@ export default function App() {
         <LocalizationProvider>
           <PermissionProvider>
             <Router>
+              <StripeReturnHandler />
+              <GoogleAuthCallback />
               <Routes>
                 {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                 <Route path="/founder" element={
