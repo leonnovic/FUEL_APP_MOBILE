@@ -156,7 +156,7 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
           </div>
 
           {/* Desktop Actions */}
-          <div className="hidden md:flex items-center gap-1.5">
+          <div className="hidden md:flex md:flex-wrap items-center justify-end gap-1.5 max-w-[68%]">
             <span className="px-2 py-1 bg-white/5 rounded-md text-[10px] text-gray-400 flex items-center gap-1"><div className="w-1.5 h-1.5 bg-green-400 rounded-full" /> Local</span>
             {user && <span className="px-2 py-1 bg-white/5 rounded-md text-[10px] text-gray-300 flex items-center gap-1"><User size={10} className="text-amber-400" /><span className="hidden xl:inline">{user.name}</span></span>}
             <button onClick={() => setShowEditInfo(!showEditInfo)} className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"><Edit3 size={12} /><span className="hidden lg:inline">Edit Info</span></button>
@@ -236,51 +236,51 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             </div>
 
             {/* Action Grid */}
-            <div className="grid grid-cols-3 gap-2">
-              <button onClick={() => { setShowEditInfo(!showEditInfo); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                <Edit3 size={16} className="text-gray-300" /><span className="text-[10px] text-gray-400">Edit Info</span>
+            <div className="grid grid-cols-4 gap-1.5" data-testid="mobile-action-grid">
+              <button onClick={() => { setShowEditInfo(!showEditInfo); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                <Edit3 size={15} className="text-gray-300" /><span className="text-[10px] text-gray-400">Edit</span>
               </button>
-              <button onClick={() => { setShowTabConfig(true); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                <LayoutDashboard size={16} className="text-gray-300" /><span className="text-[10px] text-gray-400">Tabs</span>
+              <button onClick={() => { setShowTabConfig(true); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                <LayoutDashboard size={15} className="text-gray-300" /><span className="text-[10px] text-gray-400">Tabs</span>
               </button>
-              <label className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
-                <Image size={16} className="text-gray-300" /><span className="text-[10px] text-gray-400">Logo</span><input type="file" accept="image/*" onChange={(e) => { handleLogoChange(e); setShowMobileMenu(false); }} className="hidden" />
+              <label className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                <Image size={15} className="text-gray-300" /><span className="text-[10px] text-gray-400">Logo</span><input type="file" accept="image/*" onChange={(e) => { handleLogoChange(e); setShowMobileMenu(false); }} className="hidden" />
               </label>
-              <button onClick={() => { setShowQRCode(true); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                <QrCode size={16} className="text-gray-300" /><span className="text-[10px] text-gray-400">QR Code</span>
+              <button onClick={() => { setShowQRCode(true); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                <QrCode size={15} className="text-gray-300" /><span className="text-[10px] text-gray-400">QR</span>
               </button>
-              <button onClick={() => { handleToggleTheme(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
-                {resolvedTheme === 'dark' ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-gray-300" />}
+              <button onClick={() => { handleToggleTheme(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                {resolvedTheme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-300" />}
                 <span className="text-[10px] text-gray-400">{resolvedTheme === 'dark' ? 'Light' : 'Dark'}</span>
               </button>
               {onShowStations && (
-                <button onClick={() => { onShowStations(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors" data-testid="mobile-stations-btn">
-                  <Layers size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Stations</span>
+                <button onClick={() => { onShowStations(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors" data-testid="mobile-stations-btn">
+                  <Layers size={15} className="text-blue-400" /><span className="text-[10px] text-gray-400">Stations</span>
                 </button>
               )}
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/team'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-team-btn">
-                <User size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Team</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/team'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-colors" data-testid="mobile-team-btn">
+                <User size={15} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Team</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/digest'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-colors" data-testid="mobile-digest-btn">
-                <Sparkles size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Digest</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/digest'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-blue-500/10 rounded-lg hover:bg-blue-500/20 transition-colors" data-testid="mobile-digest-btn">
+                <Sparkles size={15} className="text-blue-400" /><span className="text-[10px] text-gray-400">Digest</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/loyalty'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 transition-colors" data-testid="mobile-loyalty-btn">
-                <Award size={16} className="text-purple-400" /><span className="text-[10px] text-gray-400">Loyalty</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/loyalty'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-purple-500/10 rounded-lg hover:bg-purple-500/20 transition-colors" data-testid="mobile-loyalty-btn">
+                <Award size={15} className="text-purple-400" /><span className="text-[10px] text-gray-400">Loyalty</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/import'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-cyan-500/10 rounded-xl hover:bg-cyan-500/20 transition-colors" data-testid="mobile-import-btn">
-                <Database size={16} className="text-cyan-400" /><span className="text-[10px] text-gray-400">Import</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/import'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-cyan-500/10 rounded-lg hover:bg-cyan-500/20 transition-colors" data-testid="mobile-import-btn">
+                <Database size={15} className="text-cyan-400" /><span className="text-[10px] text-gray-400">Import</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/audit'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-rose-500/10 rounded-xl hover:bg-rose-500/20 transition-colors" data-testid="mobile-audit-btn">
-                <History size={16} className="text-rose-400" /><span className="text-[10px] text-gray-400">Audit</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/audit'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-rose-500/10 rounded-lg hover:bg-rose-500/20 transition-colors" data-testid="mobile-audit-btn">
+                <History size={15} className="text-rose-400" /><span className="text-[10px] text-gray-400">Audit</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/verify'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
-                <ShieldCheck size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Verify</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/verify'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-emerald-500/10 rounded-lg hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
+                <ShieldCheck size={15} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Verify</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/storage'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-sky-500/10 rounded-xl hover:bg-sky-500/20 transition-colors" data-testid="mobile-storage-btn">
-                <Cloud size={16} className="text-sky-400" /><span className="text-[10px] text-gray-400">Storage</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/storage'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-sky-500/10 rounded-lg hover:bg-sky-500/20 transition-colors" data-testid="mobile-storage-btn">
+                <Cloud size={15} className="text-sky-400" /><span className="text-[10px] text-gray-400">Storage</span>
               </button>
-              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/founder'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
-                <Crown size={16} className="text-amber-400" /><span className="text-[10px] text-gray-400">Admin</span>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/founder'), 0); }} className="flex flex-col items-center gap-1 p-2 bg-amber-500/10 rounded-lg hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
+                <Crown size={15} className="text-amber-400" /><span className="text-[10px] text-gray-400">Admin</span>
               </button>
             </div>
 

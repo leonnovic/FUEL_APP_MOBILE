@@ -18,6 +18,16 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 26 — Header pill row overshoot + mobile menu density
+
+**🐞 Fixed**
+- Desktop action bar pills (Team, Digest, Loyalty, Import, Audit, Verify, Storage, Admin) were in a single non-wrapping flex row → at narrower widths they overflowed horizontally with momentum-scroll overshoot. Now `flex-wrap` + `max-w-[68%]` + `justify-end` so they wrap naturally to a second line, no scroll.
+- Mobile hamburger menu was a 3-column grid with `p-3` per pill → 14 pills made the drawer scroll-heavy. Tightened to 4-column grid + `p-2` + rounded-lg (instead of rounded-xl). ~29% less vertical space.
+- Both modes verified live at 390px and 1280px viewports.
+
+**Files modified**
+- `/app/frontend/src/react-app/components/Header.tsx` — wrap-flex on desktop pills, denser mobile action grid
+
 ### Iter 25 — Mobile + Desktop UX polish (Claim banner + consent + nav parity)
 
 **🐞 Visible bugs fixed**
