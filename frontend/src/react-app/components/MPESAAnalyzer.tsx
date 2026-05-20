@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { formatNumber } from '@/react-app/utils/formatUtils';
 import AiReconcileCard from '@/react-app/components/AiReconcileCard';
+import ArchiveToS3Button from '@/react-app/components/ArchiveToS3Button';
 
 // ============================================================
 // M-PESA Inflow Analyzer v5 - RESTRUCTURED
@@ -723,10 +724,13 @@ export default function MPESAAnalyzer() {
                     <span className="text-xs dark:text-white truncate">{f.name}</span>
                     <span className="text-[10px] text-gray-400 flex-shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
                   </div>
-                  <button onClick={() => removeFile(i)}
-                    className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <ArchiveToS3Button file={f} category="receipts" />
+                    <button onClick={() => removeFile(i)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

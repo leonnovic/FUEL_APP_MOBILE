@@ -72,6 +72,11 @@ export default function ExtraOAuthButtons() {
     // Mirror the existing Google flow: stash the JWT + user, then reload.
     localStorage.setItem('fuelpro_jwt', data.token);
     if (data.user) localStorage.setItem('fuelpro_user', JSON.stringify(data.user));
+    // Stitch any anonymous device activity into the new account
+    try {
+      const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+      await linkAnonymousToUser(data.token);
+    } catch { /* non-fatal */ }
     window.location.href = '/';
   }, []);
 

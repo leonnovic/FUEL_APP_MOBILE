@@ -98,6 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { backendLogin } = await import('@/react-app/lib/backendApi');
       const u = await backendLogin(email, password);
+      // Stitch anonymous activity into the now-authenticated profile
+      try {
+        const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+        await linkAnonymousToUser();
+      } catch { /* non-fatal */ }
       setUser({
         id: `email_${u.email}`,
         authId: `email_${u.email}`,
@@ -155,11 +160,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { backendRegister } = await import('@/react-app/lib/backendApi');
       await backendRegister(email, password, name || email);
+      // Stitch any anonymous device activity into the new account
+      try {
+        const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+        await linkAnonymousToUser();
+      } catch { /* non-fatal */ }
     } catch (e) {
       // If backend rejects (e.g. email already exists there), try login silently
       try {
         const { backendLogin } = await import('@/react-app/lib/backendApi');
         await backendLogin(email, password);
+        const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+        await linkAnonymousToUser();
       } catch { /* offline-only mode */ }
     }
 

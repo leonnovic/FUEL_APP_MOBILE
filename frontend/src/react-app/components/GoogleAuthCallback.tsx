@@ -84,6 +84,11 @@ export default function GoogleAuthCallback() {
 
         setPhase('success');
         setMessage(`Welcome ${data.user.name || data.user.email}`);
+        // Stitch anonymous activity into the now-authenticated profile
+        try {
+          const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+          await linkAnonymousToUser(data.token);
+        } catch { /* non-fatal */ }
         cleanUrl();
         setTimeout(() => { window.location.reload(); }, 800);
       } catch (e: unknown) {

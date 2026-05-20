@@ -22,6 +22,7 @@ import VerifyReceipt from "@/react-app/pages/VerifyReceipt";
 import AuditLogPage from "@/react-app/pages/AuditLogPage";
 import LoyaltyPage from "@/react-app/pages/LoyaltyPage";
 import BulkImportPage from "@/react-app/pages/BulkImportPage";
+import StoragePage from "@/react-app/pages/StoragePage";
 import { lazy, Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 
@@ -138,6 +139,7 @@ export default function App() {
                   <Route path="/audit" element={<AuditLogPage />} />
                   <Route path="/loyalty" element={<LoyaltyPage />} />
                   <Route path="/import" element={<BulkImportPage />} />
+                  <Route path="/storage" element={<StoragePage />} />
 
                   {/* Main app - requires auth, shows loader while checking */}
                   <Route path="/" element={<MainAppLoader />} />

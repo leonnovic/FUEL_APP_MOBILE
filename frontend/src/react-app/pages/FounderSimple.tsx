@@ -673,14 +673,21 @@ function AuditTrailSection() {
 
 function SystemStatsSection() {
   const [stats, setStats] = useState<any>(null);
+  const [identityStats, setIdentityStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const reload = () => {
     setLoading(true);
-    fetch(`${API_BASE}/api/founder/system-stats`, { headers: _founderHeaders() })
-      .then(r => r.json())
-      .then(d => setStats(d.stats))
+    Promise.all([
+      fetch(`${API_BASE}/api/founder/system-stats`, { headers: _founderHeaders() }).then(r => r.json()),
+      fetch(`${API_BASE}/api/founder/identity-stats`, { headers: _founderHeaders() })
+        .then(r => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([sys, id]) => {
+        setStats(sys.stats);
+        setIdentityStats(id);
+      })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
   };
@@ -691,7 +698,7 @@ function SystemStatsSection() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>System Stats</h2>
-          <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Live MongoDB counts + database health.</p>
+          <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Live MongoDB counts + Identity Match Rate + database health.</p>
         </div>
         <button onClick={reload} data-testid="founder-sysstats-refresh"
           style={{ padding: '8px 14px', background: '#1a1a1f', color: '#aaa', border: '1px solid #333', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
@@ -700,6 +707,35 @@ function SystemStatsSection() {
       </div>
       {loading && <div style={{ color: '#666', padding: 16 }}>Loading…</div>}
       {error && <div style={{ color: '#f87171', padding: 12, background: 'rgba(239,68,68,0.1)', borderRadius: 8 }}>{error}</div>}
+
+      {/* Identity Match Rate KPI */}
+      {!loading && identityStats?.ok && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }} data-testid="founder-identity-stats">
+          <div style={{ padding: 14, background: 'linear-gradient(135deg,#1e3a8a,#312e81)', border: '1px solid #4338ca', borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: '#c7d2fe', textTransform: 'uppercase', letterSpacing: 0.5 }}>Identity match rate</div>
+            <div style={{ fontSize: 26, color: '#fff', fontWeight: 800, marginTop: 4 }}>{identityStats.match_rate_pct}%</div>
+            <div style={{ fontSize: 10, color: '#a5b4fc', marginTop: 2 }}>{identityStats.merged_users} of {identityStats.total_users} users</div>
+          </div>
+          <div style={{ padding: 14, background: '#111', border: '1px solid #222', borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 }}>Live devices</div>
+            <div style={{ fontSize: 22, color: '#34d399', fontWeight: 700, fontFamily: 'monospace', marginTop: 4 }}>
+              {identityStats.live_devices}
+            </div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>{identityStats.live_users} user{identityStats.live_users === 1 ? '' : 's'} online</div>
+          </div>
+          <div style={{ padding: 14, background: '#111', border: '1px solid #222', borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 }}>Identity links</div>
+            <div style={{ fontSize: 22, color: '#fff', fontWeight: 700, fontFamily: 'monospace', marginTop: 4 }}>{identityStats.total_links}</div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>anonymous → user merges</div>
+          </div>
+          <div style={{ padding: 14, background: '#111', border: '1px solid #222', borderRadius: 10 }}>
+            <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 }}>Anonymous profiles</div>
+            <div style={{ fontSize: 22, color: '#fbbf24', fontWeight: 700, fontFamily: 'monospace', marginTop: 4 }}>{identityStats.anonymous_blobs}</div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>unlinked data blobs</div>
+          </div>
+        </div>
+      )}
+
       {!loading && stats && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>

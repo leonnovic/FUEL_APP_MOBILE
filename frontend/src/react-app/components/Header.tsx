@@ -7,12 +7,13 @@ import LocationSelector from '@/react-app/components/LocationSelector';
 import TabConfigModal from '@/react-app/components/TabConfigModal';
 import SyncStatusIndicator from '@/react-app/components/SyncStatusIndicator';
 import RoleSelector from '@/react-app/components/RoleSelector';
+import ActiveDevicesBadge from '@/react-app/components/ActiveDevicesBadge';
 import { useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
 import {
   Fuel, Sun, Moon, Settings, User, Download, QrCode, LogOut,
   Edit3, Image, ChevronDown, Layers, Plus, X, Check, Menu, Shield,
-  Globe, LayoutDashboard, Crown, Sparkles, Award, Database, History, ShieldCheck
+  Globe, LayoutDashboard, Crown, Sparkles, Award, Database, History, ShieldCheck, Cloud
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -182,9 +183,13 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             <button onClick={() => navigate('/verify')} data-testid="header-verify-btn" className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg text-xs text-emerald-300 transition-colors flex items-center gap-1.5 border border-emerald-500/20" title="Verify Receipt">
               <ShieldCheck size={12} /><span className="hidden xl:inline">Verify</span>
             </button>
+            <button onClick={() => navigate('/storage')} data-testid="header-storage-btn" className="px-2.5 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg text-xs text-sky-300 transition-colors flex items-center gap-1.5 border border-sky-500/20" title="Cloud Storage (S3)">
+              <Cloud size={12} /><span className="hidden xl:inline">Storage</span>
+            </button>
             <button onClick={() => navigate('/founder')} className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-xs text-amber-400 transition-colors flex items-center gap-1.5 border border-amber-500/20">
               <Crown size={12} /><span className="hidden lg:inline">Admin</span>
             </button>
+            <ActiveDevicesBadge />
             <button onClick={handleToggleTheme} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title={`Theme: ${resolvedTheme}`}>{resolvedTheme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-gray-300" />}</button>
             <button onClick={() => { logout(); }} className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-xs text-red-400 transition-colors flex items-center gap-1.5"><LogOut size={12} /><span className="hidden lg:inline">Logout</span></button>
           </div>
@@ -270,6 +275,9 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
               </button>
               <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/verify'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
                 <ShieldCheck size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Verify</span>
+              </button>
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/storage'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-sky-500/10 rounded-xl hover:bg-sky-500/20 transition-colors" data-testid="mobile-storage-btn">
+                <Cloud size={16} className="text-sky-400" /><span className="text-[10px] text-gray-400">Storage</span>
               </button>
               <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/founder'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
                 <Crown size={16} className="text-amber-400" /><span className="text-[10px] text-gray-400">Admin</span>
