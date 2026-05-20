@@ -54,6 +54,50 @@ async function imageToText(file: File): Promise<string> {
   });
 }
 
+/** Extract text from a PDF using pdf.js. Returns the extracted text or an
+ *  error marker if extraction fails (e.g. encrypted / scanned). */
+async function pdfToText(file: File, password?: string): Promise<string> {
+  try {
+    const buf = await file.arrayBuffer();
+    const pdfjs: any = await import('pdfjs-dist');
+    const v = pdfjs.version || '5.6.205';
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${v}/build/pdf.worker.min.mjs`;
+    const doc = await pdfjs.getDocument({ data: buf, password: password || undefined, disableStream: true, disableAutoFetch: true }).promise;
+    const out: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const tc = await page.getTextContent();
+      out.push((tc.items as any[]).map(it => it.str).filter(Boolean).join(' '));
+    }
+    return out.join('\n').trim() || '[PDF appears to be a scanned image — no extractable text.]';
+  } catch (e: any) {
+    if (e?.code === 1 || /password/i.test(e?.message || '')) {
+      return '[PDF is password-protected. Reupload with password set in the input field.]';
+    }
+    return `[Failed to extract PDF text: ${e?.message || 'unknown error'}]`;
+  }
+}
+
+/** Extract text from a .docx file via the existing `mammoth` dep — falls back
+ *  to a best-effort raw-text read if mammoth isn't installed. */
+async function docxToText(file: File): Promise<string> {
+  try {
+    const mammoth: any = await import('mammoth/mammoth.browser.js' as any).catch(() => import('mammoth' as any));
+    const buf = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: buf });
+    return (result?.value || '').trim() || '[DOCX contained no extractable text]';
+  } catch {
+    // Best-effort fallback: docx is a ZIP, the body XML lives in word/document.xml
+    try {
+      const text = await file.text();
+      const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return stripped.slice(0, 200_000) || '[Could not extract DOCX text]';
+    } catch {
+      return '[Could not read DOCX file]';
+    }
+  }
+}
+
 /** Real conversion engine: reads file content and produces target format */
 async function convertFile(
   file: File,
@@ -85,14 +129,18 @@ async function convertFile(
     return { data: blob, mime, fileName: `${name}_converted${info.ext}` };
   }
 
-  // Read file as text
+  // Read file as text — now correctly handles PDFs (via pdf.js) and DOCX (via mammoth).
   let content = '';
   if (file.type.startsWith('text/') || ['json', 'xml', 'md', 'html', 'csv'].includes(ext)) {
     content = await file.text();
+  } else if (ext === 'pdf' || file.type === 'application/pdf') {
+    content = await pdfToText(file);
+  } else if (ext === 'docx' || ext === 'doc' || file.type.includes('wordprocessingml')) {
+    content = await docxToText(file);
   } else if (file.type.startsWith('image/')) {
     content = await imageToText(file);
   } else {
-    // Try to read as text for office-like files
+    // Try to read as text for other office-like files
     try { content = await file.text(); } catch { content = `[Binary file: ${file.name}]`; }
   }
   onProgress(30);

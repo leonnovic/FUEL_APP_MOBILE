@@ -26,7 +26,7 @@ from core import (
     db,
     log,
 )
-from routers import auth, digest, founder, invites, misc, mpesa, payments, sync
+from routers import auth, digest, features, founder, invites, misc, mpesa, payments, sync
 from routers.founder import ensure_founder_seeded
 from routers.mpesa import mpesa_stk_callback_handler
 from routers.payments import stripe_webhook_handler
@@ -69,6 +69,7 @@ api.include_router(sync.router)
 api.include_router(invites.router)
 api.include_router(digest.router)
 api.include_router(founder.router)
+api.include_router(features.router)
 api.include_router(misc.router)
 
 app.include_router(api)

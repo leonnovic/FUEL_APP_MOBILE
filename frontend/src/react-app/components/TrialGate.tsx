@@ -136,8 +136,15 @@ export default function TrialGate({ children }: TrialGateProps) {
     if (isExpired && sub.status !== 'trial') setShowPaywall(true);
   }, [isExpired]);
 
-  // Active trial → show non-blocking banner
-  if ((isInTrial || isPaid) && !showPaywall) {
+  // Active trial → show non-blocking banner ONLY in the last 24 hours
+  // (per product decision: don't nag users when they have ample time left).
+  const ONE_DAY_SECONDS = 24 * 3600;
+  const shouldShowBanner = !showPaywall && (
+    isPaid ||
+    (isInTrial && totalSeconds <= ONE_DAY_SECONDS)
+  );
+
+  if (shouldShowBanner) {
     const isUrgent = !isPaid && totalSeconds < 24 * 3600; // last 24h
     return (
       <>
@@ -157,7 +164,7 @@ export default function TrialGate({ children }: TrialGateProps) {
             </span>
             {!isPaid && (
               <span className="hidden sm:inline opacity-80">
-                | {totalSeconds < 3600 ? 'Expiring soon — upgrade now' : 'Full access'}
+                | {totalSeconds < 3600 ? 'Expiring soon — upgrade now' : 'Less than 24h left'}
               </span>
             )}
           </div>

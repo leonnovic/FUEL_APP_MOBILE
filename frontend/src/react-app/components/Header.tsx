@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Fuel, Sun, Moon, Settings, User, Download, QrCode, LogOut,
   Edit3, Image, ChevronDown, Layers, Plus, X, Check, Menu, Shield,
-  Globe, LayoutDashboard, Crown, Sparkles
+  Globe, LayoutDashboard, Crown, Sparkles, Award, Database, History, ShieldCheck
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -170,6 +170,18 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             <button onClick={() => navigate('/digest')} data-testid="header-digest-btn" className="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg text-xs text-blue-300 transition-colors flex items-center gap-1.5 border border-blue-500/20" title="Daily Digest">
               <Sparkles size={12} /><span className="hidden lg:inline">Digest</span>
             </button>
+            <button onClick={() => navigate('/loyalty')} data-testid="header-loyalty-btn" className="px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg text-xs text-purple-300 transition-colors flex items-center gap-1.5 border border-purple-500/20" title="Customer Loyalty">
+              <Award size={12} /><span className="hidden xl:inline">Loyalty</span>
+            </button>
+            <button onClick={() => navigate('/import')} data-testid="header-import-btn" className="px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-lg text-xs text-cyan-300 transition-colors flex items-center gap-1.5 border border-cyan-500/20" title="Bulk Import">
+              <Database size={12} /><span className="hidden xl:inline">Import</span>
+            </button>
+            <button onClick={() => navigate('/audit')} data-testid="header-audit-btn" className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg text-xs text-rose-300 transition-colors flex items-center gap-1.5 border border-rose-500/20" title="Audit Log">
+              <History size={12} /><span className="hidden xl:inline">Audit</span>
+            </button>
+            <button onClick={() => navigate('/verify')} data-testid="header-verify-btn" className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg text-xs text-emerald-300 transition-colors flex items-center gap-1.5 border border-emerald-500/20" title="Verify Receipt">
+              <ShieldCheck size={12} /><span className="hidden xl:inline">Verify</span>
+            </button>
             <button onClick={() => navigate('/founder')} className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-xs text-amber-400 transition-colors flex items-center gap-1.5 border border-amber-500/20">
               <Crown size={12} /><span className="hidden lg:inline">Admin</span>
             </button>
@@ -234,11 +246,29 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
                 <span className="text-[10px] text-gray-400">{resolvedTheme === 'dark' ? 'Light' : 'Dark'}</span>
               </button>
               {onShowStations && (
-                <button onClick={() => { onShowStations(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                <button onClick={() => { onShowStations(); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors" data-testid="mobile-stations-btn">
                   <Layers size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Stations</span>
                 </button>
               )}
-              <button onClick={() => { navigate('/founder'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors">
+              <button onClick={() => { navigate('/team'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-team-btn">
+                <User size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Team</span>
+              </button>
+              <button onClick={() => { navigate('/digest'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-colors" data-testid="mobile-digest-btn">
+                <Sparkles size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Digest</span>
+              </button>
+              <button onClick={() => { navigate('/loyalty'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 transition-colors" data-testid="mobile-loyalty-btn">
+                <Award size={16} className="text-purple-400" /><span className="text-[10px] text-gray-400">Loyalty</span>
+              </button>
+              <button onClick={() => { navigate('/import'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-cyan-500/10 rounded-xl hover:bg-cyan-500/20 transition-colors" data-testid="mobile-import-btn">
+                <Database size={16} className="text-cyan-400" /><span className="text-[10px] text-gray-400">Import</span>
+              </button>
+              <button onClick={() => { navigate('/audit'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-rose-500/10 rounded-xl hover:bg-rose-500/20 transition-colors" data-testid="mobile-audit-btn">
+                <History size={16} className="text-rose-400" /><span className="text-[10px] text-gray-400">Audit</span>
+              </button>
+              <button onClick={() => { navigate('/verify'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
+                <ShieldCheck size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Verify</span>
+              </button>
+              <button onClick={() => { navigate('/founder'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
                 <Crown size={16} className="text-amber-400" /><span className="text-[10px] text-gray-400">Admin</span>
               </button>
             </div>

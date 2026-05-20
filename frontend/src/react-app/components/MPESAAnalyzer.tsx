@@ -214,26 +214,66 @@ export default function MPESAAnalyzer() {
     return { inflows, excluded };
   };
 
-  // ===== PDF TEXT EXTRACTION (v5 - robust) =====
-  const extractPDFText = async (file: File): Promise<{ lines: string[]; error?: string }> => {
+  // PDF password (M-PESA statements are encrypted with the customer's ID number)
+  const [pdfPassword, setPdfPassword] = useState<string>('');
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+
+  // ===== PDF TEXT EXTRACTION (v6 - mobile-safe, password-aware) =====
+  const extractPDFText = async (file: File, password?: string): Promise<{ lines: string[]; error?: string; needsPassword?: boolean }> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
 
-      // Dynamic import of pdfjs-dist
       let pdfjs: any;
       try {
         pdfjs = await import('pdfjs-dist');
-      } catch (importErr) {
-        return { lines: [], error: 'pdfjs-dist library not available. Please use Manual Text Paste mode instead.' };
+      } catch (_importErr) {
+        return { lines: [], error: 'PDF library failed to load. Switch to "Manual Text Paste" mode.' };
       }
 
-      // Set worker source using the installed package version
-      // This ensures the worker matches the library version
       const pdfjsVersion = pdfjs.version || '5.6.205';
-      // Use unpkg CDN which reliably serves all pdf.js versions
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
+      // Try multiple worker sources — mobile Chrome occasionally blocks
+      // module workers from unpkg, so fall back to the .min.js bundle which
+      // works in every modern mobile browser.
+      const workerCandidates = [
+        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`,
+        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.js`,
+        `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`,
+      ];
+      pdfjs.GlobalWorkerOptions.workerSrc = workerCandidates[0];
 
-      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      // Load the document with optional password
+      const loadingTask = pdfjs.getDocument({
+        data: arrayBuffer,
+        password: password || undefined,
+        // Disable streaming/range requests so we stay on the in-memory buffer
+        disableStream: true,
+        disableAutoFetch: true,
+      });
+
+      // pdf.js raises PasswordException with code 1 (needs password) or 2 (bad password)
+      let pdf: any;
+      try {
+        pdf = await loadingTask.promise;
+      } catch (loadErr: any) {
+        const msg = loadErr?.message || String(loadErr);
+        const code = loadErr?.code;
+        // PDFJS PasswordException — code 1: needs password, code 2: wrong password
+        if (code === 1 || /no password given/i.test(msg)) {
+          return { lines: [], needsPassword: true, error: 'This PDF is password-protected. Enter the password (M-PESA statements use your ID number).' };
+        }
+        if (code === 2 || /incorrect password/i.test(msg)) {
+          return { lines: [], needsPassword: true, error: 'Incorrect password. M-PESA statement password is usually your ID number (digits only).' };
+        }
+        // Try the .min.js worker if the .mjs failed on mobile
+        try {
+          pdfjs.GlobalWorkerOptions.workerSrc = workerCandidates[1];
+          const retry = pdfjs.getDocument({ data: arrayBuffer, password: password || undefined, disableStream: true, disableAutoFetch: true });
+          pdf = await retry.promise;
+        } catch (retryErr: any) {
+          return { lines: [], error: `Failed to open PDF: ${msg}. ${retryErr?.message ? `Retry also failed: ${retryErr.message}` : ''} If this PDF is password-protected, enter the password and try again.` };
+        }
+      }
+
       const lines: string[] = [];
 
       for (let p = 1; p <= pdf.numPages; p++) {
@@ -263,7 +303,6 @@ export default function MPESAAnalyzer() {
           }
         }
 
-        // Sort rows top-to-bottom, then items left-to-right
         const sortedRows = Array.from(rowMap.entries())
           .sort((a, b) => b[0] - a[0])
           .map(([, row]) => {
@@ -275,9 +314,13 @@ export default function MPESAAnalyzer() {
         lines.push(...sortedRows);
       }
 
+      if (lines.length === 0) {
+        return { lines: [], error: 'PDF opened but contained no extractable text. It may be a scanned image — use Manual Text Paste mode.' };
+      }
+
       return { lines };
     } catch (err: any) {
-      return { lines: [], error: err.message || 'Failed to extract PDF text' };
+      return { lines: [], error: err?.message || 'Failed to extract PDF text' };
     }
   };
 
@@ -437,22 +480,38 @@ export default function MPESAAnalyzer() {
       addProgress(`Reading ${pdfFiles.length} PDF(s)...`);
 
       const allLines: string[] = [];
+      let anyNeedsPassword = false;
       for (const file of pdfFiles) {
         addProgress(`Extracting text from "${file.name}"...`);
-        const { lines, error } = await extractPDFText(file);
-
-        if (error) {
-          addProgress(`ERROR in "${file.name}": ${error}`);
-          // Continue with other files instead of failing the whole batch
+        // First attempt: no password. If pdf.js says it needs a password,
+        // retry with the user-provided one.
+        let result = await extractPDFText(file);
+        if (result.needsPassword && pdfPassword) {
+          addProgress(`"${file.name}" is encrypted — trying provided password…`);
+          result = await extractPDFText(file, pdfPassword);
+        }
+        if (result.needsPassword && !pdfPassword) {
+          anyNeedsPassword = true;
+          addProgress(`"${file.name}" is password-protected.`);
           continue;
         }
 
-        addProgress(`Extracted ${lines.length} lines from "${file.name}"`);
-        allLines.push(...lines);
+        if (result.error) {
+          addProgress(`ERROR in "${file.name}": ${result.error}`);
+          continue;
+        }
+
+        addProgress(`Extracted ${result.lines.length} lines from "${file.name}"`);
+        allLines.push(...result.lines);
       }
 
       if (allLines.length === 0) {
-        setDebugInfo(`No text could be extracted from any of the ${pdfFiles.length} PDF(s).\n\nTry using "Manual Text Paste" mode instead.`);
+        if (anyNeedsPassword) {
+          setShowPasswordPrompt(true);
+          setDebugInfo(`One or more PDFs are password-protected. Enter the password (your ID number for M-PESA statements) and tap Extract Inflows again.`);
+        } else {
+          setDebugInfo(`No text could be extracted from any of the ${pdfFiles.length} PDF(s).\n\nLikely reasons:\n• PDF is a scanned image (no embedded text) — use Manual Text Paste\n• PDF is password-protected — enter password above\n• Mobile browser blocked the worker — try desktop or Manual Text Paste`);
+        }
         setIsProcessing(false);
         return;
       }
@@ -670,6 +729,29 @@ export default function MPESAAnalyzer() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {pdfFiles.length > 0 && (
+            <div className="mt-4 max-w-md mx-auto">
+              <label className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-1 mb-1.5">
+                <Shield size={11} className="text-amber-500" />
+                PDF password (if statement is encrypted — M-PESA uses your ID number)
+              </label>
+              <input
+                type="password"
+                value={pdfPassword}
+                onChange={e => setPdfPassword(e.target.value)}
+                placeholder="Leave empty if not encrypted"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white"
+                data-testid="mpesa-pdf-password"
+                autoComplete="off"
+              />
+              {showPasswordPrompt && !pdfPassword && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1" data-testid="mpesa-password-prompt">
+                  This PDF is encrypted. Enter the password above and tap Extract Inflows again.
+                </p>
+              )}
             </div>
           )}
 

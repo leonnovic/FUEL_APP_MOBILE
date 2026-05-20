@@ -16,6 +16,10 @@ import StripeReturnHandler from "@/react-app/components/StripeReturnHandler";
 import GoogleAuthCallback from "@/react-app/components/GoogleAuthCallback";
 import TeamManagement from "@/react-app/pages/TeamManagement";
 import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
+import VerifyReceipt from "@/react-app/pages/VerifyReceipt";
+import AuditLogPage from "@/react-app/pages/AuditLogPage";
+import LoyaltyPage from "@/react-app/pages/LoyaltyPage";
+import BulkImportPage from "@/react-app/pages/BulkImportPage";
 import { lazy, Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 
@@ -124,6 +128,12 @@ export default function App() {
                   {/* Team + Digest — owner/manager tools */}
                   <Route path="/team" element={<TeamManagement />} />
                   <Route path="/digest" element={<DailyDigestPage />} />
+
+                  {/* Public + utility pages (iter 10) */}
+                  <Route path="/verify" element={<VerifyReceipt />} />
+                  <Route path="/audit" element={<AuditLogPage />} />
+                  <Route path="/loyalty" element={<LoyaltyPage />} />
+                  <Route path="/import" element={<BulkImportPage />} />
 
                   {/* Main app - requires auth, shows loader while checking */}
                   <Route path="/" element={<MainAppLoader />} />

@@ -26,6 +26,36 @@
       "short_name": "POS",
       "description": "Quick fuel sales",
       "url": "/#/?tab=pos"
+    },
+    {
+      "name": "Team",
+      "short_name": "Team",
+      "description": "Manage team & roles",
+      "url": "/#/team"
+    },
+    {
+      "name": "Loyalty",
+      "short_name": "Loyalty",
+      "description": "Customer punch-card stamps",
+      "url": "/#/loyalty"
+    },
+    {
+      "name": "Verify Receipt",
+      "short_name": "Verify",
+      "description": "Verify an M-PESA receipt",
+      "url": "/#/verify"
+    },
+    {
+      "name": "Bulk Import",
+      "short_name": "Import",
+      "description": "Upload CSV / Excel",
+      "url": "/#/import"
+    },
+    {
+      "name": "Audit Log",
+      "short_name": "Audit",
+      "description": "Full activity log",
+      "url": "/#/audit"
     }
   ]
 }

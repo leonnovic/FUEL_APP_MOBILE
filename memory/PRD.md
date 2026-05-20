@@ -181,7 +181,43 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
 - `Continue with Google` button rendered on AuthLogin (screenshot captured).
 
-### Iter 9 — Bug fixes + Refactor + Role UI + i18n (global accessibility)
+### Iter 10 — Multi-feature expansion + mobile parity + bug fixes
+
+**📱 Trial banner: hide unless ≤1 day left**
+- Banner now only renders when `totalSeconds ≤ 24h` OR user has paid. Eliminates the "nag forever" UX while keeping the urgency push intact for the final day.
+- File: `TrialGate.tsx` — gated via `shouldShowBanner`.
+
+**📱 Mobile parity — all desktop features now on mobile**
+- Mobile menu dropdown in `Header.tsx` now exposes: Team, Digest, Loyalty, Import, Audit, Verify, Admin — matching the desktop header pill bar.
+- Bottom-tab navigation (Home/POS/Sales/Stock/More) remains for primary navigation.
+
+**🧾 M-PESA Inflow Analyzer — password-protected PDFs supported**
+- M-PESA statements are encrypted by default (password = customer ID number). Old code returned "No text extracted" with no actionable guidance.
+- Now: password input field appears once a PDF is selected; pdf.js detects `PasswordException` (code 1/2) and the UI shows a clear, contextual prompt.
+- Mobile-safe worker: tries jsdelivr `.mjs` then falls back to `.min.js` for older mobile Chrome.
+- `disableStream:true, disableAutoFetch:true` keeps everything in-memory (mobile-safe).
+
+**📄 Document Converter — actually works for PDF & DOCX inputs**
+- Previously: reading PDF / DOCX via `file.text()` produced binary garbage.
+- New: dedicated `pdfToText()` (pdf.js with password support) and `docxToText()` (mammoth dep) extractors. Falls back to best-effort raw XML strip if mammoth fails to load.
+- `mammoth@1.12.0` added to deps.
+
+**🎁 8 new features added (per user's "ALL")**
+1. **Public Receipt Verification page** — `/#/verify?r=XXX` — shareable customer-trust page. Backend endpoint `GET /api/verify/receipt/{receipt}` already public.
+2. **Bulk Import** (CSV/XLSX) — `/#/import` — uploads parsed via `xlsx` client-side, sent to new `POST /api/bulk-import/{collection}` (8 collections supported: sales, deliveries, employees, invoices, inventory, expenses, suppliers, stations).
+3. **PWA install / offline shell** — manifest.json shortcuts expanded (Team/Loyalty/Import/Audit/Verify), service worker pre-existing.
+4. **WhatsApp invoice share** — `lib/whatsappShare.ts` builds wa.me deep links with templated invoice text. No API keys needed.
+5. **Sparkline KPI cards** — `components/SparklineKPI.tsx` — CSS-only SVG sparklines with delta % indicators. Ready to drop into Dashboard.
+6. **Customer Loyalty (punch-card)** — `/#/loyalty` — owner sets stamps_required / min_purchase / reward; daily flow lets staff add stamps & redeem by phone number. Backend: `loyalty_config`, `loyalty/stamp`, `loyalty/redeem`, `loyalty/customer/{phone}`, `loyalty/customers`. Customers anonymous-friendly (no FuelPro account required).
+7. **EPRA Fuel-price alerts** — `loyalty/prefs` + `loyalty/check` use existing EPRA RSS, compare against per-user snapshot, surface deltas above threshold.
+8. **Audit Log dashboard** — `/#/audit` — searchable, filterable view of every action (login, role-change, subscription, AI reconcile, digest send, etc.). Uses pre-existing `GET /api/audit-log` endpoint.
+
+**🔒 Google sign-in branding ("Create App - 1192")**
+- This is the **Emergent OAuth consent screen** — branding is controlled by the Emergent platform from the project name, not by app code. To rename, change the project name in the Emergent dashboard. The flow itself works correctly; only the visible title needs platform-level update.
+
+**Backend changes**
+- New router: `routers/features.py` — loyalty + bulk-import + price-alerts (3 feature groups, 1 file).
+- 58/58 backend tests still pass — zero regressions.
 
 **🐛 Critical UI bug fixes**
 - **Trial counter never ticked down** (P0). Root cause: TrialGate.tsx read `localStorage.fuelpro_trial.startedAt` (numeric epoch ms) but `lib/subscription.ts` wrote `trialStartedAt: ISO string` — schema mismatch made `startedAt = undefined → Date.now()` on every tick, so `msLeft` was always exactly `TRIAL_MS`. Fix: `getTrialState()` now reads either shape (numeric `startedAt` OR ISO `trialStartedAt`) and backfills the numeric form for fast subsequent reads. Verified live: banner reads `13d 23h 59m 56s → 55s → 53s → 52s` over 4 samples.
@@ -231,6 +267,8 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `localStorage.fuelpro_trial` now contains both `startedAt` (ms) and `trialStartedAt` (ISO) ✅
 - Founder login with `publican1D#20` → 200 ✅
 - All catch-all unknown routes → 404 in production ✅
+
+### Iter 9 — Bug fixes + Refactor + Role UI + i18n (global accessibility)
 
 ## What's working (verified)
 - ✅ Pixel-matched login/landing page
