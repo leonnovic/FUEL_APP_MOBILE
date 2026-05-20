@@ -148,11 +148,17 @@ async def _activate_subscription_from_stripe(tx: dict, session_id: str, from_liv
     plan = tx.get("plan", "starter")
     user_id = (tx.get("metadata") or {}).get("user_id")
     if not user_id:
+        log.warning("fuelpro.stripe.activate.skipped session_id=%s reason=no_user_id", session_id)
         return
     billing_cycle = tx.get("billing_cycle", "monthly")
     period_days = 365 if billing_cycle == "yearly" else 31
     period_end = (datetime.now(timezone.utc) + timedelta(days=period_days)).isoformat()
     now = now_iso()
+    log.info(
+        "fuelpro.stripe.activated session_id=%s user_id=%s plan=%s cycle=%s source=%s period_end=%s",
+        session_id, user_id, plan, billing_cycle,
+        "live" if from_live else "redirect_trust", period_end,
+    )
     await db.users.update_one(
         {"id": user_id},
         {"$set": {"tier": plan, "subscription_status": "active",

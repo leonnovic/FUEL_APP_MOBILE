@@ -17,6 +17,7 @@ import GoogleAuthCallback from "@/react-app/components/GoogleAuthCallback";
 import RealtimeSync from "@/react-app/components/RealtimeSync";
 import BroadcastToast from "@/react-app/components/BroadcastToast";
 import ConsentManager from "@/react-app/components/ConsentManager";
+import ClaimAccountBanner from "@/react-app/components/ClaimAccountBanner";
 import TeamManagement from "@/react-app/pages/TeamManagement";
 import DailyDigestPage from "@/react-app/pages/DailyDigestPage";
 import VerifyReceipt from "@/react-app/pages/VerifyReceipt";
@@ -116,6 +117,7 @@ export default function App() {
                 <RealtimeSync />
                 <BroadcastToast />
                 <ConsentManager />
+                <ClaimAccountBanner />
                 <Routes>
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route path="/founder" element={

@@ -216,6 +216,10 @@ async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str)
     uid = tx.get("user_id")
     plan = tx.get("plan", "starter")
     period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
+    log.info(
+        "fuelpro.mpesa.activated user_id=%s plan=%s receipt=%s amount=%s period_end=%s",
+        uid, plan, parsed.get("receipt"), parsed.get("amount"), period_end,
+    )
     await db.users.update_one(
         {"id": uid},
         {"$set": {"tier": plan, "subscription_status": "active",
@@ -237,6 +241,11 @@ async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str)
 async def mpesa_stk_callback_handler(request: Request):
     """Mounted on the FastAPI app at /api/mpesa/stk-callback by server.py."""
     parsed = _parse_stk_callback(await request.json())
+    log.info(
+        "fuelpro.mpesa.callback.parsed checkout_id=%s result_code=%s status=%s receipt=%s",
+        parsed.get("checkout_request_id"), parsed.get("result_code"),
+        parsed.get("status_str"), parsed.get("receipt"),
+    )
     tx = await db.payment_transactions.find_one(
         {"checkout_request_id": parsed["checkout_request_id"]}, {"_id": 0},
     )

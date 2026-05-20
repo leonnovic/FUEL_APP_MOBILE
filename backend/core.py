@@ -142,6 +142,7 @@ class UserOut(BaseModel):
     tier: str = "free"
     trial_ends_at: Optional[str] = None
     subscription_status: str = "trial"
+    is_guest: bool = False
     created_at: str
 
 
@@ -183,6 +184,7 @@ async def _user_doc_to_out(doc: dict) -> UserOut:
         tier=doc.get("tier", "free"),
         trial_ends_at=doc.get("trial_ends_at"),
         subscription_status=doc.get("subscription_status", "trial"),
+        is_guest=bool(doc.get("is_guest", False)),
         created_at=doc.get("created_at", ""),
     )
 
