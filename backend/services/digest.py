@@ -183,6 +183,19 @@ async def send_digest_to_user(db, user: dict, *, override_date: str | None = Non
         {"$set": {**d, "delivery": delivery, "sent_at": now_iso}},
         upsert=True,
     )
+    # Push notification (best-effort — never block the digest)
+    try:
+        from routers.push import push_to_user
+        if d.get("skipped") != "no_activity":
+            await push_to_user(user["id"], {
+                "title": f"FuelPro Digest · {d['label']}",
+                "body": f"Sales: {d.get('sales_count', 0)} · Matched: {d.get('matched', 0)}/{max(d.get('sales_count', 0), d.get('inflows_count', 0)) or 0}",
+                "url": "/#/digest",
+                "tag": f"digest-{d['date']}",
+                "icon": "/logo-small.png",
+            })
+    except Exception as _push_err:  # noqa: BLE001
+        log.debug("digest push skipped: %s", _push_err)
     # Audit trail (parity with ai.reconcile_mpesa + auth.password_reset)
     await db.audit_log.insert_one({
         "id": str(_uuid.uuid4()),

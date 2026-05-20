@@ -178,6 +178,18 @@ async def _activate_subscription_from_stripe(tx: dict, session_id: str, from_liv
         "meta": {"plan": plan, "provider": "stripe", "session_id": session_id,
                  "source": "status_lookup" if from_live else "redirect_trust"},
     })
+    # Push notification (best-effort)
+    try:
+        from routers.push import push_to_user
+        await push_to_user(user_id, {
+            "title": "Subscription activated 🎉",
+            "body": f"Your FuelPro {plan.title()} plan is now active.",
+            "url": "/#/?tab=dashboard",
+            "tag": f"stripe-paid-{session_id}",
+            "icon": "/logo-small.png",
+        })
+    except Exception as _e:  # noqa: BLE001
+        log.debug("stripe push skipped: %s", _e)
 
 
 @router.get("/payments/stripe/status/{session_id}")

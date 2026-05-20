@@ -236,6 +236,18 @@ async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str)
         "id": new_id(), "user_id": uid, "action": "subscription.activated",
         "at": now, "meta": {"plan": plan, "provider": "mpesa", "receipt": parsed["receipt"]},
     })
+    # Push notification (best-effort)
+    try:
+        from routers.push import push_to_user
+        await push_to_user(uid, {
+            "title": "Payment received 🎉",
+            "body": f"Your {plan.title()} plan is now active. Receipt: {parsed.get('receipt', 'N/A')}",
+            "url": "/#/?tab=dashboard",
+            "tag": f"mpesa-paid-{parsed.get('receipt', uid)}",
+            "icon": "/logo-small.png",
+        })
+    except Exception as _e:  # noqa: BLE001
+        log.debug("mpesa push skipped: %s", _e)
 
 
 async def mpesa_stk_callback_handler(request: Request):

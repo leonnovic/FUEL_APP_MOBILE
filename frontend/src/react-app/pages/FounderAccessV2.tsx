@@ -9,6 +9,7 @@ import {
   ChevronDown, ChevronUp, Search, Globe
 } from 'lucide-react';
 import MockedVsLiveBanner from '@/react-app/components/MockedVsLiveBanner';
+import FounderBroadcastForm from '@/react-app/components/FounderBroadcastForm';
 
 // ─── Storage Keys ───
 const SESSION_KEY = 'fuelpro_founder_session';
@@ -285,6 +286,7 @@ function DashboardSection() {
         <KpiCard title="Users" value={users.length} icon={Users} color="text-purple-400" />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <FounderBroadcastForm />
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
           <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2"><BarChart3 size={14} className="text-amber-400" /> Revenue Trend</h3>
           <div className="h-40 flex items-end gap-2">
