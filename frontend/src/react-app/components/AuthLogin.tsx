@@ -42,6 +42,7 @@ export default function AuthLogin() {
 
   const [localError, setLocalError] = useState('');
   const [success, setSuccess] = useState('');
+  const [quickStartBusy, setQuickStartBusy] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -208,6 +209,56 @@ export default function AuthLogin() {
               </div>
             )}
 
+            {/* Quick-start — instant guest auth, no redirect, no OAuth round-trip */}
+            <button
+              type="button"
+              data-testid="auth-quick-start-btn"
+              disabled={quickStartBusy}
+              onClick={async () => {
+                setLocalError(''); setQuickStartBusy(true);
+                try {
+                  const { fetchJson } = await import('@/react-app/lib/fetchJson');
+                  const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || window.location.origin;
+                  const data = await fetchJson<{ token: string; user: { email: string; name: string; id: string } }>(
+                    `${API_BASE}/api/auth/quick-start`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+                  );
+                  localStorage.setItem('fuelpro_jwt', data.token);
+                  // Persist the AuthContext shape so the rest of the app treats
+                  // the guest like any other authed user (Home then renders
+                  // FirstLoginChoice → Add Station).
+                  const identity = {
+                    id: `email_${data.user.email}`,
+                    authId: `email_${data.user.email}`,
+                    authMethod: 'email' as const,
+                    email: data.user.email,
+                    name: data.user.name,
+                  };
+                  localStorage.setItem('fuelpro_auth_identity', JSON.stringify(identity));
+                  localStorage.setItem('fuelpro_user', JSON.stringify(data.user));
+                  // Stitch any anonymous device activity into the new account
+                  try {
+                    const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
+                    await linkAnonymousToUser(data.token);
+                  } catch { /* non-fatal */ }
+                  // Land straight on the dashboard — Home renders FirstLoginChoice
+                  // (Add Station / Demo data) when there are no stations yet.
+                  window.location.href = '/';
+                } catch (e) {
+                  setLocalError(e instanceof Error ? e.message : 'Quick start failed');
+                  setQuickStartBusy(false);
+                }
+              }}
+              className="w-full mb-3 flex items-center justify-center gap-3 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-60 text-black rounded-xl font-bold text-sm transition-colors shadow-lg"
+            >
+              {quickStartBusy ? (
+                <span className="inline-block h-4 w-4 border-2 border-black/40 border-t-black rounded-full animate-spin" />
+              ) : (
+                <Zap size={16} />
+              )}
+              {quickStartBusy ? 'Setting up your account…' : 'Continue instantly — start in 1 second'}
+            </button>
+
             {/* Google Sign-In — Emergent-managed OAuth */}
             {/* REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH */}
             <button
@@ -216,10 +267,10 @@ export default function AuthLogin() {
                 const redirectUrl = window.location.origin + '/';
                 window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
               }}
-              className="w-full mb-3 flex items-center justify-center gap-3 py-3 bg-white hover:bg-gray-100 text-gray-800 rounded-xl font-semibold text-sm transition-colors shadow-md"
+              className="w-full mb-3 flex items-center justify-center gap-3 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium text-xs transition-colors border border-white/10"
               data-testid="auth-google-btn"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <svg width="14" height="14" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>

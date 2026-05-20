@@ -172,6 +172,83 @@ async def password_reset_confirm(body: PasswordResetConfirm):
     return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))
 
 
+@router.post("/auth/quick-start", response_model=TokenResponse)
+async def auth_quick_start(request: Request):
+    """Create a brand-new guest account in microseconds — no OAuth redirect, no
+    email/password required. The user lands on the app with a 14-day trial and
+    can rename / claim the account later via Profile → "Convert guest to real
+    account" (binds email + password to this same user_id).
+
+    This is the path the Founder explicitly requested over the
+    `auth.emergentagent.com` redirect for instant try-out flows.
+    """
+    now = datetime.now(timezone.utc)
+    uid = new_id()
+    # Friendly synthetic email + name so audit_log entries are still readable.
+    email = f"guest_{uid[:8]}@guest.fuelpro.app"
+    name = f"Guest {uid[:6].upper()}"
+    user_doc = {
+        "id": uid,
+        "email": email,
+        "name": name,
+        "password_hash": "",
+        "role": "owner",
+        "tier": "free",
+        "subscription_status": "trial",
+        "trial_started_at": now.isoformat(),
+        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
+        "auth_methods": ["quick_start"],
+        "is_guest": True,
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
+    await db.users.insert_one(user_doc)
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": uid, "action": "user.quick_start",
+        "at": now.isoformat(),
+        "meta": {"ip": request.client.host if request.client else None},
+    })
+    log.info("Quick-start guest user created: %s", email)
+    return TokenResponse(token=_make_token(uid), user=await _user_doc_to_out(user_doc))
+
+
+@router.post("/auth/claim-guest")
+async def auth_claim_guest(
+    body: RegisterBody,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Convert a guest account into a fully registered email/password account.
+    Same user_id is preserved — all stations / sales / sync data stays intact.
+    """
+    if not user.get("is_guest"):
+        raise HTTPException(status_code=400, detail="Only guest accounts can claim an email")
+    email = body.email.lower().strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email")
+    if await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0}):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    now = datetime.now(timezone.utc)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "email": email,
+            "name": body.name or email.split("@")[0],
+            "password_hash": _hash_pw(body.password),
+            "is_guest": False,
+            "auth_methods": list(set((user.get("auth_methods") or []) + ["email"])),
+            "claimed_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }},
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": user["id"], "action": "user.claim_guest",
+        "at": now.isoformat(), "meta": {"email": email},
+    })
+    refreshed = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return TokenResponse(token=_make_token(user["id"]), user=await _user_doc_to_out(refreshed))
+
+
 @router.post("/auth/google", response_model=TokenResponse)
 async def google_auth_exchange(body: GoogleAuthBody):
     """Exchange Emergent-managed Google OAuth session_id for a FuelPro JWT."""

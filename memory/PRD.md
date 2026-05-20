@@ -18,6 +18,38 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 21 — Instant Quick-Start auth (no OAuth redirect)
+
+**⚡ Goal**: Eliminate the `auth.emergentagent.com` redirect for users who just want to try the app. The Founder explicitly requested "auto-authenticate in the backend in microseconds and continue to Add Station".
+
+**Backend** (`routers/auth.py`)
+- `POST /api/auth/quick-start` — creates a new guest user (`guest_<8>@guest.fuelpro.app`) with a 14-day trial. Returns a FuelPro JWT in a single round-trip, ~30ms end-to-end. No email/password required.
+- `POST /api/auth/claim-guest` — converts a guest into a full email/password account. Same `user_id` is preserved so all stations / sales / sync data stay intact.
+- Audit log: `user.quick_start` + `user.claim_guest` actions.
+
+**Frontend** (`components/AuthLogin.tsx`)
+- New **"Continue instantly — start in 1 second"** primary CTA (orange gradient, Zap icon, `data-testid="auth-quick-start-btn"`).
+- Click handler:
+  1. POSTs `/api/auth/quick-start`
+  2. Stores `fuelpro_jwt` + `fuelpro_auth_identity` + `fuelpro_user` in localStorage
+  3. Calls `linkAnonymousToUser()` (stitches any pre-existing anonymous activity)
+  4. Routes to `/` — Home then renders `FirstLoginChoice` (Create New Station / Access Shared Station) automatically.
+- Existing "Continue with Google" demoted to a secondary, smaller button below — still works for users who want real Google OAuth (warning comment preserved).
+
+**Verified live**
+- Click flow takes the user from login → "Welcome to FuelPro / Create New Station" in well under 2 seconds, no external redirect, no `auth.emergentagent.com` round-trip.
+- JWT (165 chars) + identity persisted; Home detects authed user with 0 stations → renders the station setup screen with "Get Started" button.
+
+**Tested**
+- `pytest tests/test_iter17 + test_iter18 + test_fuelpro_backend` → **91 passed**, no regressions on the broader auth surface.
+
+**Files added**
+- (none — purely additive endpoints + UI changes)
+
+**Files modified**
+- `/app/backend/routers/auth.py` — `/auth/quick-start` + `/auth/claim-guest`
+- `/app/frontend/src/react-app/components/AuthLogin.tsx` — primary Quick-Start button + state
+
 ### Iter 20 — Critical production bug fixes (Promise.withResolvers polyfill + JSON-of-HTML hardening + smart rate-limit)
 
 **🪶 Promise.withResolvers polyfill** (Huawei Browser PDF crash)
