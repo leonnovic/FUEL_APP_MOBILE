@@ -36,6 +36,15 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || '');
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
+  // Sync local edit/preview state when the FuelContext finishes hydrating from
+  // localStorage on page reload (otherwise `logoPreview` stays as the initial-
+  // mount empty string and the logo briefly "disappears" until the user
+  // re-opens the Edit panel).
+  useEffect(() => {
+    setEditData({ ...state.companyData });
+    if (state.companyData.logo) setLogoPreview(state.companyData.logo);
+  }, [state.companyData]);
+
   // Close mobile menu on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

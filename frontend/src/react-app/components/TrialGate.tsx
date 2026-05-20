@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import Paywall from './Paywall';
@@ -52,9 +52,11 @@ export function markTrialPaid() {
 export function useTrial() {
   const [trialState, setTrialState] = useState(getTrialState);
 
-  // Refresh once per minute — no need for per-second ticks on a 14-day trial
+  // Tick every second so the countdown visibly decrements from 14d → 0d → 0s.
+  // We still recompute from `Date.now()` each tick (not from a counter) so the
+  // banner stays accurate even after tab-throttling or sleep/wake.
   useEffect(() => {
-    const interval = setInterval(() => setTrialState(getTrialState()), 30 * 1000);
+    const interval = setInterval(() => setTrialState(getTrialState()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -63,19 +65,27 @@ export function useTrial() {
   const isInTrial = !trialState.isExpired && !isPaid;
   const isExpired = trialState.isExpired && !isPaid;
 
-  // Friendly display: "13d 4h", "7h 12m", "12m 34s"
+  // Always show the full d/h/m/s countdown so the timer visibly ticks down
+  // ("14d 23h 59m 12s left") — communicates urgency and answers the user's
+  // explicit ask: "countdown from 14d till 0d".
   let timeDisplay: string;
+  let timeDisplayLong: string;
   if (isPaid) {
     timeDisplay = '∞';
+    timeDisplayLong = '∞';
   } else {
     const totalSeconds = Math.max(0, Math.floor(msLeft / 1000));
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
     const mins = Math.floor((totalSeconds % 3600) / 60);
     const secs = totalSeconds % 60;
-    if (days > 0) timeDisplay = `${days}d ${hours}h`;
-    else if (hours > 0) timeDisplay = `${hours}h ${mins}m`;
-    else timeDisplay = `${mins}m ${secs}s`;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    // Long form always shows all 4 units → "14d 23h 59m 12s"
+    timeDisplayLong = `${days}d ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
+    // Compact form trims leading zeroes for narrow viewports
+    if (days > 0) timeDisplay = `${days}d ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
+    else if (hours > 0) timeDisplay = `${hours}h ${pad(mins)}m ${pad(secs)}s`;
+    else timeDisplay = `${pad(mins)}m ${pad(secs)}s`;
   }
 
   return {
@@ -84,6 +94,7 @@ export function useTrial() {
     isInTrial,
     isExpired,
     timeDisplay,
+    timeDisplayLong,
     msLeft,
     totalSeconds: Math.max(0, Math.floor(msLeft / 1000)),
     progressPercent: isPaid ? 100 : Math.max(0, Math.min(100, (msLeft / TRIAL_MS) * 100)),
@@ -91,7 +102,7 @@ export function useTrial() {
 }
 
 export default function TrialGate({ children }: TrialGateProps) {
-  const { isExpired, isPaid, isInTrial, totalSeconds, timeDisplay, progressPercent } = useTrial();
+  const { isExpired, isPaid, isInTrial, totalSeconds, timeDisplay, timeDisplayLong, progressPercent } = useTrial();
   const [showPaywall, setShowPaywall] = useState(false);
   const navigate = useNavigate();
 
@@ -115,7 +126,12 @@ export default function TrialGate({ children }: TrialGateProps) {
           <div className="flex items-center gap-2">
             <Clock size={13} className={isUrgent ? 'animate-pulse' : ''} />
             <span className={`font-semibold font-mono ${isUrgent ? 'text-red-100' : ''}`} data-testid="trial-banner-time-left">
-              {isPaid ? 'Paid subscription · Full access' : `Trial: ${timeDisplay} left`}
+              {isPaid ? 'Paid subscription · Full access' : (
+                <>
+                  <span className="hidden sm:inline">Trial: {timeDisplayLong} left</span>
+                  <span className="sm:hidden">Trial: {timeDisplay} left</span>
+                </>
+              )}
             </span>
             {!isPaid && (
               <span className="hidden sm:inline opacity-80">

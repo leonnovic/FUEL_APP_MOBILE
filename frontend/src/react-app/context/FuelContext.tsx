@@ -708,8 +708,18 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         userPreferences: state.userPreferences
       };
       
-      // Only include non-empty data to minimize storage
-      if (state.companyData?.name) compactData.companyData = state.companyData;
+      // Only include non-empty data to minimize storage.
+      // Persist companyData if ANY field has been set (name, logo, email, KRA, bank, etc.),
+      // not just `name` — the logo can be uploaded before the company name is entered.
+      const cd = state.companyData;
+      if (cd && (cd.name || cd.logo || cd.email || cd.contacts || cd.poBox ||
+                 cd.kraPin || cd.vatRegNo || cd.bankName || cd.branchName ||
+                 cd.accountHolder || cd.accountNumber || cd.physicalAddress ||
+                 cd.county || cd.town || cd.etrSerialNo || cd.cuSerialNo ||
+                 (cd.currency && cd.currency !== 'Ksh') ||
+                 (cd.etrInvoicePrefix && cd.etrInvoicePrefix !== 'INV'))) {
+        compactData.companyData = cd;
+      }
       if (state.signatures?.manager || state.signatures?.director) compactData.signatures = state.signatures;
       if (state.invoiceCounter > 1) compactData.invoiceCounter = state.invoiceCounter;
       if (Object.keys(state.clients).length > 0) compactData.clients = state.clients;
@@ -780,8 +790,17 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         userPreferences: state.userPreferences
       };
       
-      // Only include non-default/non-empty values for maximum compression
-      if (state.companyData?.name) compactData.companyData = state.companyData;
+      // Only include non-default/non-empty values for maximum compression.
+      // Persist companyData if ANY field is set (logo can be uploaded standalone).
+      const cdc = state.companyData;
+      if (cdc && (cdc.name || cdc.logo || cdc.email || cdc.contacts || cdc.poBox ||
+                  cdc.kraPin || cdc.vatRegNo || cdc.bankName || cdc.branchName ||
+                  cdc.accountHolder || cdc.accountNumber || cdc.physicalAddress ||
+                  cdc.county || cdc.town || cdc.etrSerialNo || cdc.cuSerialNo ||
+                  (cdc.currency && cdc.currency !== 'Ksh') ||
+                  (cdc.etrInvoicePrefix && cdc.etrInvoicePrefix !== 'INV'))) {
+        compactData.companyData = cdc;
+      }
       if (state.signatures?.manager || state.signatures?.director) compactData.signatures = state.signatures;
       if (state.invoiceCounter > 1) compactData.invoiceCounter = state.invoiceCounter;
       if (Object.keys(state.clients).length > 0) compactData.clients = state.clients;
