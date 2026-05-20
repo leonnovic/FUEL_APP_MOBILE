@@ -6,6 +6,7 @@ import { getPriceForCity } from '@/react-app/services/DataSyncService';
 import RegulatoryAlerts from '@/react-app/components/RegulatoryAlerts';
 import SyncStatusIndicator from '@/react-app/components/SyncStatusIndicator';
 import WeatherWidget from '@/react-app/components/WeatherWidget';
+import SparklineKPI from '@/react-app/components/SparklineKPI';
 import { 
   TrendingUp, TrendingDown, DollarSign, Fuel, Users, AlertTriangle,
   BarChart3, Clock, Receipt, ArrowUpRight, ArrowDownRight, Activity,
@@ -118,6 +119,29 @@ export default function Dashboard() {
 
     return { totalRevenue: revenue, netProfit: profit, totalFuelSold: fuel, totalDebt: debt, totalExpenses: expenses, todaySales: tSales };
   }, [state.salesHistory, state.deliveryData.totals]);
+
+  // 30-day trend sparklines: revenue, fuel sold (L), expenses, debt-by-day.
+  const trendSeries = useMemo(() => {
+    const days = 30;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const rev: number[] = []; const fuel: number[] = []; const exp: number[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      let r = 0, f = 0, x = 0;
+      Object.entries(state.salesHistory).forEach(([k, entry]: [string, any]) => {
+        if (!k.startsWith(key)) return;
+        const pms = (entry.pmsPumps || []).reduce((s: number, p: any) => s + (p.salesKsh || 0), 0);
+        const ago = (entry.agoPumps || []).reduce((s: number, p: any) => s + (p.salesKsh || 0), 0);
+        r += pms + ago;
+        f += (entry.pmsPumps || []).reduce((s: number, p: any) => s + (p.salesL || 0), 0);
+        f += (entry.agoPumps || []).reduce((s: number, p: any) => s + (p.salesL || 0), 0);
+        x += (entry.expenses || []).reduce((s: number, e: any) => s + (e.amount || 0), 0);
+      });
+      rev.push(Math.round(r)); fuel.push(Math.round(f)); exp.push(Math.round(x));
+    }
+    return { rev, fuel, exp };
+  }, [state.salesHistory]);
 
   // Chart data - Sales over last 7 days
   const salesChartData = useMemo(() => {
@@ -405,6 +429,35 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* 30-day trend sparklines — quick-glance growth signal */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="dashboard-sparklines">
+        <SparklineKPI
+          testid="sparkline-revenue"
+          label="Revenue (last 30 days)"
+          value={trendSeries.rev.reduce((a, b) => a + b, 0)}
+          series={trendSeries.rev}
+          formatValue={(v) => `Ksh ${formatNumber(v, 0)}`}
+          color="#22c55e"
+        />
+        <SparklineKPI
+          testid="sparkline-fuel"
+          label="Fuel sold (L, last 30 days)"
+          value={trendSeries.fuel.reduce((a, b) => a + b, 0)}
+          series={trendSeries.fuel}
+          formatValue={(v) => formatNumber(v, 0)}
+          unit="L"
+          color="#3b82f6"
+        />
+        <SparklineKPI
+          testid="sparkline-expenses"
+          label="Expenses (last 30 days)"
+          value={trendSeries.exp.reduce((a, b) => a + b, 0)}
+          series={trendSeries.exp}
+          formatValue={(v) => `Ksh ${formatNumber(v, 0)}`}
+          color="#f97316"
+        />
       </div>
 
       {/* Auto-Synced Fuel Prices + Tax Info + Regulatory Alerts */}

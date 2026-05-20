@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from core import (
     PLANS,
     STRIPE_API_KEY,
+    STRIPE_TRUST_REDIRECT,
     db,
     get_current_user,
     get_stripe,
@@ -131,11 +132,15 @@ async def stripe_status(session_id: str, request: Request):
         payment_status = cs.payment_status
         amount_total = cs.amount_total
         currency = cs.currency
-    else:
+    elif STRIPE_TRUST_REDIRECT:
+        # Fallback: Emergent proxy retrieve is broken — trust the redirect.
+        # Toggle STRIPE_TRUST_REDIRECT=0 in /app/backend/.env to disable.
         status_str = "complete"
         payment_status = "paid"
         amount_total = int(float(tx.get("amount", 0)) * 100)
         currency = tx.get("currency", "usd")
+    else:
+        raise HTTPException(status_code=502, detail=f"Stripe status lookup failed: {stripe_error}")
 
     already_processed = tx.get("payment_status") == "paid"
     if payment_status == "paid" and not already_processed:

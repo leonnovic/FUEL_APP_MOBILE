@@ -35,6 +35,10 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
+# When the Emergent Stripe proxy can't retrieve a session_id, we fall back to
+# trusting the success-URL redirect. Set this env to "0" to disable that
+# workaround the moment the proxy bug is fixed (no redeploy needed).
+STRIPE_TRUST_REDIRECT = os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"
 PUBLIC_BACKEND_URL = os.environ.get("PUBLIC_BACKEND_URL", "")
 APP_ENV = os.environ.get("APP_ENV", "production").lower()
 IS_PRODUCTION = APP_ENV in {"production", "prod"}

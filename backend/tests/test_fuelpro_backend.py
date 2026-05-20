@@ -453,3 +453,46 @@ class TestFounder:
     def test_founder_login_wrong_password(self, session):
         r = session.post(f"{API}/founder/login", json={"password": "wrongpass-xyz"})
         assert r.status_code in (401, 429)
+
+
+
+class TestRoleSelfDemotion:
+    """Verify the last-owner safety guard on PATCH /api/users/{id}/role."""
+
+    def test_last_owner_demotion_blocked(self, session):
+        """If the system has exactly one owner, blocking demotion."""
+        import os
+        from pathlib import Path
+        from dotenv import load_dotenv
+        from pymongo import MongoClient
+        # Load env from the backend's .env (test process doesn't inherit supervisor's)
+        load_dotenv(Path(__file__).parent.parent / ".env")
+        # Direct DB access — wipe non-test owners, recreate one, then try demotion.
+        cli = MongoClient(os.environ["MONGO_URL"])
+        db = cli[os.environ["DB_NAME"]]
+        # Snapshot existing owners; we'll restore them after the test
+        owner_ids = [u["id"] for u in db.users.find({"role": "owner"}, {"_id": 0, "id": 1})]
+        db.users.update_many({"role": "owner"}, {"$set": {"role": "_test_paused_owner"}})
+
+        # Register a fresh owner — they will now be the ONLY owner
+        email = f"solo-owner-{uuid.uuid4()}@fuelpro.app"
+        r = session.post(f"{API}/auth/register",
+                         json={"email": email, "password": "password123", "name": "Solo Owner"})
+        assert r.status_code == 200
+        data = r.json()
+        token = data["token"]
+        uid = data["user"]["id"]
+
+        # Attempt self-demotion → should 400
+        r2 = session.patch(f"{API}/users/{uid}/role",
+                           headers={"Authorization": f"Bearer {token}"},
+                           json={"role": "staff"})
+
+        # Cleanup BEFORE asserting so failures don't leak state
+        db.users.update_many({"role": "_test_paused_owner"}, {"$set": {"role": "owner"}})
+        db.users.delete_one({"id": uid})
+
+        assert r2.status_code == 400, r2.text
+        assert "last remaining owner" in r2.json().get("detail", "").lower()
+        # Sanity: owners were restored
+        assert db.users.count_documents({"role": "owner"}) == len(owner_ids)
