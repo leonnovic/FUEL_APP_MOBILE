@@ -18,6 +18,26 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 25 — Mobile + Desktop UX polish (Claim banner + consent + nav parity)
+
+**🐞 Visible bugs fixed**
+- **ClaimAccountBanner overflow** on mobile: 3-column flex layout overflowed the viewport, clipping the "Claim now" CTA. Now stacks vertically on `<sm` (mobile-first), inline on `≥sm`. Description text hidden on mobile (header is enough).
+- **ConsentManager blocking content**: was full-width bottom banner blocking station-selection cards on mobile. Now compact `max-w-md ml-auto` floating card bottom-right, `pointer-events-none` wrapper so it doesn't intercept clicks anywhere outside the card itself.
+- Tighter consent button labels: "Reject non-essential" → "Reject", "Accept all" → "Accept all", "Save preferences" → "Save". Cuts banner height ~30%.
+
+**🔁 Mobile ↔ Desktop feature parity**
+- Mobile `More` sheet now has a **Quick Routes** grid at the top with `Cloud Storage` + `Admin Panel` buttons — matches the desktop pill bar's top-right shortcuts. Goes through `useNavigate()` (route nav, not tab nav).
+- testids: `mobile-more-storage`, `mobile-more-founder`, `mobile-more-quick-routes`.
+
+**Tested**
+- Frontend build clean (`yarn build` 22s, 0 warnings).
+- Live Playwright at 1280×800 (desktop) + 390×844 (mobile) — Claim banner fits within viewport on both; consent banner no longer blocks "Get Started" CTA; "Quick Start" demo card visible and clickable on mobile.
+
+**Files modified**
+- `/app/frontend/src/react-app/components/ClaimAccountBanner.tsx` — responsive stack/inline
+- `/app/frontend/src/react-app/components/ConsentManager.tsx` — compact floating card, pointer-events-none wrapper, tighter labels, removed unused `Check` import
+- `/app/frontend/src/react-app/components/MobileBottomNav.tsx` — Quick Routes section (Storage + Admin)
+
 ### Iter 24 — Claim Account banner + structured payment logs + payment-replay tests
 
 **🪪 ClaimAccountBanner — guest → real account upgrade**

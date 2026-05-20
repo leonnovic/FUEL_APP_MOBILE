@@ -1,5 +1,6 @@
-import { Home, ShoppingCart, BarChart3, FileText, MoreHorizontal, Fuel, Truck, CreditCard, Users, FolderOpen, Newspaper, Database, Activity, TrendingUp, Bell, Package, Award, Calendar, FlaskConical, Wallet, LineChart, ClipboardList, Plug, Globe, Wrench, Monitor, Receipt, Settings, HelpCircle, FileUp } from 'lucide-react';
+import { Home, ShoppingCart, BarChart3, FileText, MoreHorizontal, Fuel, Truck, CreditCard, Users, FolderOpen, Newspaper, Database, Activity, TrendingUp, Bell, Package, Award, Calendar, FlaskConical, Wallet, LineChart, ClipboardList, Plug, Globe, Wrench, Monitor, Receipt, Settings, HelpCircle, FileUp, Cloud, Crown } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { usePermissions } from '@/react-app/context/PermissionContext';
 import { useTenant } from '@/react-app/context/TenantContext';
 
@@ -19,6 +20,7 @@ export default function MobileBottomNav({ activeTab, onTabChange }: MobileBottom
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const { canAccessTab } = usePermissions();
   const { featureFlags } = useTenant();
+  const navigate = useNavigate();
 
   // Helper: Check if tab should show based on feature flags
   const isTabAllowed = (tabId: string): boolean => {
@@ -121,6 +123,25 @@ export default function MobileBottomNav({ activeTab, onTabChange }: MobileBottom
           <div className="sticky top-0 bg-white dark:bg-gray-800 p-3 border-b border-gray-200 dark:border-gray-700 z-10">
             <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">All Features</h3>
             <p className="text-[10px] text-gray-400">Tap to navigate</p>
+          </div>
+          {/* Quick routes — same as desktop pill bar */}
+          <div className="px-2 pt-2 pb-1 grid grid-cols-2 gap-1.5" data-testid="mobile-more-quick-routes">
+            <button
+              onClick={() => { setShowMoreMenu(false); navigate('/storage'); }}
+              data-testid="mobile-more-storage"
+              className="flex items-center gap-2 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/40 rounded-xl transition-colors"
+            >
+              <Cloud size={16} className="text-sky-500" />
+              <span className="text-xs font-medium text-sky-700 dark:text-sky-300">Cloud Storage</span>
+            </button>
+            <button
+              onClick={() => { setShowMoreMenu(false); navigate('/founder'); }}
+              data-testid="mobile-more-founder"
+              className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-xl transition-colors"
+            >
+              <Crown size={16} className="text-amber-500" />
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Admin Panel</span>
+            </button>
           </div>
           <div className="grid grid-cols-3 gap-1 p-2">
             {secondaryNav.map((item) => {
