@@ -253,25 +253,25 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
                   <Layers size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Stations</span>
                 </button>
               )}
-              <button onClick={() => { navigate('/team'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-team-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/team'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-team-btn">
                 <User size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Team</span>
               </button>
-              <button onClick={() => { navigate('/digest'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-colors" data-testid="mobile-digest-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/digest'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-blue-500/10 rounded-xl hover:bg-blue-500/20 transition-colors" data-testid="mobile-digest-btn">
                 <Sparkles size={16} className="text-blue-400" /><span className="text-[10px] text-gray-400">Digest</span>
               </button>
-              <button onClick={() => { navigate('/loyalty'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 transition-colors" data-testid="mobile-loyalty-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/loyalty'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 transition-colors" data-testid="mobile-loyalty-btn">
                 <Award size={16} className="text-purple-400" /><span className="text-[10px] text-gray-400">Loyalty</span>
               </button>
-              <button onClick={() => { navigate('/import'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-cyan-500/10 rounded-xl hover:bg-cyan-500/20 transition-colors" data-testid="mobile-import-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/import'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-cyan-500/10 rounded-xl hover:bg-cyan-500/20 transition-colors" data-testid="mobile-import-btn">
                 <Database size={16} className="text-cyan-400" /><span className="text-[10px] text-gray-400">Import</span>
               </button>
-              <button onClick={() => { navigate('/audit'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-rose-500/10 rounded-xl hover:bg-rose-500/20 transition-colors" data-testid="mobile-audit-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/audit'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-rose-500/10 rounded-xl hover:bg-rose-500/20 transition-colors" data-testid="mobile-audit-btn">
                 <History size={16} className="text-rose-400" /><span className="text-[10px] text-gray-400">Audit</span>
               </button>
-              <button onClick={() => { navigate('/verify'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/verify'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-emerald-500/10 rounded-xl hover:bg-emerald-500/20 transition-colors" data-testid="mobile-verify-btn">
                 <ShieldCheck size={16} className="text-emerald-400" /><span className="text-[10px] text-gray-400">Verify</span>
               </button>
-              <button onClick={() => { navigate('/founder'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
+              <button onClick={() => { setShowMobileMenu(false); setTimeout(() => navigate('/founder'), 0); }} className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors" data-testid="mobile-admin-btn">
                 <Crown size={16} className="text-amber-400" /><span className="text-[10px] text-gray-400">Admin</span>
               </button>
             </div>

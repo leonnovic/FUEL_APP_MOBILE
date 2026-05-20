@@ -181,6 +181,45 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
 - `Continue with Google` button rendered on AuthLogin (screenshot captured).
 
+### Iter 11 + 12 — Self-demotion guard, Sparkline Dashboard, Mobile sweep + fixes
+
+**🛡️ Self-demotion guard (last-owner protection)**
+- `PATCH /api/users/{id}/role`: if target is currently `owner` and new role is anything else, the backend now counts `db.users.count_documents({"role": "owner"})` first; if `<=1`, returns `400 "Cannot demote the last remaining owner. Promote another user to 'owner' first."`
+- New unit test `TestRoleSelfDemotion::test_last_owner_demotion_blocked` snapshots existing owners, pauses them, registers a fresh solo owner, attempts self-demotion → asserts 400 + restores state on teardown. **59/59 tests pass.**
+
+**🎚️ Stripe redirect-trust now toggleable via env**
+- New env var `STRIPE_TRUST_REDIRECT` (default `1`). When the Emergent proxy retrieve bug is fixed, set to `0` in `/app/backend/.env` and the workaround disappears without redeploy. If `STRIPE_TRUST_REDIRECT=0` and Stripe lookup fails, returns 502 instead of silently activating.
+
+**📊 SparklineKPI cards hooked into Dashboard**
+- Three 30-day trend cards: Revenue, Fuel sold (L), Expenses — rendered between the main KPI grid and the auto-synced fuel prices section.
+- `trendSeries` memoised over `state.salesHistory`; CSS-only SVG sparklines so the bundle stays slim.
+- testids: `sparkline-revenue`, `sparkline-fuel`, `sparkline-expenses`.
+
+**📱 Mobile sweep — all P0/P1 issues fixed**
+Iter-11 testing-agent ran a comprehensive sweep at 390x844 (iPhone 13/14) — found **zero P0 bugs**. Iter-12 verified all P1/P2 fixes are now applied:
+- **Bottom-tab testids**: `bottom-tab-home`, `bottom-tab-pos`, `bottom-tab-sales`, `bottom-tab-stock`, `bottom-tab-more` + `more-tab-{id}` for every secondary menu item. All 64px tall.
+- **Hamburger testid**: Header `mobile-menu-toggle` data-testid added with `aria-expanded`.
+- **AuthLogin submit buttons**: bumped from `py-3` (40.5px) → `py-3.5 min-h-[44px]` (44.5px) — meets Apple HIG / WCAG 2.5.5.
+- **Mobile menu navigation race**: wrapped `navigate('/path')` in `setTimeout(…, 0)` so React-Router commits the hash even when the menu closes in the same tick. All 7 mobile-*-btn buttons now route reliably.
+- **Numeric input modes** for mobile keyboards:
+  - `pos-litres-input`: `type="number" inputMode="decimal"`
+  - `pos-custom-price-input`: `inputMode="decimal"`
+  - `loyalty-phone-input`: `type="tel" inputMode="tel" autoComplete="tel"`
+  - `loyalty-amount-input`: `inputMode="decimal"`
+  - `loyalty-config stamps_required`: `inputMode="numeric"`
+  - `loyalty-config min_purchase`: `inputMode="decimal"`
+  - `verify-input` (receipt code): `autoCapitalize="characters" autoCorrect="off" spellCheck=false`
+
+**Verified working on mobile 390x844** (from iter-11/12 reports):
+- AuthLogin no h-overflow, LanguagePicker reachable, register form fully usable
+- Dashboard with 3 sparkline cards visible without overflow
+- Hamburger menu opens with all 7 buttons at 61px tap-targets
+- Bottom-tab nav (Home/POS/Sales/Stock/More) all functional
+- POS, Sales, Stock, Team, Digest, Verify, Loyalty, Import, Audit, Founder — every route renders without horizontal overflow
+- Trial banner correctly hidden on a fresh 14-day trial
+
+**Success rate**: ~95% — every requested testid + inputMode + button-height fix in place.
+
 ### Iter 10 — Multi-feature expansion + mobile parity + bug fixes
 
 **📱 Trial banner: hide unless ≤1 day left**
