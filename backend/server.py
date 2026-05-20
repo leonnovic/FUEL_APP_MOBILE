@@ -26,8 +26,9 @@ from core import (
     db,
     log,
 )
-from routers import auth, digest, features, founder, invites, misc, mpesa, payments, sync
+from routers import auth, digest, features, founder, founder_ops, invites, misc, mpesa, payments, sync
 from routers.founder import ensure_founder_seeded
+from routers.founder_ops import apply_runtime_config_to_env
 from routers.mpesa import mpesa_stk_callback_handler
 from routers.payments import stripe_webhook_handler
 
@@ -69,6 +70,7 @@ api.include_router(sync.router)
 api.include_router(invites.router)
 api.include_router(digest.router)
 api.include_router(founder.router)
+api.include_router(founder_ops.router)
 api.include_router(features.router)
 api.include_router(misc.router)
 
@@ -154,6 +156,13 @@ async def on_startup():
         await ensure_founder_seeded()
     except Exception as e:
         log.warning("Founder seed failed: %s", e)
+
+    # Apply any runtime integration keys the founder previously stored
+    # (Resend, Twilio, Stripe, Daraja) so services pick them up immediately.
+    try:
+        await apply_runtime_config_to_env()
+    except Exception as e:
+        log.warning("Runtime config apply failed: %s", e)
 
 
 @app.on_event("shutdown")

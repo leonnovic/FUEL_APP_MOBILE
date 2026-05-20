@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import os
+
 from emergentintegrations.payments.stripe.checkout import (
     CheckoutSessionRequest,
     CheckoutSessionResponse,
@@ -16,8 +18,6 @@ from pydantic import BaseModel
 
 from core import (
     PLANS,
-    STRIPE_API_KEY,
-    STRIPE_TRUST_REDIRECT,
     db,
     get_current_user,
     get_stripe,
@@ -27,6 +27,14 @@ from core import (
 )
 
 router = APIRouter()
+
+
+def _stripe_key() -> str:
+    return os.environ.get("STRIPE_API_KEY", "")
+
+
+def _stripe_trust_redirect() -> bool:
+    return os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"
 
 
 class CheckoutBody(BaseModel):
@@ -60,7 +68,7 @@ async def stripe_checkout(
 ):
     if body.plan not in PLANS or body.plan == "free":
         raise HTTPException(status_code=400, detail="Invalid plan")
-    if not STRIPE_API_KEY:
+    if not _stripe_key():
         raise HTTPException(status_code=503, detail="Stripe not configured")
 
     plan = PLANS[body.plan]
@@ -75,7 +83,7 @@ async def stripe_checkout(
     success_url = f"{origin}/?session_id={{CHECKOUT_SESSION_ID}}&plan={body.plan}"
     cancel_url = f"{origin}/?payment=cancelled"
 
-    sc = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    sc = StripeCheckout(api_key=_stripe_key(), webhook_url=webhook_url)
     metadata = {
         "user_id": user["id"],
         "user_email": user["email"],
@@ -111,7 +119,7 @@ async def stripe_checkout(
 @router.get("/payments/stripe/status/{session_id}")
 async def stripe_status(session_id: str, request: Request):
     """See server.py history: trusts redirect when Emergent proxy can't retrieve."""
-    if not STRIPE_API_KEY:
+    if not _stripe_key():
         raise HTTPException(status_code=503, detail="Stripe not configured")
 
     tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
@@ -132,7 +140,7 @@ async def stripe_status(session_id: str, request: Request):
         payment_status = cs.payment_status
         amount_total = cs.amount_total
         currency = cs.currency
-    elif STRIPE_TRUST_REDIRECT:
+    elif _stripe_trust_redirect():
         # Fallback: Emergent proxy retrieve is broken — trust the redirect.
         # Toggle STRIPE_TRUST_REDIRECT=0 in /app/backend/.env to disable.
         status_str = "complete"
@@ -191,7 +199,7 @@ async def stripe_status(session_id: str, request: Request):
 async def stripe_webhook_handler(request: Request):
     """Webhook from Stripe. Registered at /api/webhook/stripe (no /api router prefix
     issue because it's mounted on the FastAPI app directly in server.py)."""
-    if not STRIPE_API_KEY:
+    if not _stripe_key():
         return {"ok": False, "error": "stripe_not_configured"}
     sc = get_stripe(request)
     body = await request.body()

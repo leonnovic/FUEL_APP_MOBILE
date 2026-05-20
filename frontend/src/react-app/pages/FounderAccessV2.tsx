@@ -11,7 +11,10 @@ import {
 
 // ─── Storage Keys ───
 const SESSION_KEY = 'fuelpro_founder_session';
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'fuelpro2026' };
+const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
+// Display-only hint — actual auth is performed by the backend.
+const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
 
 // ═══════════════════════════════════════════════════
 //  FOUNDER AUTH - Local (ready for tRPC upgrade)
@@ -43,6 +46,37 @@ function useFounderAuth() {
 
   const login = async (user: string, pw: string) => {
     setError('');
+    try {
+      // Authenticate against the real backend so the founder gets a real
+      // JWT (required by /api/founder/integrations, /system-stats, etc.)
+      const r = await fetch(`${API_BASE}/api/founder/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (data.token) {
+          localStorage.setItem(FOUNDER_JWT_KEY, data.token);
+          localStorage.setItem(SESSION_KEY, JSON.stringify({
+            username: user || 'FOUNDER',
+            active: true,
+            loginTime: Date.now(),
+            must_change_password: !!data.must_change_password,
+          }));
+          setIsAuthenticated(true);
+          setUsername(user || 'FOUNDER');
+          return true;
+        }
+      } else if (r.status === 429) {
+        setError('Too many attempts. Try again later.');
+        return false;
+      }
+      // Fall through to client-side check below (back-compat for offline UX)
+    } catch {
+      // Network error — fall back to client-side check
+    }
+    // Back-compat: allow local-only login when username + password match defaults
     if (user === DEFAULT_CREDS.username && pw === DEFAULT_CREDS.password) {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user, active: true, loginTime: Date.now() }));
       setIsAuthenticated(true);
@@ -55,6 +89,7 @@ function useFounderAuth() {
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(FOUNDER_JWT_KEY);
     setIsAuthenticated(false);
     setUsername('');
     window.location.reload();
@@ -467,13 +502,24 @@ function SecuritySection() {
     } catch { /* */ }
   }, []);
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setPwError(''); setPwSuccess('');
     if (newPw !== confirmPw) { setPwError('Passwords do not match'); return; }
-    if (newPw.length < 6) { setPwError('Min 6 characters'); return; }
-    if (currentPw !== DEFAULT_CREDS.password) { setPwError('Current password incorrect'); return; }
-    setPwSuccess('Password updated (demo mode)');
-    setCurrentPw(''); setNewPw(''); setConfirmPw('');
+    if (newPw.length < 8) { setPwError('Min 8 characters'); return; }
+    const token = localStorage.getItem('fuelpro_founder_jwt') || '';
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPw, new_password: newPw }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setPwError(data.detail || 'Change failed'); return; }
+      setPwSuccess('Password updated. Use the new password next time you sign in.');
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+    } catch (e) {
+      setPwError(e instanceof Error ? e.message : 'Network error');
+    }
   };
 
   const handleEnable2FA = async () => {

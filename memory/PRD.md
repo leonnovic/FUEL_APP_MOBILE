@@ -181,6 +181,41 @@ end-to-end: dashboard URL is stable for 6+ seconds after Quick Start (no refresh
 - `digest/preview?date=2026-01-01` returns the right date label ("Thursday, 01 January 2026").
 - `Continue with Google` button rendered on AuthLogin (screenshot captured).
 
+### Iter 13 — Founder runtime integration keys + ops endpoints
+
+**🔑 Live integration-key panel for Founder Access**
+- New backend router `routers/founder_ops.py`. Endpoints (all founder-scope JWT):
+  - `GET /api/founder/integrations` — returns masked stored keys + which env vars are currently live
+  - `POST /api/founder/integrations` — pastes Resend/Twilio/Stripe/Daraja keys and applies them to `os.environ` **instantly** (no restart)
+  - `DELETE /api/founder/integrations/{field}` — clears a single stored key
+  - `GET /api/founder/system-stats` — live counts + dbStats for the ops dashboard
+  - `POST /api/founder/broadcast` — system-wide audit-log notification
+  - `DELETE /api/founder/users/{id}` — hard-delete a user + all their data (with last-owner safety)
+  - `POST /api/founder/users/{id}/extend-trial` — add N days to a user's trial
+  - `POST /api/founder/users/{id}/grant-subscription` — comp a paid tier (starter/pro/enterprise)
+- Persistence: stored encrypted-at-rest in `runtime_config` collection. Re-applied to `os.environ` on every backend startup (`apply_runtime_config_to_env`).
+- All payment/notification services read env values lazily (function calls, not module constants) so a runtime paste is picked up by the very next request.
+- Stripe singleton in `core.get_stripe()` now rebuilds when `STRIPE_API_KEY` changes (no zombie clients).
+
+**🔐 FounderAccessV2 wired to real backend**
+- Default password updated to `publican1D#20` (display-only — backend is authoritative).
+- Login now calls `POST /api/founder/login`, stores returned JWT at `localStorage.fuelpro_founder_jwt`, then the Integration Keys panel hits the new endpoints with that JWT.
+- Change-password handler now hits `POST /api/founder/change-password` (was a stub).
+- Logout clears both the session and the JWT.
+
+**🎛 ApiKeysSection completely rewritten**
+- Replaced the demo localStorage panel with a real backend-backed UI:
+  - 4 sections (Resend / Twilio / Stripe / Daraja M-PESA)
+  - Each field shows STORED / FROM .env / NOT SET badge
+  - Stripe trust-redirect toggle as checkbox
+  - MPESA env selector (sandbox/production)
+  - "Save & apply LIVE" button + per-field Clear
+  - Status banner shows applied-field count
+- Testids: `founder-integration-{field}`, `founder-integration-save`, `founder-integration-status`, `founder-integration-clear-{field}`.
+
+**📋 Verified end-to-end**
+- Founder login → JWT issued → save 9 fields at once → masked-key GET → `os.environ` reflects new values → broadcast to 112 users → 59/59 backend tests pass.
+
 ### Iter 11 + 12 — Self-demotion guard, Sparkline Dashboard, Mobile sweep + fixes
 
 **🛡️ Self-demotion guard (last-owner protection)**

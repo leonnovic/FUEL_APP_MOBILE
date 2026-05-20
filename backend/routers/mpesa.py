@@ -12,13 +12,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+import os
+
 from core import (
     MPESA_CALLBACK_BASE_URL,
-    MPESA_CONSUMER_KEY,
-    MPESA_CONSUMER_SECRET,
-    MPESA_ENV,
-    MPESA_PASSKEY,
-    MPESA_SHORTCODE,
     PLANS,
     db,
     get_current_user,
@@ -31,6 +28,14 @@ from core import (
 router = APIRouter()
 
 
+# Read Daraja keys lazily so founder-runtime updates take effect immediately
+def _mpesa_env(): return os.environ.get("MPESA_ENV", "sandbox")
+def _mpesa_consumer_key(): return os.environ.get("MPESA_CONSUMER_KEY", "")
+def _mpesa_consumer_secret(): return os.environ.get("MPESA_CONSUMER_SECRET", "")
+def _mpesa_shortcode(): return os.environ.get("MPESA_SHORTCODE", "174379")
+def _mpesa_passkey(): return os.environ.get("MPESA_PASSKEY", "")
+
+
 class STKBody(BaseModel):
     plan: str
     phone: str = Field(min_length=7, max_length=15)
@@ -41,10 +46,14 @@ class _DarajaClient:
         self._token: Optional[str] = None
         self._token_exp: Optional[datetime] = None
         self._lock = asyncio.Lock()
-        self.base = "https://sandbox.safaricom.co.ke" if MPESA_ENV == "sandbox" else "https://api.safaricom.co.ke"
+
+    @property
+    def base(self) -> str:
+        return "https://sandbox.safaricom.co.ke" if _mpesa_env() == "sandbox" else "https://api.safaricom.co.ke"
 
     def configured(self) -> bool:
-        return bool(MPESA_CONSUMER_KEY and MPESA_CONSUMER_SECRET and MPESA_PASSKEY and MPESA_SHORTCODE)
+        return bool(_mpesa_consumer_key() and _mpesa_consumer_secret()
+                    and _mpesa_passkey() and _mpesa_shortcode())
 
     async def token(self) -> str:
         async with self._lock:
@@ -52,7 +61,7 @@ class _DarajaClient:
                 return self._token
             if not self.configured():
                 raise RuntimeError("Daraja credentials not configured")
-            basic = base64.b64encode(f"{MPESA_CONSUMER_KEY}:{MPESA_CONSUMER_SECRET}".encode()).decode()
+            basic = base64.b64encode(f"{_mpesa_consumer_key()}:{_mpesa_consumer_secret()}".encode()).decode()
             async with httpx.AsyncClient(timeout=10) as c:
                 r = await c.get(
                     f"{self.base}/oauth/v1/generate?grant_type=client_credentials",
@@ -70,7 +79,7 @@ class _DarajaClient:
 
     @staticmethod
     def _password(timestamp: str) -> str:
-        raw = f"{MPESA_SHORTCODE}{MPESA_PASSKEY}{timestamp}"
+        raw = f"{_mpesa_shortcode()}{_mpesa_passkey()}{timestamp}"
         return base64.b64encode(raw.encode()).decode()
 
     async def stk_push(self, *, amount: int, phone: str, account_ref: str, description: str) -> dict:
@@ -79,10 +88,10 @@ class _DarajaClient:
         pwd = self._password(ts)
         callback = f"{MPESA_CALLBACK_BASE_URL}/stk-callback"
         payload = {
-            "BusinessShortCode": MPESA_SHORTCODE,
+            "BusinessShortCode": _mpesa_shortcode(),
             "Password": pwd, "Timestamp": ts,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": amount, "PartyA": phone, "PartyB": MPESA_SHORTCODE,
+            "Amount": amount, "PartyA": phone, "PartyB": _mpesa_shortcode(),
             "PhoneNumber": phone, "CallBackURL": callback,
             "AccountReference": account_ref, "TransactionDesc": description,
         }

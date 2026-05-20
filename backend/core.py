@@ -109,9 +109,13 @@ def _public_base(request: Request) -> str:
 
 def get_stripe(request: Request) -> StripeCheckout:
     global _stripe_singleton
-    if _stripe_singleton is None:
+    # Re-build the client when STRIPE_API_KEY changes at runtime (founder paste)
+    current_key = os.environ.get("STRIPE_API_KEY", "")
+    if _stripe_singleton is None or getattr(_stripe_singleton, "_api_key_snapshot", None) != current_key:
         webhook_url = f"{_public_base(request)}/api/webhook/stripe"
-        _stripe_singleton = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+        _stripe_singleton = StripeCheckout(api_key=current_key, webhook_url=webhook_url)
+        # Track the key we built with so we can rebuild on rotation
+        _stripe_singleton._api_key_snapshot = current_key  # type: ignore[attr-defined]
     return _stripe_singleton
 
 

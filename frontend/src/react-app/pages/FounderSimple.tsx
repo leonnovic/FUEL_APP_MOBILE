@@ -478,34 +478,196 @@ function ConfigSection() {
 }
 
 function ApiKeysSection() {
-  const [keys, setKeys] = useState(() => getItem('fuelpro_apikeys', [
-    { name: 'Production API', key: 'fp_live_xxxxxxxxxxxx', status: 'active', created: '2024-01-15' },
-    { name: 'Sandbox API', key: 'fp_test_xxxxxxxxxxxx', status: 'active', created: '2024-01-15' },
-  ]));
-  const [showKey, setShowKey] = useState<Record<string,boolean>>({});
-  const [newKey, setNewKey] = useState({ name: '', key: '' });
-  const addKey = () => { if (!newKey.name.trim() || !newKey.key.trim()) return; const updated = [...keys, { ...newKey, status: 'active', created: new Date().toISOString().split('T')[0] }]; setKeys(updated); setItem('fuelpro_apikeys', updated); setNewKey({ name: '', key: '' }); toast('API Key added'); };
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>API Keys</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Manage API access tokens and integrations</p></div>
-      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
-        <input placeholder="Key Name" value={newKey.name} onChange={e => setNewKey({...newKey,name:e.target.value})} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
-        <input placeholder="Key Value" value={newKey.key} onChange={e => setNewKey({...newKey,key:e.target.value})} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
-        <button onClick={addKey} style={{ padding: '8px 16px', background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}><Plus size={14} /> Add</button>
-      </div>
-      {keys.map((k: any, i: number) => (
-        <div key={i} style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h4 style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: 0 }}>{k.name}</h4>
-            <code style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>{showKey[i] ? k.key : '••••••••••••••'}</code>
-            <p style={{ fontSize: 10, color: '#444', margin: '4px 0 0' }}>Created: {k.created}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>{k.status}</span>
-            <button onClick={() => setShowKey(p => ({...p,[i]:!p[i]}))} style={{ padding: 8, background: '#1a1a1f', color: '#888', border: 'none', borderRadius: 8, cursor: 'pointer' }}><Eye size={14} /></button>
-          </div>
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<any>({});
+  const [reveal, setReveal] = useState<Record<string, boolean>>({});
+  const [statusMsg, setStatusMsg] = useState<{ kind: 'ok' | 'err', text: string } | null>(null);
+  const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || '';
+
+  const token = () => localStorage.getItem('fuelpro_founder_jwt') || localStorage.getItem('founder_jwt') || '';
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/founder/integrations`, { headers: { Authorization: `Bearer ${token()}` } });
+      const d = await r.json();
+      setData(d);
+    } catch (e) { setStatusMsg({ kind: 'err', text: 'Failed to load: ' + (e instanceof Error ? e.message : String(e)) }); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setSaving(true); setStatusMsg(null);
+    try {
+      // Only send non-empty fields
+      const payload: any = {};
+      Object.entries(form).forEach(([k, v]) => {
+        if (v !== undefined && v !== '' && v !== null) payload[k] = v;
+      });
+      if (Object.keys(payload).length === 0) {
+        setStatusMsg({ kind: 'err', text: 'No fields to save' }); setSaving(false); return;
+      }
+      const r = await fetch(`${API_BASE}/api/founder/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'Save failed');
+      setStatusMsg({ kind: 'ok', text: `Saved ${d.applied.filter((k: string) => k !== '_updated_at').length} field(s). Integrations are LIVE.` });
+      setForm({});
+      await load();
+    } catch (e) {
+      setStatusMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Save failed' });
+    } finally { setSaving(false); }
+  };
+
+  const clear = async (field: string) => {
+    if (!confirm(`Clear "${field}"? This removes the key but leaves any .env fallback intact.`)) return;
+    try {
+      await fetch(`${API_BASE}/api/founder/integrations/${field}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token()}` },
+      });
+      await load();
+    } catch (e) { setStatusMsg({ kind: 'err', text: String(e) }); }
+  };
+
+  const Field = ({ label, field, placeholder, type = 'text' }:
+    { label: string; field: string; placeholder?: string; type?: string }) => {
+    const stored = data?.integrations?.[field];
+    const live = data?.live_env_present?.[field.toUpperCase()];
+    const showStored = stored && reveal[field] !== false;
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 11, color: '#888', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          {label}
+          {stored && <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, background: 'rgba(16,185,129,0.15)', color: '#34d399' }}>STORED</span>}
+          {!stored && live && <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>FROM .env</span>}
+          {!stored && !live && <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>NOT SET</span>}
+        </label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            type={type}
+            placeholder={placeholder || (showStored ? String(stored) : 'Paste key here…')}
+            value={form[field] || ''}
+            onChange={e => setForm((f: any) => ({ ...f, [field]: type === 'checkbox' ? e.target.checked : e.target.value }))}
+            data-testid={`founder-integration-${field}`}
+            style={{ flex: 1, padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 12 }}
+          />
+          {stored && (
+            <button onClick={() => clear(field)} title="Clear stored value"
+              data-testid={`founder-integration-clear-${field}`}
+              style={{ padding: '8px 10px', background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, fontSize: 11, cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
         </div>
-      ))}
+      </div>
+    );
+  };
+
+  if (loading) {
+    return <div style={{ color: '#666', padding: 16 }}>Loading integrations…</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Integration Keys</h2>
+        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>
+          Paste API keys for Resend, Twilio, Stripe, Daraja M-PESA. Keys take effect <strong style={{ color: '#34d399' }}>immediately</strong> — no restart required. Stored encrypted-at-rest in MongoDB.
+        </p>
+      </div>
+
+      {statusMsg && (
+        <div style={{
+          padding: 12, borderRadius: 8, fontSize: 13,
+          background: statusMsg.kind === 'ok' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+          color: statusMsg.kind === 'ok' ? '#34d399' : '#f87171',
+          border: `1px solid ${statusMsg.kind === 'ok' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`,
+        }} data-testid="founder-integration-status">{statusMsg.text}</div>
+      )}
+
+      {/* Resend (Email) */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>📧 Resend (Email)</h3>
+        <Field label="RESEND_API_KEY" field="resend_api_key" placeholder="re_xxxxxxxxxxxx" type="password" />
+        <Field label="SENDER_EMAIL (verified)" field="sender_email" placeholder="noreply@yourdomain.com" />
+      </div>
+
+      {/* Twilio (SMS) */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>📱 Twilio (SMS)</h3>
+        <Field label="TWILIO_ACCOUNT_SID" field="twilio_account_sid" placeholder="ACxxxxxxxxxxxx" type="password" />
+        <Field label="TWILIO_AUTH_TOKEN" field="twilio_auth_token" placeholder="auth token" type="password" />
+        <Field label="TWILIO_FROM_NUMBER" field="twilio_from_number" placeholder="+254712345678" />
+      </div>
+
+      {/* Stripe */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>💳 Stripe</h3>
+        <Field label="STRIPE_API_KEY (sk_test_… or sk_live_…)" field="stripe_api_key" placeholder="sk_test_…" type="password" />
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: '#888', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            STRIPE_TRUST_REDIRECT
+            <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 9, background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }}>
+              CURRENT: {data?.integrations?.stripe_trust_redirect === false ? 'OFF' : 'ON'}
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#aaa', fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={form.stripe_trust_redirect === undefined ? (data?.integrations?.stripe_trust_redirect !== false) : !!form.stripe_trust_redirect}
+              onChange={e => setForm((f: any) => ({ ...f, stripe_trust_redirect: e.target.checked }))}
+              data-testid="founder-integration-stripe_trust_redirect"
+            />
+            Trust Stripe success-redirect (workaround for Emergent proxy bug). Disable once proxy is fixed.
+          </label>
+        </div>
+      </div>
+
+      {/* Daraja M-PESA */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#fff', margin: '0 0 14px' }}>💰 Daraja M-PESA</h3>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: '#888', marginBottom: 4, display: 'block' }}>MPESA_ENV</label>
+          <select
+            value={form.mpesa_env ?? data?.integrations?.mpesa_env ?? 'sandbox'}
+            onChange={e => setForm((f: any) => ({ ...f, mpesa_env: e.target.value }))}
+            data-testid="founder-integration-mpesa_env"
+            style={{ width: '100%', padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 12 }}
+          >
+            <option value="sandbox">Sandbox (developer.safaricom.co.ke)</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <Field label="MPESA_CONSUMER_KEY" field="mpesa_consumer_key" type="password" />
+        <Field label="MPESA_CONSUMER_SECRET" field="mpesa_consumer_secret" type="password" />
+        <Field label="MPESA_PASSKEY" field="mpesa_passkey" type="password" />
+        <Field label="MPESA_SHORTCODE" field="mpesa_shortcode" placeholder="174379 (sandbox default)" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'sticky', bottom: 12 }}>
+        <button
+          onClick={save}
+          disabled={saving}
+          data-testid="founder-integration-save"
+          style={{
+            padding: '10px 20px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8,
+            fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
+          }}
+        >{saving ? 'Applying live…' : 'Save & apply LIVE'}</button>
+        <button onClick={load} style={{ padding: '10px 14px', background: '#1a1a1f', color: '#aaa', border: '1px solid #333', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+          ↻ Refresh
+        </button>
+        <span style={{ fontSize: 10, color: '#555' }}>
+          {data?.updated_at ? `Last updated: ${new Date(data.updated_at).toLocaleString()}` : 'No keys stored yet'}
+        </span>
+      </div>
     </div>
   );
 }
