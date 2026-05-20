@@ -18,6 +18,50 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 20 — Critical production bug fixes (Promise.withResolvers polyfill + JSON-of-HTML hardening + smart rate-limit)
+
+**🪶 Promise.withResolvers polyfill** (Huawei Browser PDF crash)
+- Root cause: pdf.js v5 calls `Promise.withResolvers()` (ES2024) on the main thread AND inside its Web Worker. Older Chromium-based mobile browsers (Huawei, Samsung Internet) don't ship it yet.
+- Fix #1 (main thread): `lib/polyfills.ts` runs as the FIRST import in `main.tsx`, before any other modules.
+- Fix #2 (worker thread): `lib/pdfWorkerShim.ts` wraps the worker URL in a Blob URL that injects the polyfill before `importScripts`/dynamic-import of the real worker. Applied to MPESAAnalyzer and DocumentConverter.
+- Also polyfills `Array.prototype.at` and `crypto.randomUUID` for older WebViews.
+- Verified end-to-end via Playwright: `Promise.withResolvers` truthy on the page AND inside a freshly-spawned Worker.
+
+**🛡 JSON-of-HTML hardening** (cryptic `"Unexpected token '<', '<!DOCTYPE'..."` toast)
+- Root cause: when a request hit an HTML 404 page (proxy misroute), the frontend tried to `r.json()` the response and the SyntaxError bubbled up as a useless toast.
+- New `lib/fetchJson.ts` helper checks `content-type` first, surfaces a clean `Server returned text/html (HTTP 404)…` message instead.
+- Applied to: `GoogleAuthCallback` (the most exposed path), `ExtraOAuthButtons` (Apple/Microsoft), and the core `backendApi.apiFetch` wrapper (covers backendLogin/Register/getMe/etc).
+
+**🚦 Smarter auth rate-limit** (pytest no longer trips it)
+- Now reads the real client IP from `X-Forwarded-For` (ingress sets this), falling back to direct socket peer for local dev.
+- Adds an internal-bypass header `X-Fuelpro-Internal: <AUTH_RATE_LIMIT_BYPASS_TOKEN>` for trusted test traffic. Token generated and persisted to `/app/backend/.env`; pytest `conftest.py` autouse fixture attaches it to every `requests.Session`.
+- Production is **unchanged** — external clients never know the token, so 20 req/min/IP still enforces. Verified live: 25 rapid bad-cred logins from a clean session still triggered 429 after the 20th attempt.
+
+**🧪 Test improvements**
+- New `/app/backend/tests/conftest.py` — autouse session-scoped fixture monkey-patches `requests.Session.__init__` to attach the internal bypass header. Restored after the session.
+- iter18 rate-limit test explicitly POPs the header on its own session so it can still assert the production behaviour.
+
+**Tested**
+- `pytest tests/` → **143 passed, 4 env-skips** (no regressions).
+- Live preview: page renders, `Promise.withResolvers === 'function'` confirmed in both main + worker contexts.
+
+**Files added**
+- `/app/frontend/src/react-app/lib/polyfills.ts` — main-thread polyfills
+- `/app/frontend/src/react-app/lib/pdfWorkerShim.ts` — worker-side `Promise.withResolvers` polyfill via Blob URL
+- `/app/frontend/src/react-app/lib/fetchJson.ts` — content-type-aware JSON fetch
+- `/app/backend/tests/conftest.py` — autouse rate-limit-bypass header
+
+**Files modified**
+- `/app/frontend/src/react-app/main.tsx` — imports polyfills first
+- `/app/frontend/src/react-app/components/MPESAAnalyzer.tsx` — Worker shim + third CDN fallback
+- `/app/frontend/src/react-app/components/DocumentConverter.tsx` — Worker shim
+- `/app/frontend/src/react-app/components/GoogleAuthCallback.tsx` — uses fetchJson
+- `/app/frontend/src/react-app/components/ExtraOAuthButtons.tsx` — uses fetchJson
+- `/app/frontend/src/react-app/lib/backendApi.ts` — apiFetch checks content-type
+- `/app/backend/middleware/__init__.py` — XFF-aware IP detection + bypass-token header
+- `/app/backend/.env` — generates `AUTH_RATE_LIMIT_BYPASS_TOKEN`
+- `/app/backend/tests/test_iter18_features.py` — rate-limit test uses bypass-stripped session
+
 ### Iter 19 — Match-rate trend sparkline + Invoice S3 archive + GDPR consent banner
 
 **📈 Identity merge trend sparkline** (Founder → System Stats)

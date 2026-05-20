@@ -39,10 +39,23 @@ async function apiFetch<T = unknown>(
     if (t) headers.Authorization = `Bearer ${t}`;
   }
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
   if (!res.ok) {
     let detail: unknown = res.statusText;
-    try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
+    if (ct.includes('application/json')) {
+      try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
+    } else {
+      // Proxy 404/502 returning the index HTML — surface a clean message.
+      let snippet = '';
+      try { snippet = (await res.text()).slice(0, 80); } catch { /* ignore */ }
+      detail = `Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`;
+    }
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+  }
+  if (!ct.includes('application/json')) {
+    let snippet = '';
+    try { snippet = (await res.text()).slice(0, 80); } catch { /* ignore */ }
+    throw new Error(`Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`);
   }
   return res.json() as Promise<T>;
 }

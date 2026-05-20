@@ -299,23 +299,25 @@ class TestFounderIdentityStats:
 class TestAuthRateLimit:
     def test_login_rate_limit_triggers_429(self, session):
         """25 rapid bad-cred posts to /api/auth/login should trigger 429 after ~limit attempts."""
-        # Use a unique email to avoid collisions with other tests
+        # This test must NOT carry the internal bypass header — otherwise the
+        # rate-limit middleware skips us. Use a clean session.
         url = f"{BASE_URL}/api/auth/login"
         payload = {"email": f"ratelimit_{uuid.uuid4().hex[:6]}@nowhere.test", "password": "wrong"}
         statuses = []
         got_429 = False
-        for i in range(25):
-            r = session.post(url, json=payload)
-            statuses.append(r.status_code)
-            if r.status_code == 429:
-                got_429 = True
-                # Verify response body shape
-                try:
-                    body = r.json()
-                    assert "detail" in body
-                except Exception:
-                    pass
-                break
+        with requests.Session() as raw_session:
+            raw_session.headers.pop("X-Fuelpro-Internal", None)
+            for _ in range(25):
+                r = raw_session.post(url, json=payload)
+                statuses.append(r.status_code)
+                if r.status_code == 429:
+                    got_429 = True
+                    try:
+                        body = r.json()
+                        assert "detail" in body
+                    except Exception:
+                        pass
+                    break
         assert got_429, f"Expected 429 within 25 attempts; got statuses: {statuses}"
         # Should be after first few requests but before all 25
         first_429_idx = statuses.index(429)

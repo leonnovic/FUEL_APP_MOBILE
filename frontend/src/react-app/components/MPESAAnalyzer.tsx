@@ -232,6 +232,9 @@ export default function MPESAAnalyzer() {
       }
 
       const pdfjsVersion = pdfjs.version || '5.6.205';
+      // Lazy-load worker shim so we can polyfill `Promise.withResolvers` inside
+      // the pdf.js worker for older browsers (Huawei, Samsung Internet).
+      const { makePatchedWorkerSrc } = await import('@/react-app/lib/pdfWorkerShim');
       // Try multiple worker sources — mobile Chrome occasionally blocks
       // module workers from unpkg, so fall back to the .min.js bundle which
       // works in every modern mobile browser.
@@ -240,7 +243,9 @@ export default function MPESAAnalyzer() {
         `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.js`,
         `https://unpkg.com/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`,
       ];
-      pdfjs.GlobalWorkerOptions.workerSrc = workerCandidates[0];
+      // Wrap every candidate so the worker thread also has the polyfill.
+      const patchedCandidates = workerCandidates.map(makePatchedWorkerSrc);
+      pdfjs.GlobalWorkerOptions.workerSrc = patchedCandidates[0];
 
       // Load the document with optional password
       const loadingTask = pdfjs.getDocument({
@@ -267,11 +272,18 @@ export default function MPESAAnalyzer() {
         }
         // Try the .min.js worker if the .mjs failed on mobile
         try {
-          pdfjs.GlobalWorkerOptions.workerSrc = workerCandidates[1];
+          pdfjs.GlobalWorkerOptions.workerSrc = patchedCandidates[1];
           const retry = pdfjs.getDocument({ data: arrayBuffer, password: password || undefined, disableStream: true, disableAutoFetch: true });
           pdf = await retry.promise;
         } catch (retryErr: any) {
-          return { lines: [], error: `Failed to open PDF: ${msg}. ${retryErr?.message ? `Retry also failed: ${retryErr.message}` : ''} If this PDF is password-protected, enter the password and try again.` };
+          // Last-ditch attempt — third CDN
+          try {
+            pdfjs.GlobalWorkerOptions.workerSrc = patchedCandidates[2];
+            const retry2 = pdfjs.getDocument({ data: arrayBuffer, password: password || undefined, disableStream: true, disableAutoFetch: true });
+            pdf = await retry2.promise;
+          } catch (retry2Err: any) {
+            return { lines: [], error: `Failed to open PDF: ${msg}. ${retryErr?.message ? `Retry also failed: ${retryErr.message}.` : ''} ${retry2Err?.message ? `Final retry: ${retry2Err.message}.` : ''} Try Manual Text Paste or open this PDF on desktop.` };
+          }
         }
       }
 

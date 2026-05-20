@@ -61,7 +61,11 @@ async function pdfToText(file: File, password?: string): Promise<string> {
     const buf = await file.arrayBuffer();
     const pdfjs: any = await import('pdfjs-dist');
     const v = pdfjs.version || '5.6.205';
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${v}/build/pdf.worker.min.mjs`;
+    // Worker-side polyfill for browsers without `Promise.withResolvers`
+    const { makePatchedWorkerSrc } = await import('@/react-app/lib/pdfWorkerShim');
+    pdfjs.GlobalWorkerOptions.workerSrc = makePatchedWorkerSrc(
+      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${v}/build/pdf.worker.min.mjs`,
+    );
     const doc = await pdfjs.getDocument({ data: buf, password: password || undefined, disableStream: true, disableAutoFetch: true }).promise;
     const out: string[] = [];
     for (let i = 1; i <= doc.numPages; i++) {

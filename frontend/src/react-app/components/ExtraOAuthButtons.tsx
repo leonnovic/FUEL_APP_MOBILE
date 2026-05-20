@@ -60,15 +60,13 @@ export default function ExtraOAuthButtons() {
   }, []);
 
   const finishOAuth = useCallback(async (provider: 'apple' | 'microsoft', body: Record<string, unknown>) => {
-    const r = await fetch(`${API_BASE}/api/auth/${provider}`, {
+    const { fetchJson } = await import('@/react-app/lib/fetchJson');
+    const data = await fetchJson<{ token: string; user?: Record<string, unknown> }>(`${API_BASE}/api/auth/${provider}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const data = await r.json();
-    if (!r.ok || !data.token) {
-      throw new Error(data.detail || `${provider} sign-in failed`);
-    }
+    if (!data.token) throw new Error(`${provider} sign-in failed`);
     // Mirror the existing Google flow: stash the JWT + user, then reload.
     localStorage.setItem('fuelpro_jwt', data.token);
     if (data.user) localStorage.setItem('fuelpro_user', JSON.stringify(data.user));

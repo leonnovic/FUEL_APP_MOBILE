@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { setToken } from '@/react-app/lib/backendApi';
+import { fetchJson } from '@/react-app/lib/fetchJson';
 
 const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
@@ -49,13 +50,14 @@ export default function GoogleAuthCallback() {
     (async () => {
       setPhase('exchanging');
       try {
-        const r = await fetch(`${API_BASE}/api/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || 'Google sign-in failed');
+        const data = await fetchJson<{ token: string; user: { email: string; name: string } }>(
+          `${API_BASE}/api/auth/google`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sessionId }),
+          },
+        );
 
         setToken(data.token);
 
