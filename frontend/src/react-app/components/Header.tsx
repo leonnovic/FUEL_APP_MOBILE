@@ -194,6 +194,9 @@ export default function Header({ onShowStations, onShowCombined }: HeaderProps) 
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
               className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+              data-testid="mobile-menu-toggle"
+              aria-label={showMobileMenu ? 'Close menu' : 'Open menu'}
+              aria-expanded={showMobileMenu}
             >
               {showMobileMenu ? <X size={20} /> : <Menu size={20} />}
             </button>

@@ -158,13 +158,13 @@ export default function LoyaltyPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               <div>
                 <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Stamps required</label>
-                <input type="number" min={2} max={50} value={config.stamps_required}
+                <input type="number" inputMode="numeric" min={2} max={50} value={config.stamps_required}
                        onChange={e => setConfig(c => ({ ...c, stamps_required: parseInt(e.target.value || '10') }))}
                        className="w-full px-2.5 py-2 bg-black/40 border border-white/[0.08] rounded-lg text-sm" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Min purchase</label>
-                <input type="number" min={0} value={config.min_purchase_amount}
+                <input type="number" inputMode="decimal" min={0} value={config.min_purchase_amount}
                        onChange={e => setConfig(c => ({ ...c, min_purchase_amount: parseFloat(e.target.value || '0') }))}
                        className="w-full px-2.5 py-2 bg-black/40 border border-white/[0.08] rounded-lg text-sm" />
               </div>
@@ -207,13 +207,16 @@ export default function LoyaltyPage() {
                 <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input value={phone} onChange={e => setPhone(e.target.value)}
                        onBlur={() => phone && lookupCustomer(phone)}
+                       type="tel"
+                       inputMode="tel"
+                       autoComplete="tel"
                        placeholder="0712 345 678 or 254712345678"
                        className="w-full pl-9 pr-3 py-2.5 bg-black/40 border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-purple-500"
                        data-testid="loyalty-phone-input" />
               </div>
             </div>
             <div className="sm:col-span-3">
-              <input type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)}
+              <input type="number" inputMode="decimal" min={0} value={amount} onChange={e => setAmount(e.target.value)}
                      placeholder={`Amount (${config.currency})`}
                      className="w-full px-3 py-2.5 bg-black/40 border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-purple-500"
                      data-testid="loyalty-amount-input" />

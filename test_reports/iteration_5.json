@@ -1,0 +1,45 @@
+{
+  "summary": "Iter-12 verification of iter-11 mobile sweep fixes at 390x844. All P1/P2 fixes from iter-11 are CONFIRMED IN SOURCE and validated at runtime where possible. Bottom-nav testids (bottom-tab-home/pos/sales/stock/more) all present and 64px tall. Header hamburger now has data-testid='mobile-menu-toggle'. AuthLogin Sign In and Create Account buttons measure 44.5px tall (>=44 WCAG/Apple HIG). POS Litres input has inputMode='decimal' type='number' verified at runtime DOM. Loyalty inputs (loyalty-phone-input type='tel' inputMode='tel'; loyalty-amount-input inputMode='decimal') verified in source at LoyaltyPage.tsx lines 210-222 — runtime measurement returned None because clicking bottom-nav 'More -> Loyalty' switches Home.tsx tab state to 'customers' which renders a customers/loyalty component flow that did not surface those exact testids in the first viewport (may require a config fetch). All 25 more-tab-* testids enumerated at runtime; more-tab-team, more-tab-customers, more-tab-docconverter all present. more-tab-mpesa is conditionally rendered only when featureFlags.mpesa=true (Kenya/TZ feature gate) — a freshly registered @fuelpro.app account did not have the M-PESA flag on, so the tab was absent (EXPECTED behaviour, not a regression). Trial banner correctly hidden on fresh 14d trial. One notable finding: clicking mobile-*-btn buttons in the Header hamburger menu does NOT update window.location.hash to #/team /#/digest etc — hash remained empty string after clicks. The buttons clearly fire (overlay backdrop dismisses) but HashRouter navigation appears not to commit. Iter-11 already noted this as 'page.url() showed / immediately after click — likely a hash-routing eval quirk' so this may be a measurement timing issue rather than a real navigation failure (iter-11 confirmed the routes render correctly when visited directly).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Header mobile menu -> hash navigation", "issue": "Clicking [data-testid=mobile-team-btn] / mobile-digest-btn etc fires the onClick (calls navigate('/team') and closes menu) but window.location.hash remains empty string when read 1.5s later. The pages DO render via HashRouter when accessed directly. Suspect either (a) React-Router v7 HashRouter not committing the hash in this build, or (b) a race where the menu-close re-renders before the navigate flush. Iter-11 saw the same symptom. Main agent should investigate whether navigate('/team') is the right API for HashRouter in react-router v7 — consider window.location.hash = '#/team' or useNavigate from 'react-router-dom'.", "affected_selectors": ["[data-testid=mobile-team-btn]","[data-testid=mobile-digest-btn]","[data-testid=mobile-loyalty-btn]","[data-testid=mobile-import-btn]","[data-testid=mobile-audit-btn]","[data-testid=mobile-verify-btn]","[data-testid=mobile-admin-btn]"]}
+    ],
+    "design_issues": []
+  },
+  "verified_fixes_iter12": [
+    "bottom-tab-home / -pos / -sales / -stock / -more — ALL 5 testids present, height=64px ✅",
+    "data-testid='mobile-menu-toggle' on Header hamburger — present, opens/closes mobile drawer ✅",
+    "AuthLogin Create Account button bounding box height = 44.5px (py-3.5 min-h-[44px] applied) ✅",
+    "AuthLogin Sign In button bounding box height = 44.5px ✅",
+    "pos-litres-input DOM attributes: inputmode='decimal', type='number' ✅ (PointOfSale.tsx line 569/575)",
+    "loyalty-phone-input source: type='tel' inputMode='tel' ✅ (LoyaltyPage.tsx line 210-215)",
+    "loyalty-amount-input source: type='number' inputMode='decimal' ✅ (LoyaltyPage.tsx line 219-222)",
+    "All 7 mobile-*-btn testids (team/digest/loyalty/import/audit/verify/admin) present in DOM after hamburger open ✅",
+    "more-tab-* testids: 25 secondary nav items render (reports/fuelsalesreport/offloading/delivery/invoice/credit/debt/payroll/shifts/team/customers/quality/analytics/documents/audit/communication/news/data/integration/regional/fueltypes/maintenance/priceboard/expenses/docconverter) ✅",
+    "Trial banner hidden on fresh 14-day trial (regression check passes) ✅"
+  ],
+  "expected_omissions": [
+    "more-tab-mpesa is conditionally gated on featureFlags.mpesa (MobileBottomNav.tsx line 92-94 — 'M-PESA is ONLY shown if feature flag enabled (Kenya/TZ only)'). Fresh @fuelpro.app registration didn't enable the flag → tab correctly absent. This is BY DESIGN, not a regression. If main agent wants the tab to appear on all locales, set tenant default featureFlags.mpesa=true."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Investigate why mobile-*-btn clicks fire navigate('/team') but window.location.hash stays empty. Likely a race with setShowMobileMenu(false) closing the menu in the same tick. Try: setShowMobileMenu(false); setTimeout(() => navigate('/team'), 0); — or swap to a direct window.location.hash='#/team' as a regression test mechanism.",
+    "OPTIONAL — Document that more-tab-mpesa requires tenant featureFlags.mpesa=true (Kenya/TZ default); otherwise add a default-on policy if M-PESA should be visible globally."
+  ],
+  "critical_code_review_comments": [
+    "All five iter-12 fixes are correctly applied at source: MobileBottomNav.tsx (lines 139, 172, 205), Header.tsx (line 197), AuthLogin.tsx (3 buttons at 301/352/480 all py-3.5 min-h-[44px]), PointOfSale.tsx (line 569/575), LoyaltyPage.tsx (line 210-222). No regressions introduced.",
+    "MobileBottomNav uses `onTabChange(tabId)` to update Home.tsx state — it does NOT use HashRouter navigation for its tab buttons. This is intentional but means bottom-tab-* clicks won't change window.location.hash; they switch the in-page activeTab. Document this in test contract so future agents don't expect hash changes.",
+    "Header.tsx mobile menu buttons DO use react-router's navigate() but the hash isn't committing in time for automated tests. Worth a one-line fix or a tick of setTimeout."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (frontend-only)", "frontend": "~95% — every requested testid + inputMode + button-height fix is in place; sole open item is hash-navigation timing from the Header mobile menu (same as iter-11)"},
+  "test_credentials": "Fresh @fuelpro.app accounts created during sweep (mobv*@fuelpro.app / password123). No deletion required; consider periodic Mongo prune of mob*@fuelpro.app entries.",
+  "seed_data_creation": "2 mob*@fuelpro.app users with one Demo Fuel Station each via Quick Start.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iter-12 fixes verified. Only outstanding item: clicking Header.tsx mobile menu buttons (mobile-team-btn etc) doesn't update window.location.hash in automated tests despite calling navigate('/team'). Pages render correctly when visited directly. NOTE: MobileBottomNav buttons use in-page state switching (onTabChange), NOT hash routing — so don't expect bottom-tab-pos to change the hash. NOTE 2: more-tab-mpesa only renders when featureFlags.mpesa=true (KE/TZ).",
+  "rca of the issue": "Hash-navigation eval returns empty string because the navigate('/team') call from react-router-v7's HashRouter doesn't synchronously update window.location.hash before our 1.5s evaluate runs. This is consistent with iter-11 observation. Recommend swapping to direct hash assignment or adding micro-task delay between setShowMobileMenu(false) and navigate()."
+}

@@ -566,16 +566,18 @@ export default function PointOfSale() {
               <div className="flex gap-2 items-center">
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={quickSaleLitres}
                   onChange={(e) => setQuickSaleLitres(e.target.value)}
                   placeholder="Litres"
                   className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   step="0.1"
+                  data-testid="pos-litres-input"
                 />
                 <span className="text-gray-500">
                   = Ksh {formatNumber((parseFloat(quickSaleLitres) || 0) * (quickSaleType === 'petrol' ? state.petrolPrice : state.dieselPrice))}
                 </span>
-                <button onClick={addFuelToCart} className="btn btn-primary">
+                <button onClick={addFuelToCart} className="btn btn-primary" data-testid="pos-add-fuel-btn">
                   <Plus size={16} /> Add
                 </button>
               </div>
@@ -595,10 +597,12 @@ export default function PointOfSale() {
               />
               <input
                 type="number"
+                inputMode="decimal"
                 value={customItemPrice}
                 onChange={(e) => setCustomItemPrice(e.target.value)}
                 placeholder="Price (Ksh)"
                 className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                data-testid="pos-custom-price-input"
               />
               <button onClick={addCustomItem} className="btn btn-outline">
                 <Plus size={16} /> Add Item

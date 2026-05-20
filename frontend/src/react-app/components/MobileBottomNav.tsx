@@ -136,6 +136,7 @@ export default function MobileBottomNav({ activeTab, onTabChange }: MobileBottom
                       : 'hover:bg-gray-100 dark:hover:bg-gray-700/50'
                   }`}
                   style={{ minHeight: 64, touchAction: 'manipulation' }}
+                  data-testid={`more-tab-${item.id}`}
                 >
                   <Icon
                     size={22}
@@ -168,6 +169,8 @@ export default function MobileBottomNav({ activeTab, onTabChange }: MobileBottom
                 onClick={() => handleNavClick(item.id)}
                 className="flex flex-col items-center justify-center flex-1 h-full transition-all active:scale-95 relative"
                 style={{ minWidth: 48, touchAction: 'manipulation' }}
+                data-testid={`bottom-tab-${item.id === 'dashboard' ? 'home' : item.id === 'inventory' ? 'stock' : item.id}`}
+                aria-label={item.label}
               >
                 {/* Active indicator line */}
                 {isActive && (
@@ -199,6 +202,8 @@ export default function MobileBottomNav({ activeTab, onTabChange }: MobileBottom
               onClick={() => setShowMoreMenu(!showMoreMenu)}
               className="flex flex-col items-center justify-center flex-1 h-full transition-all active:scale-95 relative"
               style={{ minWidth: 48, touchAction: 'manipulation' }}
+              data-testid="bottom-tab-more"
+              aria-label="More features menu"
             >
               {isMoreActive && (
                 <div

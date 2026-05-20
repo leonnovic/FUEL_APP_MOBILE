@@ -89,6 +89,9 @@ export default function VerifyReceipt() {
                 className="w-full pl-9 pr-3 py-3 bg-black/40 border border-white/[0.1] rounded-lg text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-emerald-500"
                 data-testid="verify-input"
                 autoFocus={!initial}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
             <button
