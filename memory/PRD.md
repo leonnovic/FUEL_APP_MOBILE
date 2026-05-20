@@ -18,6 +18,79 @@ User's follow-up directives (all addressed in iteration 3):
 - **Routing**: HashRouter (`/#/`, `/#/founder`, `/#/reset-password`, `/#/join/:invite`) + Stripe returns to `/?session_id=…&plan=…` which is intercepted by `StripeReturnHandler` at the App root.
 
 ## Iteration log
+### Iter 18 — Identity stitching + S3 storage UI + Security headers + Active devices badge
+
+**🪪 Anonymous → authenticated identity stitching** (`routers/identity.py`)
+- `POST /api/identity/link` — auth user posts `{anonymous_id}`. Server moves rows from:
+  - `user_data` (only if user doesn't already have a blob)
+  - All 10 `sync_*` collections (stations, sales, inventory, employees, invoices, deliveries, expenses, suppliers, audit, documents)
+  - `audit_log` entries keyed by anonymous_id
+  - `storage_files` keyed by anonymous_id
+- Idempotent at two layers: DB unique index `{anonymous_id, user_id}` + early existing-link lookup. Self-link guard (`anon_id == user.id`).
+- Audit-logged as `identity.link` with `meta.anonymous_id` + per-collection counts.
+- Frontend `lib/identity.ts`: `getAnonymousId()` persists a stable per-device UUID; `linkAnonymousToUser(jwt)` POSTs to /api/identity/link. Called automatically on every login/register (email, Google, Apple, Microsoft).
+
+**📊 Founder Identity Stats KPI** (`GET /api/founder/identity-stats`)
+- Returns `total_users`, `merged_users`, `total_links`, `match_rate_pct`, `anonymous_blobs`, `live_devices`, `live_users`.
+- Surfaced as 4 gradient KPI cards in Founder → System Stats section: Identity Match Rate, Live Devices, Identity Links, Anonymous Profiles.
+
+**🟢 Active Devices badge** (`components/ActiveDevicesBadge.tsx`)
+- Polls `/api/identity/me/devices` every 20s + reacts to realtime `hello`/`ping` WS events.
+- Pill badge with pulsing green dot + count. Rendered next to Admin in the desktop header. Hidden when count < 1.
+
+**☁️ S3 Storage page** (`/#/storage`)
+- Drag-and-drop upload UI with 6 category tabs (receipts/photos/payroll/documents/logos/misc).
+- Three-step flow: presign-upload → direct browser PUT to S3 with XHR progress → confirm-upload. Bypasses ingress size limits.
+- Per-file Download (presigned GET) + Delete buttons. Live file list with status badges.
+- Shows clear "Configure S3 in Founder UI" banner when AWS keys are unset.
+- Storage button added to desktop pill bar + mobile menu.
+
+**🧾 MPESAAnalyzer S3 archive button**
+- `components/ArchiveToS3Button.tsx` — drop-in helper next to each uploaded PDF row.
+- Renders ONLY when /api/storage/config returns configured:true (clean UX for unconfigured users).
+- One-click upload to `receipts/` with status feedback (idle → uploading → done/error).
+
+**🛡 Security middleware** (`backend/middleware/__init__.py`)
+- `SecurityHeadersMiddleware`: sets HSTS (1y + includeSubDomains), X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy. Verified at the Cloudflare ingress.
+- `AuthRateLimitMiddleware`: per-IP sliding window on `/api/auth/login` + `/api/auth/register`. Default 20 req/min, configurable via `AUTH_RATE_LIMIT_PER_MIN`. Returns 429 on overflow.
+- Both toggleable via `SECURITY_HEADERS=0` env override (dev convenience).
+
+**📈 Public `/api/status` endpoint**
+- Lightweight (Mongo ping only). No auth, no PII. Designed for UptimeRobot / Better Uptime / Grafana Cloud scraping. Returns `{ok, service, status, ts}`.
+
+**🐞 Founder-login limiter improvement** (per testing-agent feedback)
+- Was: 5 attempts (success + fail) per IP per hour → broke rapid re-test cycles.
+- Now: counts only FAILED attempts; successful login wipes the IP's prior failed-attempt rows. Threshold configurable via `FOUNDER_LOGIN_MAX_PER_HOUR` (default 20).
+
+**Tested**
+- New: `pytest tests/test_iter18_features.py` → **24/24 passing**
+- Full regression: `pytest tests/` → **143 passed, 4 env-skips**
+- Live-verified end-to-end:
+  - Anonymous user-data → register → link → GET user-data returns previously-anonymous data ✅
+  - All 5 security headers present on /api/status, /api/auth/login (429 path included), /api/founder/health ✅
+  - 25 rapid bad-cred logins → 429 returned after threshold ✅
+  - Founder identity-stats returns match_rate_pct + live_devices ✅
+
+**Files added**
+- `/app/backend/routers/identity.py` (identity stitching + me/devices + identity-stats + /api/status)
+- `/app/backend/middleware/__init__.py` (SecurityHeaders + AuthRateLimit middlewares)
+- `/app/frontend/src/react-app/lib/identity.ts` (getAnonymousId + linkAnonymousToUser)
+- `/app/frontend/src/react-app/pages/StoragePage.tsx` (cloud storage UI at /#/storage)
+- `/app/frontend/src/react-app/components/ActiveDevicesBadge.tsx`
+- `/app/frontend/src/react-app/components/ArchiveToS3Button.tsx`
+- `/app/backend/tests/test_iter18_features.py`
+
+**Files modified**
+- `/app/backend/server.py` — registers identity router, security middleware, identity_links indexes
+- `/app/backend/routers/founder.py` — failed-only rate-limit window
+- `/app/frontend/src/react-app/App.tsx` — /#/storage route
+- `/app/frontend/src/react-app/components/Header.tsx` — Storage button + ActiveDevicesBadge
+- `/app/frontend/src/react-app/components/MPESAAnalyzer.tsx` — ArchiveToS3Button next to PDF rows
+- `/app/frontend/src/react-app/context/AuthContext.tsx` — auto-link anonymous on login/register
+- `/app/frontend/src/react-app/components/ExtraOAuthButtons.tsx` — link on Apple/Microsoft success
+- `/app/frontend/src/react-app/components/GoogleAuthCallback.tsx` — link on Google success
+- `/app/frontend/src/react-app/pages/FounderSimple.tsx` — Identity Stats KPI cards in System Stats
+
 ### Iter 17 — Apple/Microsoft OAuth + S3 storage + WebSocket realtime sync
 
 **🍎 Apple Sign-In + 🪟 Microsoft Sign-In (server-side ID-token verification)**

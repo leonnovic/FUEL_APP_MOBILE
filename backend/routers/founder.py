@@ -58,20 +58,28 @@ async def ensure_founder_seeded():
 
 @router.post("/founder/login")
 async def founder_login(body: FounderLoginBody, request: Request):
-    """Founder access verification. Rate-limited 5/h per IP."""
+    """Founder access verification. Rate-limited per IP — counts only FAILED
+    attempts so a successful login resets the counter (testing-agent feedback)."""
+    import os
     ip = request.client.host if request.client else "anonymous"
+    limit = int(os.environ.get("FOUNDER_LOGIN_MAX_PER_HOUR", "20"))
     one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    attempts = await db.founder_login_log.count_documents({"ip": ip, "at": {"$gt": one_hour_ago}})
-    if attempts >= 5:
+    attempts = await db.founder_login_log.count_documents(
+        {"ip": ip, "at": {"$gt": one_hour_ago}, "success": {"$ne": True}},
+    )
+    if attempts >= limit:
         await asyncio.sleep(0.5)
-        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-
-    await db.founder_login_log.insert_one({"ip": ip, "at": now_iso()})
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
 
     founder = await db.founder.find_one({"id": "founder"}, {"_id": 0})
     if not founder or not _verify_pw(body.password, founder.get("password_hash", "")):
+        await db.founder_login_log.insert_one({"ip": ip, "at": now_iso(), "success": False})
         await asyncio.sleep(0.4)
         raise HTTPException(status_code=401, detail="Invalid founder password")
+
+    # Successful login — drop prior failed-attempt rows for this IP
+    await db.founder_login_log.delete_many({"ip": ip, "success": {"$ne": True}})
+    await db.founder_login_log.insert_one({"ip": ip, "at": now_iso(), "success": True})
 
     exp = datetime.now(timezone.utc) + timedelta(hours=4)
     token = jwt.encode({"sub": "founder", "exp": exp, "scope": "founder"},
