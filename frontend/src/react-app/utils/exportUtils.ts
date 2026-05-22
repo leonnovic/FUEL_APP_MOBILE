@@ -4,6 +4,30 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { formatNumber } from './formatUtils';
 
+/**
+ * Mobile-safe PDF download helper
+ * Works around iOS Safari and Android Chrome download restrictions
+ * MUST be called directly from a user gesture (click/tap handler)
+ */
+function triggerMobilePDFDownload(doc: jsPDF, filename: string): void {
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  
+  // iOS Safari requires explicit user-initiated click
+  a.click();
+  
+  // Cleanup after a short delay
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
 export function exportDeliveryPDF(state: any) {
   const doc = new jsPDF();
   
@@ -78,7 +102,7 @@ export function exportDeliveryPDF(state: any) {
   doc.text(`EMAIL: ${state.companyData.email || 'N/A'}`, 14, y);
   y += 10;
 
-  doc.save(`Delivery_Report_${state.deliveredTo || 'Client'}.pdf`);
+  triggerMobilePDFDownload(doc, `Delivery_Report_${state.deliveredTo || 'Client'}.pdf`);
 }
 
 export function exportDeliveryExcel(state: any) {
@@ -199,7 +223,7 @@ export function exportDebtPDF(state: any) {
   ];
   doc.text(lines, 15, y, { maxWidth: 180 });
 
-  doc.save(`Debt_Reminder_${data.name}.pdf`);
+  triggerMobilePDFDownload(doc, `Debt_Reminder_${data.name}.pdf`);
 }
 
 export function exportDebtExcel(state: any) {
@@ -348,7 +372,7 @@ export function exportSalesPDF(state: any) {
     doc.text(`Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`, 15, y);
   }
 
-  doc.save('Fuel_Sales_Report.pdf');
+  triggerMobilePDFDownload(doc, 'Fuel_Sales_Report.pdf');
 }
 
 export function exportSalesExcel(state: any) {
@@ -610,7 +634,7 @@ export function exportInvoicePDF(invoiceData: any, mode: 'save' | 'blob' = 'save
   if (mode === 'blob') {
     return doc.output('blob');
   }
-  doc.save(filename);
+  triggerMobilePDFDownload(doc, filename);
 }
 
 export function exportInvoiceExcel(invoiceData: any) {

@@ -9,6 +9,12 @@
 * { user-select: text; -webkit-user-select: text; }
 input, textarea { user-select: text; -webkit-user-select: text; }
 
+/* Mobile touch optimization - removes 300ms tap delay while preserving scroll */
+html, body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --primary: #1a3a5f;
   --secondary: #d4af37;
@@ -56,7 +62,7 @@ body {
   background-color: #f8f9fa;
   color: #2c3e50;
   transition: background-color 0.4s ease, color 0.4s ease;
-  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
   position: relative;
   scroll-behavior: smooth;
   /* Prevent scroll-wheel overshoot beyond document edges */
@@ -453,7 +459,7 @@ html.dark .summary-value {
 /* Device-based responsive containers */
 .responsive-container {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100dvh; // Dynamic viewport height for mobile browsers
   padding: var(--responsive-padding);
   box-sizing: border-box;
 }
@@ -895,8 +901,8 @@ html.dark .summary-value {
 
 /* Ensure content always fits within viewport */
 .main-content {
-  min-height: 100vh;
-  max-height: 100vh;
+  min-height: 100dvh; // Dynamic viewport height for mobile browsers
+  max-height: 100dvh; // Dynamic viewport height for mobile browsers
   overflow-y: auto;
   box-sizing: border-box;
 }
