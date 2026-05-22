@@ -4,7 +4,7 @@ import { FileUp, FileType, AlertCircle, CheckCircle2, X, Loader2, Download, File
 import { getDetectedCurrency, getCurrencySymbol } from '@/react-app/lib/currency';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { api } from '@/react-app/lib/api';
+import { trpc } from '@/providers/trpc';
 
 export type SupportedFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'txt' | 'csv' | 'jpg' | 'png';
 
@@ -48,7 +48,7 @@ async function ocrExtractText(file: File): Promise<{ success: boolean; text: str
     });
 
     // Call the backend OCR API (runs in background via tRPC)
-    const result = await api.ocr.extractText.mutate({
+    const result = await trpc.ocr.extractText.mutate({
       imageData: dataUrl,
       fileName: file.name,
     });
