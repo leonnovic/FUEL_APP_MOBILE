@@ -5,6 +5,7 @@ import { inventoryRouter } from "./inventory-router";
 import { paymentRouter } from "./payment-router";
 import { auditRouter } from "./audit-router";
 import { founderAuthRouter } from "./founder-auth-router";
+import { ocrRouter } from "./ocr-router";
 import {
   featureFlagRouter,
   pricingRouter,
@@ -27,6 +28,7 @@ export const appRouter = createRouter({
   inventory: inventoryRouter,
   payment: paymentRouter,
   audit: auditRouter,
+  ocr: ocrRouter,
   // ─── Founder Authentication (public, for login) ───
   founderAuth: founderAuthRouter,
   // ─── Founder Access (admin-protected) ───

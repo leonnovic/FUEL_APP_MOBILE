@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { FileUp, FileType, AlertCircle, CheckCircle2, X, Loader2, Download, FileText, Image,
-  FileSpreadsheet, Presentation, Trash2, Eye, Camera, ChevronDown, CameraOff, RotateCcw } from 'lucide-react';
+  FileSpreadsheet, Presentation, Trash2, Eye, Camera, ChevronDown, CameraOff, RotateCcw, Wand2 } from 'lucide-react';
 import { getDetectedCurrency, getCurrencySymbol } from '@/react-app/lib/currency';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { api } from '@/react-app/lib/api';
 
 export type SupportedFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'txt' | 'csv' | 'jpg' | 'png';
 
@@ -12,12 +13,14 @@ interface ConversionJob {
   fileName: string;
   originalType: string;
   targetFormat: SupportedFormat;
-  status: 'queued' | 'converting' | 'done' | 'error';
+  status: 'queued' | 'converting' | 'done' | 'error' | 'ocr_processing';
   progress: number;
   error?: string;
   result?: string;
   resultData?: string;
   resultMime?: string;
+  ocrText?: string; // Extracted text from OCR
+  useOcr?: boolean; // Whether to use OCR for this file
 }
 
 const FORMAT_INFO: Record<SupportedFormat, { label: string; mime: string; ext: string }> = {
@@ -33,7 +36,34 @@ const FORMAT_INFO: Record<SupportedFormat, { label: string; mime: string; ext: s
 
 const ALL_ACCEPTED_EXTS = '.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.txt,.csv,.odt,.ods,.odp,.rtf,.pages,.numbers,.key,.html,.xml,.json,.md,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp,.svg,.mp3,.mp4,.wav,.avi,.zip,.rar,.7z,.epub,.ps';
 
-/** OCR-lite: extract text from image using canvas */
+/** OCR using GLM-OCR via backend API - runs in background */
+async function ocrExtractText(file: File): Promise<{ success: boolean; text: string; error?: string }> {
+  try {
+    // Convert file to base64 data URL
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Call the backend OCR API (runs in background via tRPC)
+    const result = await api.ocr.extractText.mutate({
+      imageData: dataUrl,
+      fileName: file.name,
+    });
+
+    return result;
+  } catch (error: any) {
+    return {
+      success: false,
+      text: '',
+      error: error.message || 'OCR processing failed',
+    };
+  }
+}
+
+/** Fallback OCR-lite: extract text from image using canvas (no actual OCR, just metadata) */
 async function imageToText(file: File): Promise<string> {
   return new Promise((resolve) => {
     const img = new window.Image();
@@ -106,8 +136,9 @@ async function docxToText(file: File): Promise<string> {
 async function convertFile(
   file: File,
   target: SupportedFormat,
-  onProgress: (p: number) => void
-): Promise<{ data: Blob; mime: string; fileName: string }> {
+  onProgress: (p: number) => void,
+  useOcr: boolean = false
+): Promise<{ data: Blob; mime: string; fileName: string; ocrText?: string }> {
   onProgress(10);
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const name = file.name.replace(/\.[^.]+$/, '');
@@ -135,6 +166,8 @@ async function convertFile(
 
   // Read file as text — now correctly handles PDFs (via pdf.js) and DOCX (via mammoth).
   let content = '';
+  let ocrText: string | undefined;
+  
   if (file.type.startsWith('text/') || ['json', 'xml', 'md', 'html', 'csv'].includes(ext)) {
     content = await file.text();
   } else if (ext === 'pdf' || file.type === 'application/pdf') {
@@ -142,7 +175,20 @@ async function convertFile(
   } else if (ext === 'docx' || ext === 'doc' || file.type.includes('wordprocessingml')) {
     content = await docxToText(file);
   } else if (file.type.startsWith('image/')) {
-    content = await imageToText(file);
+    // Use OCR if enabled, otherwise fallback to basic image capture
+    if (useOcr) {
+      onProgress(20);
+      const ocrResult = await ocrExtractText(file);
+      if (ocrResult.success) {
+        content = ocrResult.text;
+        ocrText = ocrResult.text;
+      } else {
+        content = `[OCR failed: ${ocrResult.error}] Using fallback...`;
+        content = await imageToText(file);
+      }
+    } else {
+      content = await imageToText(file);
+    }
   } else {
     // Try to read as text for other office-like files
     try { content = await file.text(); } catch { content = `[Binary file: ${file.name}]`; }
@@ -288,7 +334,7 @@ ${linesToHtml(content.split('\n'))}</body></html>`;
 
   onProgress(100);
   const blob = resultData instanceof Blob ? resultData : new Blob([resultData], { type: mime });
-  return { data: blob, mime, fileName: `${name}_converted${info.ext}` };
+  return { data: blob, mime, fileName: `${name}_converted${info.ext}`, ocrText };
 }
 
 function linesToHtml(lines: string[]): string {
@@ -335,19 +381,20 @@ export default function DocumentConverter() {
   // Persist jobs
   useEffect(() => { localStorage.setItem('fuelpro_converter_jobs', JSON.stringify(jobs)); }, [jobs]);
 
-  const processConversion = useCallback(async (file: File) => {
+  const processConversion = useCallback(async (file: File, useOcr: boolean = false) => {
     const jobId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
 
     setJobs(prev => [{
       id: jobId, fileName: file.name, originalType: ext,
-      targetFormat, status: 'converting', progress: 0,
+      targetFormat, status: useOcr ? 'ocr_processing' : 'converting', progress: 0,
+      useOcr,
     }, ...prev]);
 
     try {
       const result = await convertFile(file, targetFormat, (p) => {
         setJobs(prev => prev.map(j => j.id === jobId ? { ...j, progress: p } : j));
-      });
+      }, useOcr);
 
       // Store result as data URL for later download
       const reader = new FileReader();
@@ -356,6 +403,7 @@ export default function DocumentConverter() {
         setJobs(prev => prev.map(j => j.id === jobId ? {
           ...j, status: 'done', progress: 100,
           result: result.fileName, resultData: dataUrl, resultMime: result.mime,
+          ocrText: result.ocrText,
         } : j));
 
         // Auto-download
