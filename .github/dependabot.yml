@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Backend (Python)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "litellm"
+    open-pull-requests-limit: 5
+
+  # Frontend (Node.js)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "jspdf"
+    open-pull-requests-limit: 5
