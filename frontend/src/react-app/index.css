@@ -459,7 +459,7 @@ html.dark .summary-value {
 /* Device-based responsive containers */
 .responsive-container {
   width: 100%;
-  min-height: 100dvh; // Dynamic viewport height for mobile browsers
+  min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
   padding: var(--responsive-padding);
   box-sizing: border-box;
 }
@@ -901,8 +901,8 @@ html.dark .summary-value {
 
 /* Ensure content always fits within viewport */
 .main-content {
-  min-height: 100dvh; // Dynamic viewport height for mobile browsers
-  max-height: 100dvh; // Dynamic viewport height for mobile browsers
+  min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
+  max-height: 100dvh; /* Dynamic viewport height for mobile browsers */
   overflow-y: auto;
   box-sizing: border-box;
 }
