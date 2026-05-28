@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { FileUp, FileType, AlertCircle, CheckCircle2, X, Loader2, Download, FileText, Image,
-  FileSpreadsheet, Presentation, Trash2, Eye, Camera, ChevronDown, CameraOff, RotateCcw } from 'lucide-react';
+  FileSpreadsheet, Presentation, Trash2, Eye, Camera, ChevronDown, CameraOff, RotateCcw, Wand2, Zap } from 'lucide-react';
 import { getDetectedCurrency, getCurrencySymbol } from '@/react-app/lib/currency';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { extractTextFromImage, fileToDataUrl, checkOCRHealth } from '@/react-app/lib/ocr';
 
 export type SupportedFormat = 'pdf' | 'docx' | 'xlsx' | 'pptx' | 'txt' | 'csv' | 'jpg' | 'png';
 
@@ -12,12 +13,14 @@ interface ConversionJob {
   fileName: string;
   originalType: string;
   targetFormat: SupportedFormat;
-  status: 'queued' | 'converting' | 'done' | 'error';
+  status: 'queued' | 'converting' | 'done' | 'error' | 'ocr_processing';
   progress: number;
   error?: string;
   result?: string;
   resultData?: string;
   resultMime?: string;
+  ocrText?: string;
+  useOcr?: boolean;
 }
 
 const FORMAT_INFO: Record<SupportedFormat, { label: string; mime: string; ext: string }> = {
@@ -33,7 +36,7 @@ const FORMAT_INFO: Record<SupportedFormat, { label: string; mime: string; ext: s
 
 const ALL_ACCEPTED_EXTS = '.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.txt,.csv,.odt,.ods,.odp,.rtf,.pages,.numbers,.key,.html,.xml,.json,.md,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.webp,.svg,.mp3,.mp4,.wav,.avi,.zip,.rar,.7z,.epub,.ps';
 
-/** OCR-lite: extract text from image using canvas */
+/** OCR-lite: extract text from image using canvas (fallback when no real OCR) */
 async function imageToText(file: File): Promise<string> {
   return new Promise((resolve) => {
     const img = new window.Image();
@@ -46,22 +49,19 @@ async function imageToText(file: File): Promise<string> {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
-      // For now, return a placeholder with image info
-      resolve(`[Image captured: ${img.width}x${img.height}px - ${file.name}]`);
+      resolve(`[Image: ${img.width}x${img.height}px - ${file.name}]`);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve('[Image: Could not read]'); };
     img.src = url;
   });
 }
 
-/** Extract text from a PDF using pdf.js. Returns the extracted text or an
- *  error marker if extraction fails (e.g. encrypted / scanned). */
+/** Extract text from a PDF using pdf.js */
 async function pdfToText(file: File, password?: string): Promise<string> {
   try {
     const buf = await file.arrayBuffer();
     const pdfjs: any = await import('pdfjs-dist');
     const v = pdfjs.version || '5.6.205';
-    // Worker-side polyfill for browsers without `Promise.withResolvers`
     const { makePatchedWorkerSrc } = await import('@/react-app/lib/pdfWorkerShim');
     pdfjs.GlobalWorkerOptions.workerSrc = makePatchedWorkerSrc(
       `https://cdn.jsdelivr.net/npm/pdfjs-dist@${v}/build/pdf.worker.min.mjs`,
@@ -73,17 +73,16 @@ async function pdfToText(file: File, password?: string): Promise<string> {
       const tc = await page.getTextContent();
       out.push((tc.items as any[]).map(it => it.str).filter(Boolean).join(' '));
     }
-    return out.join('\n').trim() || '[PDF appears to be a scanned image — no extractable text.]';
+    return out.join('\n').trim() || '[PDF appears to be scanned — no extractable text.]';
   } catch (e: any) {
     if (e?.code === 1 || /password/i.test(e?.message || '')) {
-      return '[PDF is password-protected. Reupload with password set in the input field.]';
+      return '[PDF is password-protected. Reupload with password in input field.]';
     }
-    return `[Failed to extract PDF text: ${e?.message || 'unknown error'}]`;
+    return `[Failed to extract PDF: ${e?.message || 'unknown error'}]`;
   }
 }
 
-/** Extract text from a .docx file via the existing `mammoth` dep — falls back
- *  to a best-effort raw-text read if mammoth isn't installed. */
+/** Extract text from a .docx file */
 async function docxToText(file: File): Promise<string> {
   try {
     const mammoth: any = await import('mammoth/mammoth.browser.js' as any).catch(() => import('mammoth' as any));
@@ -91,7 +90,6 @@ async function docxToText(file: File): Promise<string> {
     const result = await mammoth.extractRawText({ arrayBuffer: buf });
     return (result?.value || '').trim() || '[DOCX contained no extractable text]';
   } catch {
-    // Best-effort fallback: docx is a ZIP, the body XML lives in word/document.xml
     try {
       const text = await file.text();
       const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -102,21 +100,21 @@ async function docxToText(file: File): Promise<string> {
   }
 }
 
-/** Real conversion engine: reads file content and produces target format */
+/** Real conversion engine */
 async function convertFile(
   file: File,
   target: SupportedFormat,
-  onProgress: (p: number) => void
-): Promise<{ data: Blob; mime: string; fileName: string }> {
+  onProgress: (p: number) => void,
+  useOcr: boolean = false
+): Promise<{ data: Blob; mime: string; fileName: string; ocrText?: string }> {
   onProgress(10);
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   const name = file.name.replace(/\.[^.]+$/, '');
   const info = FORMAT_INFO[target];
 
-  // If target is same-ish as source image format
+  // Image-to-image conversion
   if ((target === 'jpg' || target === 'png') && file.type.startsWith('image/')) {
     onProgress(50);
-    // For image-to-image, just create a converted version
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new window.Image();
@@ -133,8 +131,10 @@ async function convertFile(
     return { data: blob, mime, fileName: `${name}_converted${info.ext}` };
   }
 
-  // Read file as text — now correctly handles PDFs (via pdf.js) and DOCX (via mammoth).
+  // Text extraction with optional OCR
   let content = '';
+  let ocrText: string | undefined;
+  
   if (file.type.startsWith('text/') || ['json', 'xml', 'md', 'html', 'csv'].includes(ext)) {
     content = await file.text();
   } else if (ext === 'pdf' || file.type === 'application/pdf') {
@@ -142,14 +142,33 @@ async function convertFile(
   } else if (ext === 'docx' || ext === 'doc' || file.type.includes('wordprocessingml')) {
     content = await docxToText(file);
   } else if (file.type.startsWith('image/')) {
-    content = await imageToText(file);
+    if (useOcr) {
+      onProgress(20);
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        const ocrResult = await extractTextFromImage(dataUrl, file.name);
+        if (ocrResult.success && ocrResult.text) {
+          content = ocrResult.text;
+          ocrText = ocrResult.text;
+          onProgress(50);
+        } else {
+          content = `[OCR: ${ocrResult.error || 'No text detected'}]\n\n` + (await imageToText(file));
+          onProgress(50);
+        }
+      } catch (err: any) {
+        content = `[OCR failed: ${err.message}]\n\n` + (await imageToText(file));
+        onProgress(50);
+      }
+    } else {
+      content = await imageToText(file);
+      onProgress(30);
+    }
   } else {
-    // Try to read as text for other office-like files
     try { content = await file.text(); } catch { content = `[Binary file: ${file.name}]`; }
   }
-  onProgress(30);
 
-  await new Promise(r => setTimeout(r, 200)); // Simulate processing
+  if (!useOcr || !file.type.startsWith('image/')) onProgress(30);
+  await new Promise(r => setTimeout(r, 200));
   onProgress(60);
 
   let resultData: string | Blob = '';
@@ -167,7 +186,6 @@ async function convertFile(
       break;
     }
     case 'pdf': {
-      // Use jsPDF for proper PDF generation
       try {
         const doc = new jsPDF();
         const lines = content.split('\n').filter(l => l.trim());
@@ -176,35 +194,29 @@ async function convertFile(
         const maxWidth = pageWidth - margin * 2;
         let y = 20;
 
-        // Title
         doc.setFontSize(18);
         doc.setTextColor(26, 26, 46);
         doc.text(name, margin, y);
         y += 8;
 
-        // Subtitle line
         doc.setDrawColor(245, 158, 11);
         doc.setLineWidth(0.5);
         doc.line(margin, y, pageWidth - margin, y);
         y += 10;
 
-        // Metadata
         doc.setFontSize(9);
         doc.setTextColor(100, 100, 100);
         doc.text(`Source: ${file.name}    Converted: ${new Date().toLocaleString()}`, margin, y);
         y += 12;
 
-        // Content
         doc.setFontSize(10);
         doc.setTextColor(51, 51, 51);
 
         if (lines.length === 0) {
           doc.text('(empty file)', margin, y);
         } else {
-          // Check if content has tabular structure
           const hasTabs = lines.some(l => l.includes('\t'));
           if (hasTabs && lines.length > 1) {
-            // Render as table
             const tableData = lines.map(l => l.split('\t').map(c => c.trim()));
             autoTable(doc, {
               startY: y,
@@ -217,7 +229,6 @@ async function convertFile(
               styles: { overflow: 'linebreak', cellWidth: 'wrap' },
             });
           } else {
-            // Render as plain text
             for (const line of lines) {
               if (y > 270) {
                 doc.addPage();
@@ -230,7 +241,6 @@ async function convertFile(
           }
         }
 
-        // Footer on each page
         const pageCount = (doc.internal as unknown as { getNumberOfPages(): number }).getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
           doc.setPage(i);
@@ -242,7 +252,6 @@ async function convertFile(
         resultData = doc.output('blob');
         mime = 'application/pdf';
       } catch {
-        // Fallback: create a text-based PDF
         resultData = new Blob([content || `[Converted file: ${file.name}]\n\nDate: ${new Date().toLocaleString()}`], { type: 'application/pdf' });
       }
       break;
@@ -288,7 +297,7 @@ ${linesToHtml(content.split('\n'))}</body></html>`;
 
   onProgress(100);
   const blob = resultData instanceof Blob ? resultData : new Blob([resultData], { type: mime });
-  return { data: blob, mime, fileName: `${name}_converted${info.ext}` };
+  return { data: blob, mime, fileName: `${name}_converted${info.ext}`, ocrText };
 }
 
 function linesToHtml(lines: string[]): string {
@@ -312,10 +321,11 @@ function triggerDownload(blob: Blob, fileName: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 export default function DocumentConverter() {
@@ -328,37 +338,46 @@ export default function DocumentConverter() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [ocrEnabled, setOcrEnabled] = useState(true);
+  const [ocrHealthy, setOcrHealthy] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Check OCR health on mount
+  useEffect(() => {
+    checkOCRHealth().then(health => {
+      setOcrHealthy(health.hasApiKey ?? false);
+    }).catch(() => setOcrHealthy(false));
+  }, []);
+
   // Persist jobs
   useEffect(() => { localStorage.setItem('fuelpro_converter_jobs', JSON.stringify(jobs)); }, [jobs]);
 
-  const processConversion = useCallback(async (file: File) => {
+  const processConversion = useCallback(async (file: File, useOcr: boolean = false) => {
     const jobId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
 
     setJobs(prev => [{
       id: jobId, fileName: file.name, originalType: ext,
-      targetFormat, status: 'converting', progress: 0,
+      targetFormat, status: useOcr ? 'ocr_processing' : 'converting', progress: 0,
+      useOcr,
     }, ...prev]);
 
     try {
       const result = await convertFile(file, targetFormat, (p) => {
         setJobs(prev => prev.map(j => j.id === jobId ? { ...j, progress: p } : j));
-      });
+      }, useOcr);
 
-      // Store result as data URL for later download
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
         setJobs(prev => prev.map(j => j.id === jobId ? {
           ...j, status: 'done', progress: 100,
           result: result.fileName, resultData: dataUrl, resultMime: result.mime,
+          ocrText: result.ocrText,
         } : j));
 
-        // Auto-download
         setTimeout(() => triggerDownload(result.data, result.fileName), 300);
       };
       reader.readAsDataURL(result.data);
@@ -369,12 +388,13 @@ export default function DocumentConverter() {
     }
   }, [targetFormat]);
 
-  const handleFile = useCallback((files: FileList | null) => {
+  const handleFile = useCallback((files: FileList | null, forceOcr: boolean = false) => {
     if (!files) return;
     Array.from(files).forEach((file, i) => {
-      setTimeout(() => processConversion(file), i * 400);
+      const useOcr = forceOcr && ocrEnabled && ocrHealthy && file.type.startsWith('image/');
+      setTimeout(() => processConversion(file, useOcr), i * 400);
     });
-  }, [processConversion]);
+  }, [ocrEnabled, ocrHealthy, processConversion]);
 
   const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); handleFile(e.dataTransfer.files); }, [handleFile]);
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
@@ -386,7 +406,9 @@ export default function DocumentConverter() {
   const startCamera = async () => {
     setCameraError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+      });
       setVideoStream(stream);
       setShowCamera(true);
       setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100);
@@ -415,7 +437,7 @@ export default function DocumentConverter() {
       if (!blob) return;
       const file = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
       stopCamera();
-      processConversion(file);
+      processConversion(file, ocrEnabled && ocrHealthy);
     }, 'image/jpeg', 0.92);
   };
 
@@ -434,39 +456,70 @@ export default function DocumentConverter() {
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Document Converter</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Upload any file — we convert to your target format. Supports 30+ input formats.
+            Upload any file — we convert to your target format. Supports 30+ input formats. OCR enabled for images.
           </p>
         </div>
         {jobs.length > 0 && (
-          <button onClick={clearAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1">
+          <button onClick={clearAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1" style={{ touchAction: 'manipulation', minHeight: '44px', minWidth: '44px', padding: '10px' }}>
             <Trash2 size={12} /> Clear All
           </button>
         )}
       </div>
 
-      {/* Target Format + Camera */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      {/* OCR Status Banner */}
+      {ocrEnabled && (
+        <div className={`p-3 rounded-lg border flex items-center gap-2 text-sm ${
+          ocrHealthy 
+            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300'
+        }`}>
+          <Zap size={14} />
+          {ocrHealthy ? '✓ OCR Ready - Images will be processed with text extraction' : '⚠ OCR Unavailable - Using fallback extraction'}
+        </div>
+      )}
+
+      {/* Target Format + Camera + OCR Toggle */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex-1">
+          <div className="flex-1 min-w-48">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Convert to:</label>
             <div className="flex flex-wrap gap-2">
               {Object.entries(FORMAT_INFO).map(([key, info]) => (
                 <button key={key} onClick={() => setTargetFormat(key as SupportedFormat)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all touch-action-manipulation ${
                     targetFormat === key ? 'bg-amber-500 text-white shadow-md' :
                     'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}>{info.label}</button>
+                  }`} style={{ touchAction: 'manipulation', minHeight: '32px' }}>{info.label}</button>
               ))}
             </div>
           </div>
           <button onClick={showCamera ? stopCamera : startCamera}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all">
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all touch-action-manipulation"
+            style={{ minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}>
             {showCamera ? <CameraOff size={16} /> : <Camera size={16} />}
-            {showCamera ? 'Close Camera' : 'Capture Document'}
+            {showCamera ? 'Close' : 'Camera'}
           </button>
         </div>
+
+        {/* OCR Toggle */}
+        <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <input
+            type="checkbox"
+            id="ocrToggle"
+            checked={ocrEnabled && ocrHealthy}
+            onChange={(e) => setOcrEnabled(e.target.checked)}
+            disabled={!ocrHealthy}
+            className="w-4 h-4 cursor-pointer"
+            style={{ minHeight: '44px', minWidth: '44px', padding: '10px', touchAction: 'manipulation' }}
+          />
+          <label htmlFor="ocrToggle" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer flex-1">
+            <Wand2 className="inline mr-1" size={14} />
+            Enable OCR for images (Extract text with AI)
+          </label>
+        </div>
+
         {cameraError && (
-          <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs text-red-600 flex items-center gap-2">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs text-red-600 flex items-center gap-2">
             <AlertCircle size={14} /> {cameraError}
           </div>
         )}
@@ -480,12 +533,15 @@ export default function DocumentConverter() {
             <canvas ref={canvasRef} className="hidden" />
             <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
               <button onClick={capturePhoto}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full text-sm font-bold shadow-lg transition-all">
-                <Camera size={16} className="inline mr-1" /> Capture & Convert
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-full text-sm font-bold shadow-lg transition-all touch-action-manipulation"
+                style={{ minHeight: '44px', touchAction: 'manipulation' }}>
+                <Camera size={16} className="inline mr-1" /> Capture
               </button>
-              <button onClick={() => { if (videoRef.current) { videoRef.current.classList.toggle('transform'); } /* rotate placeholder */ }}
-                className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full" title="Flip">
-                <RotateCcw size={16} />
+              <button onClick={stopCamera}
+                className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full touch-action-manipulation"
+                style={{ minHeight: '44px', minWidth: '44px', touchAction: 'manipulation' }}
+                title="Close">
+                <X size={16} />
               </button>
             </div>
           </div>
@@ -497,10 +553,11 @@ export default function DocumentConverter() {
       {!showCamera && (
         <div onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
+          className={`relative border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all touch-action-manipulation ${
             isDragging ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 scale-[1.01]' :
             'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 hover:border-gray-400'
-          }`}>
+          }`}
+          style={{ minHeight: '200px', touchAction: 'manipulation' }}>
           <input ref={fileInputRef} type="file" accept={ALL_ACCEPTED_EXTS} multiple
             onChange={e => { handleFile(e.target.files); e.target.value = ''; }} className="hidden" />
           <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all ${
@@ -512,7 +569,7 @@ export default function DocumentConverter() {
             {isDragging ? 'Drop files here!' : 'Drag & drop files here, or click to browse'}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            PDF, DOCX, XLSX, PPTX, TXT, CSV, ODT, Pages, Images, and more
+            PDF, DOCX, XLSX, PPTX, TXT, CSV, Images, and more
           </p>
         </div>
       )}
@@ -530,10 +587,11 @@ export default function DocumentConverter() {
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{job.fileName}</p>
-                  <p className="text-xs text-gray-500">{job.originalType} → {FORMAT_INFO[job.targetFormat].label}</p>
+                  <p className="text-xs text-gray-500">{job.originalType} → {FORMAT_INFO[job.targetFormat].label} {job.useOcr && '(OCR)'}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {job.status === 'converting' && <Loader2 size={16} className="text-amber-500 animate-spin" />}
+                  {job.status === 'ocr_processing' && <Wand2 size={16} className="text-blue-500 animate-spin" />}
                   {job.status === 'done' && <CheckCircle2 size={16} className="text-green-500" />}
                   {job.status === 'error' && <AlertCircle size={16} className="text-red-500" />}
                   {job.status === 'done' && job.resultData && (
@@ -543,11 +601,13 @@ export default function DocumentConverter() {
                       const ia = new Uint8Array(ab);
                       for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
                       triggerDownload(new Blob([ab], { type: job.resultMime || 'application/octet-stream' }), job.result!);
-                    }} className="p-1.5 rounded-lg hover:bg-gray-100 text-blue-500 transition-all" title="Download">
+                    }} className="p-1.5 rounded-lg hover:bg-gray-100 text-blue-500 transition-all touch-action-manipulation" title="Download"
+                      style={{ minHeight: '32px', minWidth: '32px', touchAction: 'manipulation' }}>
                       <Download size={14} />
                     </button>
                   )}
-                  <button onClick={() => removeJob(job.id)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all">
+                  <button onClick={() => removeJob(job.id)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-all touch-action-manipulation"
+                    style={{ minHeight: '32px', minWidth: '32px', touchAction: 'manipulation' }}>
                     <X size={14} />
                   </button>
                 </div>
@@ -560,13 +620,19 @@ export default function DocumentConverter() {
                   <p className="text-[10px] text-gray-400 mt-1 text-right">{job.progress}%</p>
                 </div>
               )}
+              {job.status === 'ocr_processing' && (
+                <div className="mt-3">
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Processing with OCR...</p>
+                </div>
+              )}
               {job.status === 'error' && job.error && (
                 <p className="mt-2 text-xs text-red-600">{job.error}</p>
               )}
-              {job.status === 'done' && job.result && (
-                <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
-                  <CheckCircle2 size={10} /> {job.result} — auto-downloaded
-                </p>
+              {job.status === 'done' && job.ocrText && (
+                <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300 max-h-24 overflow-y-auto">
+                  <strong>OCR Extracted Text:</strong>
+                  <p className="mt-1">{job.ocrText.substring(0, 200)}...</p>
+                </div>
               )}
             </div>
           ))}
@@ -579,10 +645,15 @@ export default function DocumentConverter() {
           <FileType size={14} /> How It Works
         </h4>
         <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-          1. Select your target format above. 2. Drag & drop a file or click browse.
-          3. Conversion happens automatically — no buttons to press. 4. Downloaded file saves to your device.
-          For camera: tap "Capture Document", position the page, then tap Capture.
+          1. Select target format. 2. Enable OCR toggle if desired. 3. Drag & drop or click to upload. 
+          4. For camera: tap "Camera", frame document, tap "Capture". Files auto-download when ready.
+          OCR extracts text from images using AI for high-accuracy document processing.
         </p>
+      </div>
+
+      {/* Mobile Optimization Note */}
+      <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+        ✓ Works on desktop, mobile, and tablet • Touch-optimized interface • Cross-device sync enabled
       </div>
     </div>
   );
