@@ -11,6 +11,7 @@ import {
   ArrowLeft, KeyRound, Crown,
   Building
 } from 'lucide-react';
+import { buildGoogleAuthUrl } from '@/react-app/lib/googleAuthConfig';
 
 type LoginMode = 'email' | 'username' | 'register';
 
@@ -111,6 +112,14 @@ export default function AuthLogin() {
         }));
       }
       setSuccess('Account created successfully! Logging you in...');
+    }
+  };
+
+  const handleGoogleSignIn = () => {
+    try {
+      window.location.href = buildGoogleAuthUrl();
+    } catch (err) {
+      setLocalError('Failed to initialize Google sign-in. Please try again.');
     }
   };
 
@@ -224,9 +233,6 @@ export default function AuthLogin() {
                     { method: 'POST', headers: { 'Content-Type': 'application/json' } },
                   );
                   localStorage.setItem('fuelpro_jwt', data.token);
-                  // Persist the AuthContext shape so the rest of the app treats
-                  // the guest like any other authed user (Home then renders
-                  // FirstLoginChoice → Add Station).
                   const identity = {
                     id: `email_${data.user.email}`,
                     authId: `email_${data.user.email}`,
@@ -236,20 +242,17 @@ export default function AuthLogin() {
                   };
                   localStorage.setItem('fuelpro_auth_identity', JSON.stringify(identity));
                   localStorage.setItem('fuelpro_user', JSON.stringify(data.user));
-                  // Stitch any anonymous device activity into the new account
                   try {
                     const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
                     await linkAnonymousToUser(data.token);
                   } catch { /* non-fatal */ }
-                  // Land straight on the dashboard — Home renders FirstLoginChoice
-                  // (Add Station / Demo data) when there are no stations yet.
                   window.location.href = '/';
                 } catch (e) {
                   setLocalError(e instanceof Error ? e.message : 'Quick start failed');
                   setQuickStartBusy(false);
                 }
               }}
-              className="w-full mb-3 flex items-center justify-center gap-3 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-60 text-black rounded-xl font-bold text-sm transition-colors shadow-lg"
+              className="w-full mb-3 flex items-center justify-center gap-3 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-60 text-black font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl border border-amber-400/20 disabled:cursor-not-allowed"
             >
               {quickStartBusy ? (
                 <span className="inline-block h-4 w-4 border-2 border-black/40 border-t-black rounded-full animate-spin" />
@@ -259,14 +262,10 @@ export default function AuthLogin() {
               {quickStartBusy ? 'Setting up your account…' : 'Continue instantly — start in 1 second'}
             </button>
 
-            {/* Google Sign-In — Emergent-managed OAuth */}
-            {/* REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH */}
+            {/* Google Sign-In — Direct Google OAuth, no third-party proxy */}
             <button
               type="button"
-              onClick={() => {
-                const redirectUrl = window.location.origin + '/';
-                window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-              }}
+              onClick={handleGoogleSignIn}
               className="w-full mb-3 flex items-center justify-center gap-3 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium text-xs transition-colors border border-white/10"
               data-testid="auth-google-btn"
             >
@@ -352,7 +351,7 @@ export default function AuthLogin() {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-3.5 min-h-[44px] px-6 rounded-xl transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-3.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg"
                 >
                   {isPending ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -403,7 +402,7 @@ export default function AuthLogin() {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-3.5 min-h-[44px] px-6 rounded-xl transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold py-3.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg"
                 >
                   {isPending ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -531,7 +530,7 @@ export default function AuthLogin() {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3.5 min-h-[44px] px-6 rounded-xl transition-all shadow-lg shadow-green-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg"
                 >
                   {isPending ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
