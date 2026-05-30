@@ -15,7 +15,7 @@ const PRICING_KEY = 'fuelpro_pricing_tiers';
 const COUPON_KEY = 'fuelpro_coupons';
 const PAYMENT_KEY = 'fuelpro_payments_log';
 const TRIAL_ABUSE_KEY = 'fuelpro_trial_abuse';
-const TRIAL_DURATION_MS = 60 * 60 * 1000; // 1 hour
+const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 // ─── Version Migration ───
 // Migrate data from old versioned keys to current non-versioned keys

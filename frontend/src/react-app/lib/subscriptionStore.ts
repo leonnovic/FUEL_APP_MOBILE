@@ -31,7 +31,7 @@ export const TIERS: SubscriptionTier[] = [
     priceUSD: 0,
     description: 'Get started with basic features',
     features: [
-      '7-day trial access',
+      '14-day trial access',
       'View public reports',
       'Download sample templates',
       '1 station only',
@@ -125,7 +125,7 @@ export function getSubscription(): SubscriptionState {
       const elapsedHours = elapsed / (1000 * 60 * 60);
 
       if (elapsedHours < 168) {
-        const expiresAt = new Date(started.getTime() + 168 * 60 * 60 * 1000).toISOString();
+        const expiresAt = new Date(started.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
         const state: SubscriptionState = {
           tier: 'free',
           status: 'trial',
@@ -145,7 +145,7 @@ export function getSubscription(): SubscriptionState {
     tier: 'free',
     status: 'trial',
     activatedAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 168 * 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
     mpesaReceipt: null,
     phone: null,
     autoRenew: false,
@@ -175,11 +175,11 @@ export function activateTier(tier: string, opts?: { mpesaReceipt?: string; phone
     const trialRaw = localStorage.getItem('fuelpro_trial_start');
     if (trialRaw) {
       state.activatedAt = trialRaw;
-      state.expiresAt = new Date(new Date(trialRaw).getTime() + 168 * 60 * 60 * 1000).toISOString();
+      state.expiresAt = new Date(new Date(trialRaw).getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
     } else {
       const now = new Date().toISOString();
       state.activatedAt = now;
-      state.expiresAt = new Date(Date.now() + 168 * 60 * 60 * 1000).toISOString();
+      state.expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       localStorage.setItem('fuelpro_trial_start', now);
     }
   }
