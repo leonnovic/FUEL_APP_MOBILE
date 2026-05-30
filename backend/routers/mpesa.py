@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 import os
 
 from core import (
+    IS_PRODUCTION,
     MPESA_CALLBACK_BASE_URL,
     PLANS,
     db,
@@ -251,13 +252,57 @@ async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str)
 
 
 async def mpesa_stk_callback_handler(request: Request):
-    """Mounted on the FastAPI app at /api/mpesa/stk-callback by server.py."""
-    parsed = _parse_stk_callback(await request.json())
+    """Mounted on the FastAPI app at /api/mpesa/stk-callback by server.py.
+
+    Security: In production, verifies HMAC-SHA256 signature from Safaricom
+    headers (X-Signature + X-Timestamp) if MPESA_WEBHOOK_SECRET is configured.
+    Always returns 200 to prevent Safaricom retry storms on verification failures.
+    """
+    import hashlib
+    import hmac as _hmac
+    import json as _json
+
+    body_bytes = await request.body()
+
+    # --- HMAC signature verification (production gate) ---
+    webhook_secret = os.environ.get("MPESA_WEBHOOK_SECRET", "")
+    x_signature = request.headers.get("X-Signature") or request.headers.get("x-signature")
+    x_timestamp = request.headers.get("X-Timestamp") or request.headers.get("x-timestamp")
+    signature_verified = False
+
+    if webhook_secret and x_signature and x_timestamp:
+        try:
+            expected = _hmac.new(
+                webhook_secret.encode("utf-8"),
+                body_bytes + x_timestamp.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            signature_verified = _hmac.compare_digest(expected, x_signature)
+            if not signature_verified:
+                log.warning(
+                    "fuelpro.mpesa.callback.sig_mismatch ip=%s ua=%s",
+                    request.client.host if request.client else "unknown",
+                    request.headers.get("user-agent", "")[:80],
+                )
+        except Exception as sig_err:
+            log.warning("fuelpro.mpesa.callback.sig_error: %s", sig_err)
+    elif IS_PRODUCTION and webhook_secret and not x_signature:
+        log.warning("fuelpro.mpesa.callback.no_signature ip=%s", request.client.host if request.client else "unknown")
+
+    # --- Parse body ---
+    try:
+        payload = _json.loads(body_bytes)
+    except _json.JSONDecodeError:
+        log.error("fuelpro.mpesa.callback.bad_json")
+        return {"ResultCode": 0, "ResultDesc": "Callback received"}
+
+    parsed = _parse_stk_callback(payload)
     log.info(
-        "fuelpro.mpesa.callback.parsed checkout_id=%s result_code=%s status=%s receipt=%s",
+        "fuelpro.mpesa.callback.parsed checkout_id=%s result_code=%s status=%s receipt=%s sig_verified=%s",
         parsed.get("checkout_request_id"), parsed.get("result_code"),
-        parsed.get("status_str"), parsed.get("receipt"),
+        parsed.get("status_str"), parsed.get("receipt"), signature_verified,
     )
+
     tx = await db.payment_transactions.find_one(
         {"checkout_request_id": parsed["checkout_request_id"]}, {"_id": 0},
     )
@@ -266,6 +311,23 @@ async def mpesa_stk_callback_handler(request: Request):
         await _update_payment_transaction(parsed, now)
         if parsed["status_str"] == "paid":
             await _activate_subscription_from_callback(tx, parsed, now)
+
+    # Audit trail for every callback
+    await db.audit_log.insert_one({
+        "id": new_id(),
+        "action": "mpesa.stk_callback",
+        "at": now_iso(),
+        "ip_address": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "")[:200],
+        "meta": {
+            "checkout_request_id": parsed.get("checkout_request_id"),
+            "status": parsed.get("status_str"),
+            "receipt": parsed.get("receipt"),
+            "result_code": parsed.get("result_code"),
+            "signature_verified": signature_verified,
+        },
+    })
+
     return {"ResultCode": 0, "ResultDesc": "Callback received"}
 
 

@@ -9,6 +9,23 @@
 * { user-select: text; -webkit-user-select: text; }
 input, textarea { user-select: text; -webkit-user-select: text; }
 
+/* Mobile touch: prevents 300ms tap delay and double-tap zoom on interactive elements */
+button, a, [role="button"], input, select, textarea, label {
+  touch-action: manipulation;
+}
+
+/* WCAG 2.5.5 / Apple HIG: minimum 44×44px touch target for all interactive elements */
+button, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Prevent text inflation on mobile landscape (iOS Safari) */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 :root {
   --primary: #1a3a5f;
   --secondary: #d4af37;

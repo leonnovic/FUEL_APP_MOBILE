@@ -12,8 +12,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, validator
 
+from fastapi.security import HTTPAuthorizationCredentials
+
 from core import (
     IS_PRODUCTION,
+    JWT_ALG,
+    JWT_EXPIRE_HOURS,
+    JWT_SECRET,
     PUBLIC_BACKEND_URL,
     TokenResponse,
     UserCreate,
@@ -23,6 +28,7 @@ from core import (
     _make_token,
     _user_doc_to_out,
     _verify_pw,
+    bearer,
     db,
     get_current_user,
     log,
@@ -57,7 +63,7 @@ class GoogleAuthBody(BaseModel):
 
 
 @router.post("/auth/register", response_model=TokenResponse)
-async def register(body: UserCreate):
+async def register(body: UserCreate, request: Request):
     email = body.email.lower().strip()
     existing = await db.users.find_one({"email": email})
     if existing:
@@ -80,19 +86,46 @@ async def register(body: UserCreate):
     }
     await db.users.insert_one(user)
     await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "user.register",
-        "at": now.isoformat(), "meta": {"email": email},
+        "id": new_id(),
+        "user_id": user["id"],
+        "action": "user.register",
+        "at": now.isoformat(),
+        "ip_address": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "station_id": request.headers.get("x-station-id"),
+        "meta": {"email": email, "auth_method": "email"},
     })
     out = await _user_doc_to_out(user)
     return TokenResponse(token=_make_token(user["id"]), user=out)
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-async def login(body: UserLogin):
+async def login(body: UserLogin, request: Request):
     email = body.email.lower().strip()
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not _verify_pw(body.password, user.get("password_hash", "")):
+        # Audit failed login attempt (for breach detection)
+        await db.audit_log.insert_one({
+            "id": new_id(),
+            "user_id": "anonymous",
+            "action": "auth.login_failed",
+            "at": now_iso(),
+            "ip_address": request.client.host if request.client else "unknown",
+            "user_agent": request.headers.get("user-agent", "unknown"),
+            "meta": {"email": email, "reason": "invalid_credentials"},
+        })
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    await db.audit_log.insert_one({
+        "id": new_id(),
+        "user_id": user["id"],
+        "action": "auth.login",
+        "at": now_iso(),
+        "ip_address": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "station_id": request.headers.get("x-station-id"),
+        "meta": {"email": email, "auth_method": "email"},
+    })
     out = await _user_doc_to_out(user)
     return TokenResponse(token=_make_token(user["id"]), user=out)
 
@@ -103,12 +136,71 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.post("/auth/logout")
-async def logout(user: dict = Depends(get_current_user)):
-    """Logout: revoke current JWT token"""
-    # Token revocation is handled via the Authorization header's jti claim
-    # in get_current_user dependency. Just acknowledge the logout.
-    log.info("User logged out: user_id=%s", user["id"])
+async def logout(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+):
+    """Logout: revoke current JWT so it cannot be reused even before expiry."""
+    from jose import jwt as _jwt
+    if creds:
+        try:
+            payload = _jwt.decode(
+                creds.credentials, JWT_SECRET, algorithms=[JWT_ALG],
+                options={"verify_exp": False},
+            )
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                exp_iso = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+                await revoke_token(jti, exp_iso)
+        except Exception as e:
+            log.warning("Logout token revocation failed: %s", e)
+
+    await db.audit_log.insert_one({
+        "id": new_id(),
+        "user_id": user["id"],
+        "action": "auth.logout",
+        "at": now_iso(),
+        "ip_address": request.client.host if request.client else "unknown",
+        "user_agent": request.headers.get("user-agent", "unknown"),
+        "meta": {},
+    })
+    log.info("User logged out + token revoked: user_id=%s", user["id"])
     return {"ok": True, "message": "Logged out successfully"}
+
+
+@router.post("/auth/refresh")
+async def refresh_token(
+    request: Request,
+    user: dict = Depends(get_current_user),
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+):
+    """Refresh: revoke old JWT and issue a fresh one (sliding session)."""
+    from jose import jwt as _jwt
+    if creds:
+        try:
+            payload = _jwt.decode(
+                creds.credentials, JWT_SECRET, algorithms=[JWT_ALG],
+                options={"verify_exp": False},
+            )
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                exp_iso = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+                await revoke_token(jti, exp_iso)
+        except Exception as e:
+            log.warning("Refresh token revocation failed: %s", e)
+
+    new_token = _make_token(user["id"])
+    log.info("Token refreshed: user_id=%s", user["id"])
+    return {
+        "ok": True,
+        "access_token": new_token,
+        "token_type": "bearer",
+        "expires_in": JWT_EXPIRE_HOURS * 3600,
+        "user": await _user_doc_to_out(user),
+    }
 
 
 _GENERIC_RESET_MSG = "If that email is registered we sent reset instructions."
