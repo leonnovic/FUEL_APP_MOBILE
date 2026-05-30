@@ -7,6 +7,7 @@ circular imports between routers.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
@@ -89,10 +90,56 @@ ALLOWED_COLLECTIONS = {
 }
 
 # ---------------------------------------------------------------------------
-# Logger, DB, security primitives
+# Structured JSON logging (production-grade observability)
+# Outputs one JSON object per line — easy to ship to Datadog / CloudWatch / GCP.
+# In development (LOG_FORMAT=text) falls back to human-readable plain text.
 # ---------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-log = logging.getLogger("fuelpro")
+
+class _JSONFormatter(logging.Formatter):
+    """Emit each log record as a single-line JSON object with standard fields."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Attempt to read the current request_id from the context variable.
+        req_id = ""
+        try:
+            from middleware import request_id_ctx  # local import avoids circular dep
+            req_id = request_id_ctx.get("")
+        except Exception:
+            pass
+
+        payload: dict[str, Any] = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+            "module": record.module,
+            "func": record.funcName,
+            "line": record.lineno,
+        }
+        if req_id:
+            payload["request_id"] = req_id
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def _configure_logging() -> logging.Logger:
+    use_json = os.environ.get("LOG_FORMAT", "json" if os.environ.get("APP_ENV", "production") in {"production", "prod"} else "text") == "json"
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        if use_json:
+            handler.setFormatter(_JSONFormatter())
+        else:
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+            )
+        root.addHandler(handler)
+    return logging.getLogger("fuelpro")
+
+
+log = _configure_logging()
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]

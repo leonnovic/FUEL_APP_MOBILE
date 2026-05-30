@@ -1,40 +1,75 @@
-"""Security middleware — adds production-grade response headers and a
-simple per-IP rate limiter for auth endpoints.
+"""Production middleware stack for FuelPro backend.
 
-Headers applied:
-- Strict-Transport-Security: HSTS (1 year, includeSubDomains)
-- X-Content-Type-Options: nosniff
-- X-Frame-Options: DENY  (clickjacking)
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: lock down camera/microphone/geolocation
-- Content-Security-Policy: applied to non-API HTML routes only (so the API
-  responses stay un-restricted for the React dev server / Vite HMR)
+Middleware (applied in registration order, outermost first):
+- RequestIDMiddleware   — generates X-Request-ID per request; threads via contextvars
+- SecurityHeadersMiddleware — HSTS, X-Frame-Options, CSP, Permissions-Policy
+- AuthRateLimitMiddleware   — sliding-window per-IP limit on auth endpoints
 
 Toggle via env:
-  SECURITY_HEADERS=0   → disable entirely (dev convenience)
-  AUTH_RATE_LIMIT_PER_MIN=10  → override per-IP limit on /api/auth/{login,register}
+  SECURITY_HEADERS=0           → disable security headers (dev convenience)
+  AUTH_RATE_LIMIT_PER_MIN=10   → override per-IP rate limit
 """
 
 from __future__ import annotations
 
 import os
 import time
+import uuid
 from collections import deque
+from contextvars import ContextVar
 from typing import Deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+# ---------------------------------------------------------------------------
+# Context variable: request_id is set by RequestIDMiddleware and can be read
+# anywhere in the call stack (routers, services, logging filters).
+# ---------------------------------------------------------------------------
+request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
 
-HSTS_VALUE = "max-age=31536000; includeSubDomains"
+
+HSTS_VALUE = "max-age=31536000; includeSubDomains; preload"
 PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(self), payment=(self)"
 REFERRER_POLICY = "strict-origin-when-cross-origin"
 FRAME_OPTIONS = "DENY"
 CONTENT_TYPE_OPTIONS = "nosniff"
 
 
+# ---------------------------------------------------------------------------
+# Request ID middleware
+# ---------------------------------------------------------------------------
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Generate a unique X-Request-ID for every request.
+
+    - Accepts X-Request-ID from the client (Vercel edge, load balancer) if already set.
+    - Otherwise generates a compact UUID4.
+    - Stores the ID in a ContextVar so any router / service can read it.
+    - Echoes it back on the response so clients can correlate logs.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        req_id = (
+            request.headers.get("x-request-id")
+            or request.headers.get("x-correlation-id")
+            or str(uuid.uuid4())
+        )
+        # Trim to 64 chars max to prevent header smuggling
+        req_id = req_id[:64]
+        token = request_id_ctx.set(req_id)
+        try:
+            response: Response = await call_next(request)
+        finally:
+            request_id_ctx.reset(token)
+        response.headers.setdefault("X-Request-ID", req_id)
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add production-grade security response headers to every response."""
+
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
         if os.environ.get("SECURITY_HEADERS", "1") == "0":
@@ -45,6 +80,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         h.setdefault("X-Frame-Options", FRAME_OPTIONS)
         h.setdefault("Referrer-Policy", REFERRER_POLICY)
         h.setdefault("Permissions-Policy", PERMISSIONS_POLICY)
+        h.setdefault("X-XSS-Protection", "1; mode=block")
+        h.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
         # CORS already handled by CORSMiddleware; do not stomp on it.
         return response
 

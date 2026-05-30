@@ -62,6 +62,17 @@ async def health():
     return {"ok": True, "mongo": mongo_ok}
 
 
+@api.get("/version")
+async def version():
+    """Return API version info — used by clients for compatibility checks."""
+    return {
+        "api_version": "v1",
+        "service": "FuelPro Backend",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "build": os.environ.get("RENDER_GIT_COMMIT", "local")[:8],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Compose routers under the /api prefix
 # ---------------------------------------------------------------------------
@@ -153,10 +164,11 @@ app.add_middleware(
     max_age=max_age,
 )
 
-# Security headers + auth rate-limit (toggleable via env)
-from middleware import AuthRateLimitMiddleware, SecurityHeadersMiddleware  # noqa: E402
+# Middleware stack (Starlette applies in LIFO order, so the last added is outermost)
+from middleware import AuthRateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware  # noqa: E402
 app.add_middleware(AuthRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIDMiddleware)   # outermost — stamps every request before anything else
 
 
 # ---------------------------------------------------------------------------
