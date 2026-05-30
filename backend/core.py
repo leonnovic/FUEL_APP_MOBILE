@@ -51,6 +51,9 @@ MPESA_CALLBACK_BASE_URL = os.environ.get("MPESA_CALLBACK_BASE_URL", "")
 FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "publican1D#20")
 FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
 
+# Security: Password pepper (server-side secret added to password before hashing)
+PASSWORD_PEPPER = os.environ.get("PASSWORD_PEPPER", "")
+
 # Server-authoritative subscription tiers — frontend MUST NOT send prices.
 PLANS: dict[str, dict[str, Any]] = {
     "free": {
@@ -155,19 +158,72 @@ class TokenResponse(BaseModel):
 # Auth helpers
 # ---------------------------------------------------------------------------
 def _hash_pw(pw: str) -> str:
+    """Hash password with bcrypt + server-side pepper (if configured)"""
+    if PASSWORD_PEPPER:
+        pw = pw + PASSWORD_PEPPER
     return pwd_ctx.hash(pw)
 
 
 def _verify_pw(pw: str, hashed: str) -> bool:
+    """Verify password with pepper support (constant-time comparison).
+    Tries pepper-prefixed version first, then falls back to non-peppered for legacy compatibility.
+    """
     try:
+        if PASSWORD_PEPPER:
+            # Try with pepper first
+            if pwd_ctx.verify(pw + PASSWORD_PEPPER, hashed):
+                return True
+            # Fallback: try without pepper (for legacy hashes created before pepper was added)
+            return pwd_ctx.verify(pw, hashed)
         return pwd_ctx.verify(pw, hashed)
     except Exception:
         return False
 
 
-def _make_token(user_id: str) -> str:
+# Token Revocation Support (for logout/session termination)
+async def is_token_revoked(jti: str) -> bool:
+    """Check if token ID is in revocation list (user logged out)"""
+    return await db.revoked_tokens.find_one({
+        "jti": jti,
+        "expires_at": {"$gt": now_iso()}
+    }) is not None
+
+
+async def revoke_token(jti: str, expires_at: str):
+    """Add token to revocation list with TTL.
+    MongoDB will auto-delete after expiry via TTL index.
+    """
+    await db.revoked_tokens.insert_one({
+        "jti": jti,
+        "revoked_at": now_iso(),
+        "expires_at": expires_at,
+    })
+    # Ensure TTL index exists (run once during startup)
+    try:
+        await db.revoked_tokens.create_index(
+            [("expires_at", 1)],
+            expireAfterSeconds=0,
+            background=True
+        )
+    except Exception:
+        pass  # Index may already exist
+
+
+def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
+    """Generate JWT with SOC-2 compliant claims including token ID for revocation"""
     exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
-    return jwt.encode({"sub": user_id, "exp": exp}, JWT_SECRET, algorithm=JWT_ALG)
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "iss": "fuelpro-backend",      # Token issuer
+        "aud": "fuelpro-client",        # Intended audience
+        "exp": exp,
+        "iat": now,
+        "jti": new_id(),                # ← Unique token ID for revocation
+        "scope": "user",
+        **(extra_claims or {}),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
 def _strip_oid(d: dict) -> dict:
@@ -197,6 +253,12 @@ async def get_current_user(
     try:
         payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         uid = payload.get("sub")
+        jti = payload.get("jti")
+        
+        # CRITICAL: Check if token was revoked (user logged out)
+        if jti and await is_token_revoked(jti):
+            raise HTTPException(status_code=401, detail="Session ended. Please log in again.")
+            
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if not uid:
