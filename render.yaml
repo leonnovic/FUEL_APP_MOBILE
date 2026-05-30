@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: fuel-app-mobile
+    env: static
+    buildCommand: cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
