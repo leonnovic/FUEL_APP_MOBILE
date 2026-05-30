@@ -1,0 +1,54 @@
+### 1. Update `.env` (Critical!)
+Add these **required** new variables to your `backend/.env`:
+```bash
+JWT_SECRET=your-very-long-secret-key-at-least-32-characters-long
+FOUNDER_DEFAULT_PASSWORD=your-secure-founder-password
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=fuelpro
+MPESA_ENV=sandbox
+MPESA_CONSUMER_KEY=your_consumer_key
+MPESA_CONSUMER_SECRET=your_consumer_secret
+MPESA_PASSKEY=your_passkey
+MPESA_CALLBACK_BASE_URL=https://your-domain.com/api
+REDIS_URL=redis://localhost:6379/0
+```
+
+### 2. Install New Dependency
+```bash
+cd backend
+pip install pytz
+# Add to requirements.txt:
+echo "pytz>=2024.1" >> requirements.txt
+```
+
+### 3. Commit & Push
+```bash
+git add -A
+git commit -m "feat: Security overhaul + 3 new features + CI/CD
+
+SECURITY:
+- JWT secret validation (>=32 chars)
+- CSRF protection on all state-changing endpoints
+- Timing-attack-safe password reset
+- Ticket-based WebSocket auth (no JWT in query strings)
+- Input validation + XSS sanitization on sync data
+- Thread-safe Stripe singleton
+- Proper M-PESA timezone handling
+- Cursor-based pagination on all list endpoints
+
+FEATURES:
+- Inventory low-stock alerts (push/email/SMS/WhatsApp)
+- Shift management with cash/fuel reconciliation
+- Advanced analytics (KPIs, trends, forecasting, anomalies)
+
+INFRASTRUCTURE:
+- Multi-stage Dockerfile
+- Docker Compose with MongoDB + Redis + Nginx
+- GitHub Actions CI/CD for backend and frontend
+- 40+ comprehensive tests
+
+BREAKING: FOUNDER_DEFAULT_PASSWORD now required in env"
+git push origin main
+```
+
+---
