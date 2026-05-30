@@ -1,11 +1,10 @@
 /**
- * Lightweight FuelPro backend client.
- *
- * - Reads the API base from VITE_REACT_APP_BACKEND_URL or window.location.origin
- * - Stores the JWT in localStorage under `fuelpro_jwt`
- * - Auto-attaches Authorization header when a token is present
- * - Mirrors the local auth state with the backend so cloud sync works
- *   across devices without breaking the existing localStorage flow
+ * Enhanced Backend API Client
+ * - Robust error handling for all response types
+ * - Automatic retry on network failures
+ * - Proper timeout handling
+ * - User-friendly error messages
+ * - Cross-device compatibility
  */
 
 const RAW_BASE =
@@ -14,10 +13,14 @@ const RAW_BASE =
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
 const TOKEN_KEY = 'fuelpro_jwt';
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000; // Start at 1s, exponential backoff
+const TIMEOUT_MS = 30000; // 30 second timeout
 
 export function getToken(): string | null {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
+
 export function setToken(token: string | null): void {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
@@ -25,6 +28,104 @@ export function setToken(token: string | null): void {
   } catch { /* ignore */ }
 }
 
+/**
+ * Retry logic with exponential backoff
+ */
+async function retryFetch<T>(
+  path: string,
+  init: RequestInit,
+  retries = 0
+): Promise<T> {
+  try {
+    return await fetchWithTimeout<T>(path, init);
+  } catch (err: any) {
+    // Determine if error is retryable
+    const isRetryable = 
+      (err.name === 'AbortError') || // Timeout
+      (err instanceof TypeError) || // Network error
+      (err.status >= 500) || // Server error
+      (err.status === 408) || // Request timeout
+      (err.status === 429); // Rate limited
+    
+    if (isRetryable && retries < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS * Math.pow(2, retries); // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryFetch<T>(path, init, retries + 1);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetch with timeout
+ */
+async function fetchWithTimeout<T>(
+  path: string,
+  init: RequestInit
+): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+    
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    
+    // Handle error responses
+    if (!res.ok) {
+      let errorDetail = res.statusText;
+      
+      try {
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          errorDetail = data.detail || data.message || data.error || errorDetail;
+        } else if (contentType.includes('text/html')) {
+          // Server returned HTML (likely proxy/gateway error)
+          const text = await res.text();
+          if (text.includes('502') || text.includes('Bad Gateway')) {
+            errorDetail = 'Server temporarily unavailable. Please try again.';
+          } else if (text.includes('503') || text.includes('Service Unavailable')) {
+            errorDetail = 'Service is under maintenance. Please try again later.';
+          } else {
+            errorDetail = `Server error (HTTP ${res.status})`;
+          }
+        } else {
+          errorDetail = `HTTP ${res.status}: ${contentType || 'unknown response type'}`;
+        }
+      } catch {
+        errorDetail = `HTTP ${res.status}`;
+      }
+      
+      const error: any = new Error(errorDetail);
+      error.status = res.status;
+      throw error;
+    }
+    
+    // Parse successful response
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Expected JSON but got ${contentType || 'unknown content type'}`);
+    }
+    
+    return res.json() as Promise<T>;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    if (err instanceof TypeError) {
+      throw new Error('Network error. Please check your connection.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Main API fetch with auth and retry
+ */
 async function apiFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
@@ -34,33 +135,25 @@ async function apiFetch<T = unknown>(
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
   };
+  
   if (withAuth) {
     const t = getToken();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  const ct = (res.headers.get('content-type') || '').toLowerCase();
-  if (!res.ok) {
-    let detail: unknown = res.statusText;
-    if (ct.includes('application/json')) {
-      try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
-    } else {
-      // Proxy 404/502 returning the index HTML — surface a clean message.
-      let snippet = '';
-      try { snippet = (await res.text()).slice(0, 80); } catch { /* ignore */ }
-      detail = `Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`;
+  
+  try {
+    return await retryFetch<T>(path, { ...init, headers });
+  } catch (err: any) {
+    // Clear token on 401 (Unauthorized)
+    if (err.status === 401) {
+      setToken(null);
+      throw new Error('Your session has expired. Please log in again.');
     }
-    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    throw err;
   }
-  if (!ct.includes('application/json')) {
-    let snippet = '';
-    try { snippet = (await res.text()).slice(0, 80); } catch { /* ignore */ }
-    throw new Error(`Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`);
-  }
-  return res.json() as Promise<T>;
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+// ─── Auth ───────────────────────────────────────────────────────────
 export interface BackendUser {
   id: string;
   email: string;
@@ -90,12 +183,18 @@ export async function backendLogin(email: string, password: string): Promise<Bac
 export async function backendMe(): Promise<BackendUser | null> {
   if (!getToken()) return null;
   try { return await apiFetch<BackendUser>('/api/auth/me'); }
-  catch { setToken(null); return null; }
+  catch (err) {
+    // If auth check fails, clear token and return null
+    if (err instanceof Error && err.message.includes('session has expired')) {
+      setToken(null);
+    }
+    return null;
+  }
 }
 
 export function backendLogout(): void { setToken(null); }
 
-// ─── Subscriptions ────────────────────────────────────────────────────────────
+// ─── Subscriptions ────────────────────────────────────────────────────────
 export interface BackendPlan {
   key: string; name: string;
   price_usd: number; price_kes: number;
@@ -115,7 +214,7 @@ export async function fetchSubscription(): Promise<SubscriptionInfo> {
   return apiFetch<SubscriptionInfo>('/api/subscription');
 }
 
-// ─── Stripe Checkout ──────────────────────────────────────────────────────────
+// ─── Stripe Checkout ───────────────────────────────────────────────────────
 export async function startStripeCheckout(plan: string, billingCycle: 'monthly' | 'yearly' = 'monthly'): Promise<{ url: string; session_id: string }> {
   return apiFetch('/api/payments/stripe/checkout', {
     method: 'POST',
@@ -134,7 +233,7 @@ export async function pollStripeStatus(sessionId: string): Promise<StripeStatus>
   return apiFetch(`/api/payments/stripe/status/${sessionId}`);
 }
 
-// ─── M-PESA STK Push ──────────────────────────────────────────────────────────
+// ─── M-PESA STK Push ───────────────────────────────────────────────────────
 export interface MpesaPushResp {
   ok: boolean; tx_id: string; mocked?: boolean; message?: string;
   checkout_request_id?: string; merchant_request_id?: string;
@@ -154,7 +253,7 @@ export async function pollMpesaStatus(txId: string): Promise<MpesaStatus> {
   return apiFetch(`/api/mpesa/status/${txId}`);
 }
 
-// ─── Cloud sync ───────────────────────────────────────────────────────────────
+// ─── Cloud sync ─────────────────────────────────────────────────────────
 export async function syncGet<T = unknown>(collection: string): Promise<T[]> {
   const r = await apiFetch<{ items: T[] }>(`/api/sync/${collection}`);
   return r.items;
