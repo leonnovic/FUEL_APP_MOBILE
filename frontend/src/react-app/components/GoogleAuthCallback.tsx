@@ -1,113 +1,110 @@
 /**
  * GoogleAuthCallback
  *
- * After the Emergent Google OAuth flow completes, the user lands back on this
- * origin with a URL like  `https://app/#/...#session_id=<id>`. Because we use
- * HashRouter, the session_id ends up in the secondary `#` segment. This
- * component:
- *   1. Detects `session_id=` anywhere in `window.location.hash`
- *   2. Forwards it to `POST /api/auth/google`
- *   3. Stores the returned FuelPro JWT, syncs AuthContext, and routes to /
- *
- * Mounted near the top of App so it runs once per OAuth round-trip and is
- * idempotent thanks to a useRef latch (StrictMode-safe).
+ * Handles the OAuth callback after Google redirects back to /auth/callback?code=...
+ * This component:
+ *   1. Extracts the authorization code from URL
+ *   2. Exchanges it with the backend for a FuelPro JWT
+ *   3. Stores the token and syncs AuthContext
+ *   4. Redirects to the main app
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { setToken } from '@/react-app/lib/backendApi';
-import { fetchJson } from '@/react-app/lib/fetchJson';
-
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+import { exchangeGoogleCode } from '@/react-app/lib/googleAuthConfig';
 
 type Phase = 'idle' | 'exchanging' | 'success' | 'failed';
 
-function extractSessionId(): string | null {
-  const h = window.location.hash || '';
-  const idx = h.indexOf('session_id=');
-  if (idx < 0) return null;
-  const raw = h.substring(idx + 'session_id='.length);
-  return raw.split('&')[0] || null;
-}
-
-function cleanUrl() {
-  const url = new URL(window.location.href);
-  // Strip the entire hash to avoid replaying — App will repaint the right route.
-  url.hash = '';
-  window.history.replaceState({}, '', url.toString() + '#/');
-}
-
 export default function GoogleAuthCallback() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [phase, setPhase] = useState<Phase>('idle');
   const [message, setMessage] = useState<string>('');
   const ran = useRef(false);
 
   useEffect(() => {
     if (ran.current) return;
-    const sessionId = extractSessionId();
-    if (!sessionId) return;
+    
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+
+    if (error) {
+      ran.current = true;
+      setPhase('failed');
+      setMessage(errorDescription || error || 'Google sign-in was cancelled');
+      setTimeout(() => navigate('/'), 4000);
+      return;
+    }
+
+    if (!code) return;
     ran.current = true;
 
     (async () => {
       setPhase('exchanging');
       try {
-        const data = await fetchJson<{ token: string; user: { email: string; name: string } }>(
-          `${API_BASE}/api/auth/google`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sessionId }),
-          },
-        );
-
+        const data = await exchangeGoogleCode(code);
+        
+        // Store JWT token
         setToken(data.token);
 
-        // Mirror into the existing local AuthContext shape so the rest of the
-        // app treats Google users identically to email users.
+        // Mirror into the existing local AuthContext shape
         const localUser = {
-          id: `email_${data.user.email}`,
-          authId: `email_${data.user.email}`,
-          authMethod: 'email',
+          id: `google_${data.user.id}`,
+          authId: `google_${data.user.id}`,
+          authMethod: 'google',
           email: data.user.email,
           name: data.user.name,
         };
         localStorage.setItem('fuelpro_user_v3', JSON.stringify(localUser));
+        localStorage.setItem('fuelpro_auth_identity', JSON.stringify(localUser));
 
-        // Ensure a local-mirror user record exists so offline login keeps working.
-        const users = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
-        if (!Object.values(users).find((u: { email?: string }) => u.email === data.user.email)) {
+        // Store in email users cache for offline support
+        try {
+          const users = JSON.parse(localStorage.getItem('fuelpro_email_users') || '{}');
           const uid = `user_${Date.now()}`;
-          users[uid] = {
-            id: uid, email: data.user.email, password: '',
-            name: data.user.name, createdAt: new Date().toISOString(),
-            authMethod: 'google',
-          };
-          localStorage.setItem('fuelpro_email_users', JSON.stringify(users));
-        }
+          if (!Object.values(users).find((u: any) => u.email === data.user.email)) {
+            users[uid] = {
+              id: uid,
+              email: data.user.email,
+              password: '',
+              name: data.user.name,
+              createdAt: new Date().toISOString(),
+              authMethod: 'google',
+            };
+            localStorage.setItem('fuelpro_email_users', JSON.stringify(users));
+          }
+        } catch { /* non-fatal */ }
 
         setPhase('success');
         setMessage(`Welcome ${data.user.name || data.user.email}`);
-        // Stitch anonymous activity into the now-authenticated profile
+        
+        // Stitch anonymous activity into the authenticated profile
         try {
           const { linkAnonymousToUser } = await import('@/react-app/lib/identity');
           await linkAnonymousToUser(data.token);
         } catch { /* non-fatal */ }
-        cleanUrl();
-        setTimeout(() => { window.location.reload(); }, 800);
+
+        setTimeout(() => {
+          navigate('/');
+          window.location.reload();
+        }, 800);
       } catch (e: unknown) {
         setPhase('failed');
         setMessage(e instanceof Error ? e.message : 'Sign-in failed');
-        setTimeout(cleanUrl, 4000);
+        setTimeout(() => navigate('/'), 4000);
       }
     })();
-  }, []);
+  }, [searchParams, navigate]);
 
   if (phase === 'idle') return null;
 
   const colors: Record<Phase, { bg: string; border: string; text: string; Icon: typeof Loader2 }> = {
-    idle:       { bg: '',                  border: '',                 text: '',          Icon: Loader2 },
-    exchanging: { bg: 'rgba(99,91,255,.15)',  border: '#635bff', text: '#a5a3ff', Icon: Loader2 },
-    success:    { bg: 'rgba(16,185,129,.18)', border: '#10b981', text: '#6ee7b7', Icon: CheckCircle2 },
-    failed:     { bg: 'rgba(239,68,68,.18)',  border: '#ef4444', text: '#fca5a5', Icon: XCircle },
+    idle:       { bg: '',                          border: '',          text: '',            Icon: Loader2 },
+    exchanging: { bg: 'rgba(99,91,255,.15)',       border: '#635bff',   text: '#a5a3ff',     Icon: Loader2 },
+    success:    { bg: 'rgba(16,185,129,.18)',      border: '#10b981',   text: '#6ee7b7',     Icon: CheckCircle2 },
+    failed:     { bg: 'rgba(239,68,68,.18)',       border: '#ef4444',   text: '#fca5a5',     Icon: XCircle },
   };
   const c = colors[phase];
   const Icon = c.Icon;
