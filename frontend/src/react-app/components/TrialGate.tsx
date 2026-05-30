@@ -3,6 +3,7 @@ import { Clock, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import Paywall from './Paywall';
 import { getSubscription } from '@/react-app/lib/subscriptionStore';
+import { checkSubscription as checkLibSubscription } from '@/react-app/lib/subscription';
 import { useTrial, markTrialPaid } from '@/react-app/hooks/useTrial';
 
 // Re-export for backward compatibility with any other files that import from here
@@ -17,12 +18,13 @@ export default function TrialGate({ children }: TrialGateProps) {
   const [showPaywall, setShowPaywall] = useState(false);
   const navigate = useNavigate();
 
-  // Check paid subscription from subscriptionStore (handles M-PESA / Stripe upgrades)
+  // Check paid subscription — checks BOTH storage engines so any payment path unlocks the gate
   useEffect(() => {
-    const sub = getSubscription();
-    if (sub.status === 'active') { setShowPaywall(false); return; }
-    // Only force paywall when trial has expired and no active paid sub
-    if (isExpired && sub.status !== 'active') setShowPaywall(true);
+    const storeSub = getSubscription();        // subscriptionStore → fuelpro_subscription_v1
+    const libCheck = checkLibSubscription();   // lib/subscription   → fuelpro_subscription
+    const isActivePaid = storeSub.status === 'active' || libCheck.access;
+    if (isActivePaid) { setShowPaywall(false); return; }
+    if (isExpired && !isActivePaid) setShowPaywall(true);
   }, [isExpired]);
 
   // Show banner only in last 3 days of trial (72h) to avoid annoying users with ample time left
@@ -30,8 +32,10 @@ export default function TrialGate({ children }: TrialGateProps) {
   const shouldShowBanner = !showPaywall && (isPaid || (isInTrial && totalSeconds <= THREE_DAYS_SECONDS));
 
   const handlePaywallClose = () => {
-    const sub = getSubscription();
-    if (sub.status === 'active' || sub.status === 'trial') {
+    const storeSub = getSubscription();
+    const libCheck = checkLibSubscription();
+    const isActive = storeSub.status === 'active' || storeSub.status === 'trial' || libCheck.access;
+    if (isActive) {
       setShowPaywall(false);
       window.location.reload();
     } else {

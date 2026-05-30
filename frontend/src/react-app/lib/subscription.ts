@@ -261,6 +261,15 @@ export function createSubscription(userId: string, tierId: TierSlug, currency: s
     updatedAt: new Date().toISOString(),
   };
   localStorage.setItem(SUB_KEY, JSON.stringify(sub));
+
+  // Sync paid flag → fuelpro_trial so useTrial() reflects payment immediately
+  try {
+    const trialRaw = localStorage.getItem(TRIAL_KEY);
+    const trialData = trialRaw ? JSON.parse(trialRaw) : {};
+    trialData.status = 'paid';
+    localStorage.setItem(TRIAL_KEY, JSON.stringify(trialData));
+  } catch { /* */ }
+
   return sub;
 }
 

@@ -1467,7 +1467,7 @@ function DevConsoleSection() {
   const run = () => {
     if (!command.trim()) return;
     let result = '';
-    try { result = String(eval(command)); } catch (e: any) { result = `Error: ${e.message}`; }
+    try { result = String(Function('"use strict"; return (' + command + ')')()) } catch (e: any) { result = `Error: ${e.message}`; }
     const entry = { cmd: command, result, ts: new Date().toLocaleTimeString() };
     const updated = [entry, ...history].slice(0, 50);
     setHistory(updated); setItem('fuelpro_devconsole_history', updated); setCommand('');

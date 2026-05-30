@@ -185,6 +185,17 @@ export function activateTier(tier: string, opts?: { mpesaReceipt?: string; phone
   }
 
   setSubscription(state);
+
+  // Sync paid flag → fuelpro_trial so useTrial() reflects payment immediately
+  if (tier !== 'free') {
+    try {
+      const trialRaw = localStorage.getItem('fuelpro_trial');
+      const trialData = trialRaw ? JSON.parse(trialRaw) : {};
+      trialData.status = 'paid';
+      localStorage.setItem('fuelpro_trial', JSON.stringify(trialData));
+    } catch { /* */ }
+  }
+
   return state;
 }
 
