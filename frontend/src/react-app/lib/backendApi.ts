@@ -25,7 +25,7 @@ export function setToken(token: string | null): void {
   } catch { /* ignore */ }
 }
 
-async function apiFetch<T = unknown>(
+export async function apiFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
   withAuth = true,
