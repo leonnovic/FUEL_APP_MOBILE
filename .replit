@@ -1,0 +1,16 @@
+modules = ["nodejs-20", "python-3.12", "web"]
+[agent]
+expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+APP_ENV = "development"
+DB_NAME = "fuelpro"
+MPESA_ENV = "sandbox"
+DIGEST_ENABLED = "0"
+WATCHDOG_ENABLED = "0"

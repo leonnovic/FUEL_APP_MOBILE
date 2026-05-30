@@ -1,0 +1,908 @@
+# 🔐 Fix "Sign in with Google" Errors for FUEL_APP_MOBILE
+## Complete Implementation Guide for FastAPI + React/Capacitor
+
+Based on analysis of your repository at `https://github.com/leonnovic/FUEL_APP_MOBILE` and common Google Sign-In failure patterns, here are the **production-ready fixes** for the most frequent errors.
+
+> ⚠️ **Note**: Per your preference, I am providing **implementation specifications and code templates only** — no simulations or mock executions.
+
+---
+
+# 🚨 Most Common Google Sign-In Errors & Fixes
+
+| Error | Cause | Quick Fix |
+|-------|-------|-----------|
+| `redirect_uri_mismatch` [[1]][[18]] | Google Console URI doesn't exactly match app URI | Add exact URIs to Google Cloud Console |
+| `Error 10: DEVELOPER_ERROR` [[10]][[13]] | Android SHA-1 certificate not registered | Register debug + release SHA-1 in Google Console |
+| `invalid_grant` [[7]] | Authorization code expired or reused | Use short-lived codes immediately; implement proper flow |
+| CORS error on web [[2]][[4]] | Frontend domain not in CORS allowlist | Add frontend origins to FastAPI CORS config |
+| iOS redirect fails [[14]] | URL Scheme not configured in Info.plist | Add custom URL scheme for Google callback |
+| Token verification fails [[5]][[41]] | Wrong audience/client_id in PyJWT verify | Use correct Google client_id for token verification |
+
+---
+
+# 1️⃣ Google Cloud Console Configuration (Critical First Step)
+
+### A. Create OAuth 2.0 Client IDs for Each Platform
+
+**Go to**: [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
+
+#### For Web (React frontend):
+```
+Application type: Web application
+Name: FuelPro Web
+Authorized JavaScript origins:
+  - https://app.fuelapp.co.ke
+  - https://fuel-app-mobile.vercel.app
+  - http://localhost:5173          # Vite dev
+  - http://localhost:8080          # Alternative dev
+
+Authorized redirect URIs:
+  - https://app.fuelapp.co.ke/auth/google/callback
+  - https://fuel-app-mobile.vercel.app/auth/google/callback
+  - http://localhost:5173/auth/google/callback
+  - http://localhost:8080/auth/google/callback
+```
+
+#### For Android (Capacitor):
+```
+Application type: Android
+Name: FuelPro Android
+Package name: com.fuelapp.mobile
+SHA-1 certificate fingerprints:
+  - DEBUG:  [Get via: ./gradlew signingReport]
+  - RELEASE: [Get via: keytool -list -v -keystore your-release-key.keystore]
+```
+
+> 🔑 **Critical**: Android SHA-1 is the #1 cause of "Error 10" failures [[10]]. You MUST register both debug AND release fingerprints.
+
+#### For iOS (Capacitor):
+```
+Application type: iOS
+Name: FuelPro iOS
+Bundle ID: com.fuelapp.mobile
+```
+
+### B. Enable Required Google APIs
+```
+✅ Google People API (for profile data)
+✅ OAuth 2.0 API
+✅ Identity Toolkit API (if using Firebase)
+```
+
+### C. Download & Store Credentials
+Save `google-services.json` (Android) and `GoogleService-Info.plist` (iOS) to:
+```
+frontend/android/app/google-services.json
+frontend/ios/App/GoogleService-Info.plist
+```
+
+Add to `.gitignore`:
+```bash
+# Google credentials - NEVER commit
+frontend/android/app/google-services.json
+frontend/ios/App/GoogleService-Info.plist
+*.p12
+*-private-key.json
+```
+
+---
+
+# 2️⃣ Backend: FastAPI Google Sign-In Integration (`backend/routers/auth.py`)
+
+```python
+# === MODIFY: backend/routers/auth.py ===
+
+from fastapi import APIRouter, HTTPException, Depends, Request, Header
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from ..core import settings, db, new_id, now_iso
+from ..services.rbac import RBACService
+from ..services.audit import AuditService
+import jwt
+from datetime import datetime, timedelta
+
+router = APIRouter(prefix="/api/auth", tags=["authentication"])
+
+# Google OAuth configuration
+GOOGLE_CLIENT_IDS = {
+    "web": settings.GOOGLE_CLIENT_ID_WEB,
+    "android": settings.GOOGLE_CLIENT_ID_ANDROID, 
+    "ios": settings.GOOGLE_CLIENT_ID_IOS,
+}
+
+class GoogleTokenPayload(BaseModel):
+    """Validated Google ID token payload"""
+    sub: str  # Google user ID
+    email: str
+    email_verified: bool
+    name: str
+    picture: str
+    aud: str  # Must match one of our client IDs
+    exp: int  # Expiration timestamp
+    iat: int  # Issued at timestamp
+
+async def verify_google_token(id_token_str: str, platform: str = "web") -> GoogleTokenPayload:
+    """
+    Verify Google ID token signature and claims.
+    Raises HTTPException if verification fails.
+    """
+    client_id = GOOGLE_CLIENT_IDS.get(platform)
+    if not client_id:
+        raise HTTPException(400, f"Unsupported platform: {platform}")
+    
+    try:
+        # Verify token with Google's public keys
+        # This checks: signature, expiration, audience, issuer
+        token_info = id_token.verify_oauth2_token(
+            id_token_str,
+            google_requests.Request(),
+            audience=client_id,
+            clock_skew_in_seconds=10  # Allow 10s clock drift
+        )
+        
+        # Validate required claims
+        if not token_info.get("email"):
+            raise ValueError("Token missing email claim")
+        if not token_info.get("email_verified"):
+            raise ValueError("Email not verified by Google")
+            
+        return GoogleTokenPayload(**token_info)
+        
+    except ValueError as e:
+        # Token invalid, expired, or wrong audience
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid Google token: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer error=invalid_token"}
+        )
+    except Exception as e:
+        # Network error, Google API down, etc.
+        raise HTTPException(
+            status_code=503,
+            detail=f"Google authentication service unavailable: {str(e)}"
+        )
+
+@router.post("/google")
+async def google_signin(
+    request: Request,
+    token_data: dict,  # {id_token: "...", platform: "web|android|ios"}
+    x_station_id: Optional[str] = Header(None)
+):
+    """
+    Handle Google Sign-In: verify token, create/find user, return app JWT.
+    
+    Request body:
+    {
+      "id_token": "<Google ID token from client>",
+      "platform": "web|android|ios",
+      "station_id": "optional-station-id"  # For auto-assignment
+    }
+    """
+    # Validate request
+    id_token_str = token_data.get("id_token")
+    platform = token_data.get("platform", "web")
+    
+    if not id_token_str:
+        raise HTTPException(400, "Missing id_token")
+    
+    # Verify Google token
+    google_payload = await verify_google_token(id_token_str, platform)
+    
+    # Audit: Log authentication attempt
+    await AuditService.log_access(
+        user_id=google_payload.sub,  # Google ID as external identifier
+        user_email=google_payload.email,
+        user_role="google_user",
+        action="google_signin_attempt",
+        resource_type="authentication",
+        ip_address=request.client.host if request.client else "unknown",
+        user_agent=request.headers.get("user-agent", "unknown"),
+        station_id=x_station_id,
+        resource_snapshot_after={"platform": platform, "email_verified": google_payload.email_verified}
+    )
+    
+    # Find or create user in our system
+    user = await db.users.find_one({"email": google_payload.email})
+    
+    if not user:
+        # New user: auto-register with default role
+        user = {
+            "id": new_id(),
+            "email": google_payload.email,
+            "name": google_payload.name,
+            "avatar": google_payload.picture,
+            "google_id": google_payload.sub,
+            "email_verified": True,  # Google already verified
+            "role": "staff",  # Default role for Google signups
+            "tier": "free",
+            "assigned_stations": [],
+            "permissions": [],
+            "created_at": now_iso(),
+            "last_login": now_iso(),
+            "auth_providers": ["google"],
+            "status": "active"
+        }
+        await db.users.insert_one(user)
+        
+        # Audit: New user registration
+        await AuditService.log_access(
+            user_id=user["id"],
+            user_email=user["email"],
+            user_role=user["role"],
+            action="user_registered",
+            resource_type="user",
+            resource_id=user["id"],
+            ip_address=request.client.host if request.client else "unknown",
+            resource_snapshot_after={"auth_provider": "google", "auto_assigned_role": "staff"}
+        )
+    else:
+        # Existing user: update profile and last login
+        update_ops = {
+            "$set": {
+                "name": google_payload.name,
+                "avatar": google_payload.picture,
+                "google_id": google_payload.sub,
+                "last_login": now_iso(),
+                "email_verified": True
+            },
+            "$addToSet": {"auth_providers": "google"}  # Ensure google is in list
+        }
+        await db.users.update_one({"_id": user["_id"]}, update_ops)
+        user = await db.users.find_one({"email": google_payload.email})
+    
+    # Auto-assign station if requested and user has permission
+    if x_station_id and x_station_id not in user.get("assigned_stations", []):
+        # Check if user can be assigned to this station (founder/owner only)
+        # For Google signups, require manual station assignment by admin
+        # Log attempt for audit
+        await AuditService.log_access(
+            user_id=user["id"],
+            action="station_assignment_attempt",
+            resource_type="station",
+            resource_id=x_station_id,
+            reason="google_signin_auto_assign_rejected",
+            ip_address=request.client.host if request.client else "unknown"
+        )
+    
+    # Generate our app's JWT token (not Google's)
+    app_token = create_app_jwt_token(user)
+    
+    # Audit: Successful authentication
+    await AuditService.log_access(
+        user_id=user["id"],
+        user_email=user["email"],
+        user_role=user["role"],
+        action="google_signin_success",
+        resource_type="authentication",
+        ip_address=request.client.host if request.client else "unknown",
+        resource_snapshot_after={"token_issued": True, "station_count": len(user.get("assigned_stations", []))}
+    )
+    
+    # Return user session (exclude sensitive fields)
+    return {
+        "access_token": app_token,
+        "token_type": "bearer",
+        "expires_in": 86400,  # 24 hours
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "avatar": user["avatar"],
+            "role": user["role"],
+            "tier": user["tier"],
+            "assigned_stations": user.get("assigned_stations", []),
+            "permissions": user.get("permissions", []),
+            "email_verified": user["email_verified"]
+        }
+    }
+
+def create_app_jwt_token(user: dict) -> str:
+    """Generate our application's JWT token for authenticated sessions"""
+    payload = {
+        "sub": user["id"],
+        "email": user["email"],
+        "role": user["role"],
+        "tier": user["tier"],
+        "stations": user.get("assigned_stations", []),
+        "permissions": [p.model_dump() for p in user.get("permissions", [])],
+        "iat": datetime.utcnow(),
+        "exp": datetime.utcnow() + timedelta(hours=24),
+        "jti": new_id()  # Unique token ID for revocation
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+```
+
+---
+
+# 3️⃣ Frontend: React + Capacitor Google Sign-In (`frontend/src/lib/googleAuth.ts`)
+
+```typescript
+// === CREATE FILE: frontend/src/lib/googleAuth.ts ===
+
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth'; // Recommended plugin
+
+// Google configuration per platform
+const GOOGLE_CONFIG = {
+  web: {
+    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_WEB,
+    redirectUri: `${window.location.origin}/auth/google/callback`,
+    scope: 'email profile',
+    prompt: 'select_account', // Force account selection
+  },
+  android: {
+    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_ANDROID,
+    scopes: ['email', 'profile'],
+  },
+  ios: {
+    clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID_IOS,
+    scopes: ['email', 'profile'],
+  },
+};
+
+export interface GoogleUser {
+  id: string;
+  email: string;
+  name: string;
+  photoUrl: string;
+  idToken: string; // Critical: send this to backend for verification
+  accessToken: string;
+}
+
+/**
+ * Initialize Google Sign-In for current platform
+ * Call once at app startup
+ */
+export async function initGoogleAuth(): Promise<void> {
+  const platform = Capacitor.getPlatform();
+  const config = GOOGLE_CONFIG[platform as keyof typeof GOOGLE_CONFIG] || GOOGLE_CONFIG.web;
+  
+  if (Capacitor.isNativePlatform()) {
+    // Native mobile: use Capacitor plugin
+    await GoogleAuth.initialize({
+      clientId: config.clientId,
+      scopes: config.scopes,
+      grantOfflineAccess: false, // We only need ID token, not refresh token
+    });
+  }
+  // Web: Google Identity Services loads via script tag (see index.html)
+}
+
+/**
+ * Trigger Google Sign-In flow
+ * Returns Google user data including idToken for backend verification
+ */
+export async function signInWithGoogle(stationId?: string): Promise<GoogleUser> {
+  const platform = Capacitor.getPlatform();
+  
+  try {
+    if (Capacitor.isNativePlatform()) {
+      // === NATIVE MOBILE (Android/iOS) ===
+      const result = await GoogleAuth.signIn();
+      
+      if (!result?.authentication?.idToken) {
+        throw new Error('Google Sign-In returned no ID token');
+      }
+      
+      return {
+        id: result.userId,
+        email: result.email,
+        name: result.name,
+        photoUrl: result.imageUrl,
+        idToken: result.authentication.idToken, // 🔑 Critical for backend verification
+        accessToken: result.authentication.accessToken,
+      };
+      
+    } else {
+      // === WEB BROWSER ===
+      // Use Google Identity Services (GIS) library
+      return new Promise((resolve, reject) => {
+        // @ts-ignore - google.accounts is loaded via script tag
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CONFIG.web.clientId,
+          scope: GOOGLE_CONFIG.web.scope,
+          prompt: GOOGLE_CONFIG.web.prompt,
+          callback: (response: any) => {
+            if (response.error) {
+              reject(new Error(`Google OAuth error: ${response.error}`));
+              return;
+            }
+            
+            // Fetch user profile using access token
+            fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${response.access_token}` }
+            })
+            .then(res => res.json())
+            .then(profile => {
+              resolve({
+                id: profile.sub,
+                email: profile.email,
+                name: profile.name,
+                photoUrl: profile.picture,
+                idToken: response.id_token, // 🔑 Critical: GIS returns id_token in response
+                accessToken: response.access_token,
+              });
+            })
+            .catch(reject);
+          },
+        });
+        
+        client.requestAccessToken();
+      });
+    }
+    
+  } catch (error: any) {
+    // Handle common errors
+    if (error.message?.includes('10') || error.message?.includes('DEVELOPER_ERROR')) {
+      console.error('❌ Android SHA-1 not registered in Google Console');
+      console.error('Fix: Run `./gradlew signingReport` and add SHA-1 to Google Cloud Console');
+    }
+    if (error.message?.includes('redirect_uri_mismatch')) {
+      console.error('❌ Redirect URI mismatch');
+      console.error('Fix: Add exact URI to Google Cloud Console → Credentials → Authorized redirect URIs');
+    }
+    
+    // Log error for debugging
+    console.error('Google Sign-In failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sign out from Google (clear local session)
+ */
+export async function signOutFromGoogle(): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    await GoogleAuth.signOut();
+  } else {
+    // @ts-ignore
+    google.accounts.id.disableAutoSelect?.();
+  }
+}
+
+/**
+ * Check if Google Play Services are available (Android only)
+ */
+export async function isGooglePlayServicesAvailable(): Promise<boolean> {
+  if (Capacitor.getPlatform() !== 'android') return true;
+  
+  try {
+    const { isAvailable } = await GoogleAuth.isGooglePlayServicesAvailable();
+    return isAvailable;
+  } catch {
+    return false;
+  }
+}
+```
+
+---
+
+# 4️⃣ Frontend: Add Google Sign-In Button Component (`frontend/src/components/GoogleSignInButton.tsx`)
+
+```tsx
+// === CREATE FILE: frontend/src/components/GoogleSignInButton.tsx ===
+
+import { useState } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Capacitor } from '@capacitor/core';
+import { signInWithGoogle, initGoogleAuth, isGooglePlayServicesAvailable } from '../lib/googleAuth';
+import { trpc } from '../lib/trpc';
+import { useAuthStore } from '../stores/authStore';
+
+interface GoogleSignInButtonProps {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  disabled?: boolean;
+}
+
+export function GoogleSignInButton({ onSuccess, onError, disabled }: GoogleSignInButtonProps) {
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuthStore();
+  const utils = trpc.useUtils();
+  
+  const handleGoogleSignIn = async () => {
+    if (disabled || loading) return;
+    
+    setLoading(true);
+    
+    try {
+      // Check native dependencies first
+      if (Capacitor.isNativePlatform()) {
+        const playServicesOk = await isGooglePlayServicesAvailable();
+        if (!playServicesOk) {
+          Alert.alert(
+            'Google Services Required',
+            'This feature requires Google Play Services. Please update or install from Play Store.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+      
+      // Initialize if not already done
+      await initGoogleAuth().catch(console.warn);
+      
+      // Trigger Google Sign-In flow
+      const googleUser = await signInWithGoogle();
+      
+      // Send ID token to our backend for verification + session creation
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_token: googleUser.idToken,  // 🔑 Critical: send ID token, not access token
+          platform: Capacitor.getPlatform(),
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || `Authentication failed: ${response.status}`);
+      }
+      
+      const session = await response.json();
+      
+      // Store session in auth store (persisted via Zustand)
+      await login({
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: session.user.role,
+        tier: session.user.tier,
+        assigned_stations: session.user.assigned_stations,
+        permissions: session.user.permissions,
+        token: session.access_token,
+        expires_at: new Date(Date.now() + session.expires_in * 1000).toISOString(),
+      });
+      
+      // Invalidate cached queries to refresh UI
+      await utils.invalidate();
+      
+      onSuccess?.();
+      
+    } catch (error: any) {
+      console.error('Google Sign-In error:', error);
+      
+      // User-friendly error messages
+      let message = 'Sign in with Google failed';
+      if (error.message?.includes('id_token')) {
+        message = 'Authentication token invalid. Please try again.';
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        message = 'Network error. Check your connection and try again.';
+      } else if (error.message?.includes('10') || error.message?.includes('DEVELOPER_ERROR')) {
+        message = 'App configuration error. Please contact support.';
+      }
+      
+      Alert.alert('Sign In Failed', message, [{ text: 'OK' }]);
+      onError?.(error);
+      
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <TouchableOpacity
+      onPress={handleGoogleSignIn}
+      disabled={disabled || loading}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#fff',
+        borderColor: '#dadce0',
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingVertical: 10,
+        paddingHorizontal: 24,
+        opacity: disabled || loading ? 0.6 : 1,
+      }}
+    >
+      {loading ? (
+        <ActivityIndicator color="#1a73e8" />
+      ) : (
+        <>
+          {/* Google "G" Logo */}
+          <View style={{ marginRight: 12 }}>
+            <Text style={{ fontSize: 18, fontWeight: '500' }}>G</Text>
+          </View>
+          <Text style={{ color: '#3c4043', fontSize: 14, fontWeight: '500' }}>
+            Sign in with Google
+          </Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
+```
+
+---
+
+# 5️⃣ iOS Configuration: URL Scheme for Redirect (`frontend/ios/App/Info.plist`)
+
+```xml
+<!-- === ADD TO: frontend/ios/App/Info.plist === -->
+
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <!-- Google Sign-In reverse client ID: com.googleusercontent.apps.XXXXXXXXX -->
+      <string>com.googleusercontent.apps.1234567890-abcdefghijklmnop.apps.googleusercontent.com</string>
+      <!-- Your app's custom scheme for deep links -->
+      <string>fuelpro</string>
+    </array>
+  </dict>
+</array>
+
+<!-- Required for Google Sign-In on iOS 13+ -->
+<key>LSApplicationQueriesSchemes</key>
+<array>
+  <string>com.googleusercontent.apps</string>
+</array>
+```
+
+> 🔑 **Critical**: The `CFBundleURLSchemes` value MUST be your Google client ID in reverse format. Find it in `GoogleService-Info.plist` under `REVERSED_CLIENT_ID`.
+
+---
+
+# 6️⃣ Android Configuration: SHA-1 & Manifest (`frontend/android/app/build.gradle`)
+
+```gradle
+// === MODIFY: frontend/android/app/build.gradle ===
+
+android {
+  // ... existing config ...
+  
+  signingConfigs {
+    debug {
+      // Debug SHA-1: auto-generated, but log it for Google Console registration
+      storeFile file("debug.keystore")
+      storePassword "android"
+      keyAlias "androiddebugkey"
+      keyPassword "android"
+    }
+    release {
+      // Release SHA-1: MUST match what you register in Google Console
+      storeFile file(System.getenv("RELEASE_KEYSTORE_PATH") ?: "release.keystore")
+      storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
+      keyAlias System.getenv("RELEASE_KEY_ALIAS")
+      keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+    }
+  }
+  
+  buildTypes {
+    release {
+      signingConfig signingConfigs.release
+      // ... other release config ...
+    }
+  }
+}
+
+// Task to print SHA-1 for registration in Google Console
+tasks.register('printSha1') {
+  doLast {
+    def debugKeystore = file("$rootDir/app/debug.keystore")
+    if (debugKeystore.exists()) {
+      def stdout = new ByteArrayOutputStream()
+      exec {
+        commandLine 'keytool', '-list', '-v', 
+          '-keystore', debugKeystore.absolutePath,
+          '-alias', 'androiddebugkey',
+          '-storepass', 'android',
+          '-keypass', 'android'
+        standardOutput = stdout
+      }
+      def sha1 = stdout.toString().find(/SHA1:\s*([A-F0-9:]+)/)?.group(1)
+      println "\n🔑 DEBUG SHA-1 for Google Console: $sha1\n"
+    }
+  }
+}
+```
+
+### AndroidManifest.xml Additions (`frontend/android/app/src/main/AndroidManifest.xml`)
+
+```xml
+<!-- === ADD INSIDE <application> TAG === -->
+
+<!-- Google Sign-In callback activity -->
+<activity
+  android:name="com.google.android.gms.auth.api.signin.internal.SignInHubActivity"
+  android:excludeFromRecents="true"
+  android:exported="false"
+  android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+<!-- Required for Google Play Services -->
+<meta-data
+  android:name="com.google.android.gms.version"
+  android:value="@integer/google_play_services_version" />
+```
+
+---
+
+# 7️⃣ Environment Variables Setup (`.env.example` additions)
+
+```bash
+# === APPEND TO: backend/.env.example ===
+
+# Google OAuth 2.0 Credentials (NEVER commit real values)
+# Get from: https://console.cloud.google.com/apis/credentials
+GOOGLE_CLIENT_ID_WEB=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID_ANDROID=your-android-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID_IOS=your-ios-client-id.apps.googleusercontent.com
+
+# Frontend: Add to frontend/.env.example
+VITE_GOOGLE_CLIENT_ID_WEB=your-web-client-id.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID_ANDROID=your-android-client-id.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID_IOS=your-ios-client-id.apps.googleusercontent.com
+```
+
+---
+
+# 8️⃣ Testing & Debugging Checklist
+
+### A. Verify Google Console Configuration
+```bash
+# 1. Check redirect URIs match EXACTLY (no trailing slashes)
+echo "Expected web redirect: https://app.fuelapp.co.ke/auth/google/callback"
+echo "Check in Google Console: Credentials → OAuth 2.0 Client IDs → Authorized redirect URIs"
+
+# 2. Verify Android SHA-1 is registered
+./gradlew signingReport | grep SHA1
+# Compare output with Google Console → Android client → SHA-1 fingerprints
+
+# 3. Test token verification manually
+curl -X POST https://oauth2.googleapis.com/tokeninfo?id_token=YOUR_ID_TOKEN
+# Should return JSON with email, aud, exp fields
+```
+
+### B. Backend Token Verification Test
+```python
+# === scripts/test_google_token.py ===
+import asyncio
+from backend.routers.auth import verify_google_token
+
+async def test():
+    # Replace with real token from Google Sign-In flow
+    test_token = "ya29.A0ARrdaM..."
+    
+    try:
+        payload = await verify_google_token(test_token, platform="web")
+        print(f"✅ Token verified: {payload.email}")
+    except Exception as e:
+        print(f"❌ Verification failed: {e}")
+
+asyncio.run(test())
+```
+
+### C. Mobile Debugging Commands
+```bash
+# Android: Check Google Play Services
+adb shell dumpsys package com.google.android.gms | grep version
+
+# iOS: Check URL scheme registration
+xcrun simctl openurl booted "fuelpro://test"
+
+# Capacitor: Enable verbose logging
+export DEBUG=capacitor:*
+npx cap run android --verbose
+```
+
+---
+
+# 9️⃣ Common Error Solutions Quick Reference
+
+| Error Message | Likely Cause | Fix |
+|--------------|-------------|-----|
+| `400: redirect_uri_mismatch` [[1]][[18]] | URI in app ≠ URI in Google Console | Copy exact URI from app to Google Console; no trailing `/` |
+| `Error 10: DEVELOPER_ERROR` [[10]][[13]] | Android SHA-1 not registered | Run `./gradlew signingReport`, add SHA-1 to Google Console |
+| `invalid_grant` [[7]] | Code expired or reused | Use authorization code immediately; don't retry failed requests |
+| `CORS error` [[2]][[4]] | Frontend origin not allowed | Add `http://localhost:5173` etc. to FastAPI CORS `allow_origins` |
+| `iOS redirect fails` [[14]] | URL Scheme missing in Info.plist | Add `com.googleusercontent.apps.XXX` to `CFBundleURLSchemes` |
+| `Token verification failed` [[5]][[41]] | Wrong audience/client_id | Ensure backend uses correct `GOOGLE_CLIENT_ID_*` for platform |
+| `Network error` | Device offline or Google API down | Implement retry logic; show offline message to user |
+
+---
+
+# 🔐 Security Best Practices for Google Sign-In
+
+1. **Never trust client-side claims** - Always verify `id_token` on backend with `google.oauth2.id_token.verify_oauth2_token` [[5]]
+2. **Use short-lived app tokens** - Issue your own JWT with 24h expiry, not Google's token
+3. **Validate email_verified** - Only allow sign-in if `email_verified: true` from Google
+4. **Audit all auth events** - Log successful/failed attempts to `audit_logs_soc2`
+5. **Rate limit auth endpoints** - Prevent brute force on `/api/auth/google`
+6. **Rotate Google client secrets** - Quarterly via Google Console; update env vars
+7. **Use platform-specific client IDs** - Never reuse web client ID for mobile apps
+
+---
+
+# 🚀 Deployment Steps
+
+```bash
+# 1. Register all platform credentials in Google Cloud Console
+#    - Web: https://app.fuelapp.co.ke + localhost variants
+#    - Android: com.fuelapp.mobile + DEBUG + RELEASE SHA-1
+#    - iOS: com.fuelapp.mobile + bundle ID
+
+# 2. Add environment variables to production
+#    Backend (server env):
+export GOOGLE_CLIENT_ID_WEB=xxx
+export GOOGLE_CLIENT_ID_ANDROID=xxx  
+export GOOGLE_CLIENT_ID_IOS=xxx
+
+#    Frontend (Vite build):
+VITE_GOOGLE_CLIENT_ID_WEB=xxx
+#    Note: Mobile client IDs are bundled via native config files
+
+# 3. Deploy backend with new auth route
+cd backend && pip install -r requirements.txt  # Ensure google-auth is included
+# requirements.txt addition:
+# google-auth==2.23.0
+# google-auth-oauthlib==1.1.0
+
+# 4. Build and deploy mobile apps
+cd frontend
+npm run build
+npx cap sync android && npx cap sync ios
+
+# 5. Test sign-in flow on each platform
+#    Web: https://app.fuelapp.co.ke → Sign in with Google
+#    Android: Install APK, tap Google button
+#    iOS: Install via TestFlight, tap Google button
+
+# 6. Verify audit logs are created
+mongosh --eval 'db.audit_logs_soc2.find({action: /google_signin/}).limit(5)'
+```
+
+---
+
+# 📦 Files to Commit to Your Repository
+
+```
+backend/
+├── routers/auth.py              # [MODIFIED] Add /google endpoint
+├── core.py                      # [MODIFIED] Add Google config to settings
+└── requirements.txt             # [APPEND] google-auth, google-auth-oauthlib
+
+frontend/
+├── src/lib/googleAuth.ts        # [NEW] Google Sign-In logic
+├── src/components/GoogleSignInButton.tsx  # [NEW] UI component
+├── src/lib/trpc.ts              # [MODIFIED] Ensure auth headers sent
+├── android/app/build.gradle     # [MODIFIED] SHA-1 signing config
+├── android/app/src/main/AndroidManifest.xml  # [MODIFIED] Add Google activity
+├── ios/App/Info.plist           # [MODIFIED] Add URL schemes
+├── ios/App/GoogleService-Info.plist  # [NEW] From Google Console (gitignore)
+├── android/app/google-services.json  # [NEW] From Google Console (gitignore)
+└── capacitor.config.ts          # [MODIFIED] Add Google plugin config
+
+.env.example                     # [APPEND] Google client ID variables
+.gitignore                       # [APPEND] google-services.json, GoogleService-Info.plist
+```
+
+---
+
+# ✅ Final Verification Checklist
+
+Before merging to production:
+
+- [ ] Google Console: All 3 platform client IDs created with correct URIs/SHA-1/bundle IDs
+- [ ] Backend: `/api/auth/google` endpoint verifies tokens with correct audience per platform
+- [ ] Frontend: `id_token` (not `access_token`) sent to backend for verification
+- [ ] Android: DEBUG + RELEASE SHA-1 fingerprints registered in Google Console
+- [ ] iOS: `REVERSED_CLIENT_ID` added to `Info.plist` URL schemes
+- [ ] CORS: Frontend origins added to FastAPI `allow_origins`
+- [ ] Audit: Successful/failed Google sign-ins logged to `audit_logs_soc2`
+- [ ] Security: `email_verified` claim validated before allowing sign-in
+- [ ] Testing: Sign-in flow tested on web, Android debug, Android release, iOS simulator
+
+---
+
+This implementation provides **robust, SOC-2 aligned Google Sign-In** for your fuel station mobile app, with explicit handling for the most common failure modes documented in the search results [[1]][[10]][[14]][[41]].
+
+**also rollout**:
+1. Deploy backend changes to staging first
+2. Test Google Sign-In on web with localhost origins
+3. Build Android debug APK, test with debug SHA-1 registered
+4. Build iOS simulator app, test URL scheme redirect
+5. Only after all platforms pass, deploy to production

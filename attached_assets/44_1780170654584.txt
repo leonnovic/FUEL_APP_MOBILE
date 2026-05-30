@@ -1,0 +1,43 @@
+22:47:18.091 Running build in Washington, D.C., USA (East) – iad1
+22:47:18.092 Build machine configuration: 2 cores, 8 GB
+22:47:18.234 Cloning github.com/leonnovic/FUEL_APP_MOBILE (Branch: main, Commit: f4389a7)
+22:47:19.100 Cloning completed: 865.000ms
+22:47:19.828 Restored build cache from previous deployment (FesGdmc1wZFownLK1YFFSo6sUYVs)
+22:47:20.093 Running "vercel build"
+22:47:20.138 Vercel CLI 54.4.1
+22:47:20.999 Warning: Detected "engines": { "node": ">=20.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+22:47:21.015 Installing dependencies...
+22:47:47.132 
+22:47:47.133 added 42 packages, removed 14 packages, and changed 94 packages in 26s
+22:47:47.134 
+22:47:47.135 115 packages are looking for funding
+22:47:47.135   run `npm fund` for details
+22:47:47.212 Running "npm run build"
+22:47:47.347 
+22:47:47.348 > fuelpro@1.0.0 build
+22:47:47.348 > vite build
+22:47:47.348 
+22:47:47.649 vite v6.4.2 building for production...
+22:47:47.746 transforming...
+22:47:59.182 ✓ 2604 modules transformed.
+22:47:59.186 ✗ Build failed in 11.50s
+22:47:59.187 error during build:
+22:47:59.188 src/react-app/lib/ocr.ts (1:19): "apiFetch" is not exported by "src/react-app/lib/backendApi.ts", imported by "src/react-app/lib/ocr.ts".
+22:47:59.188 file: /vercel/path0/frontend/src/react-app/lib/ocr.ts:1:19
+22:47:59.189 
+22:47:59.189 1: import { API_BASE, apiFetch } from './backendApi';
+22:47:59.190                       ^
+22:47:59.190 2: 
+22:47:59.190 3: /**
+22:47:59.191 
+22:47:59.191     at getRollupError (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/parseAst.js:406:41)
+22:47:59.191     at error (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/parseAst.js:402:42)
+22:47:59.192     at Module.error (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:17390:16)
+22:47:59.192     at Module.traceVariable (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:17823:29)
+22:47:59.193     at ModuleScope.findVariable (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:15413:39)
+22:47:59.194     at FunctionScope.findVariable (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:5682:38)
+22:47:59.194     at FunctionBodyScope.findVariable (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:5682:38)
+22:47:59.194     at BlockScope.findVariable (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:5682:38)
+22:47:59.201     at Identifier.bind (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:5449:40)
+22:47:59.202     at CallExpression.bind (file:///vercel/path0/frontend/node_modules/rollup/dist/es/shared/node-entry.js:2831:23)
+22:47:59.277 Error: Command "npm run build" exited with 1

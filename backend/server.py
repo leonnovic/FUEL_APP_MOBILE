@@ -26,7 +26,7 @@ from core import (
     db,
     log,
 )
-from routers import auth, digest, features, founder, founder_ops, identity, invites, misc, mpesa, oauth_extra, payments, push, storage, sync, ws
+from routers import auth, digest, features, founder, founder_ops, identity, invites, location, misc, mpesa, oauth_extra, payments, push, storage, sync, ws
 from routers import health as health_router
 from routers.founder import ensure_founder_seeded
 from routers.founder_ops import apply_runtime_config_to_env
@@ -62,6 +62,17 @@ async def health():
     return {"ok": True, "mongo": mongo_ok}
 
 
+@api.get("/version")
+async def version():
+    """Return API version info — used by clients for compatibility checks."""
+    return {
+        "api_version": "v1",
+        "service": "FuelPro Backend",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "build": os.environ.get("RENDER_GIT_COMMIT", "local")[:8],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Compose routers under the /api prefix
 # ---------------------------------------------------------------------------
@@ -80,6 +91,7 @@ api.include_router(founder.router)
 api.include_router(founder_ops.router)
 api.include_router(health_router.router)
 api.include_router(features.router)
+api.include_router(location.router)
 api.include_router(misc.router)
 
 app.include_router(api)
@@ -116,18 +128,47 @@ async def api_fallback(full_path: str, request: Request):
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
+
+# Production-safe CORS
+if IS_PRODUCTION:
+    # Strict: only allow known frontend domains
+    allowed_origins = [
+        origin.strip() for origin in 
+        os.environ.get("CORS_ORIGINS", "https://fuel-app-mobile.vercel.app").split(",")
+        if origin.strip() and origin.strip() != "*"
+    ]
+    allowed_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allowed_headers = [
+        "Authorization", "Content-Type", "X-Station-ID",
+        "X-Request-ID", "X-App-Version"
+    ]
+    expose_headers = ["X-Request-ID", "X-RateLimit-Remaining"]
+    max_age = 600  # 10 min cache
+    log.info("CORS: Production mode - allowed_origins=%s", allowed_origins)
+else:
+    # Development: permissive for local testing
+    allowed_origins = ["*"]
+    allowed_methods = ["*"]
+    allowed_headers = ["*"]
+    expose_headers = ["*"]
+    max_age = 3600
+    log.info("CORS: Development mode - allowing *")
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=allowed_methods,
+    allow_headers=allowed_headers,
+    expose_headers=expose_headers,
+    max_age=max_age,
 )
 
-# Security headers + auth rate-limit (toggleable via env)
-from middleware import AuthRateLimitMiddleware, SecurityHeadersMiddleware  # noqa: E402
+# Middleware stack (Starlette applies in LIFO order, so the last added is outermost)
+from middleware import AuthRateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware  # noqa: E402
 app.add_middleware(AuthRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIDMiddleware)   # outermost — stamps every request before anything else
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +197,12 @@ async def on_startup():
         await db.identity_links.create_index("user_id")
         await db.push_subscriptions.create_index("endpoint", unique=True)
         await db.push_subscriptions.create_index("user_id")
+        # JWT revocation list with TTL
+        await db.revoked_tokens.create_index(
+            [("expires_at", 1)],
+            expireAfterSeconds=0,
+            background=True
+        )
         await db.invites.create_index(
             [("email", 1), ("status", 1)],
             unique=True,
@@ -163,7 +210,7 @@ async def on_startup():
         )
         for c in ALLOWED_COLLECTIONS:
             await db[f"sync_{c}"].create_index("user_id")
-        log.info("MongoDB indexes ready")
+        log.info("MongoDB indexes ready (including JWT revocation TTL)")
     except Exception as e:
         log.warning("Index creation issue: %s", e)
 

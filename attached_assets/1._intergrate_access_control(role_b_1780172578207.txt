@@ -1,0 +1,5 @@
+fully, detailed and completly
+
+1. intergrate access control(role base permission: scoped by team, by data type, by action) to the whole site.
+2. intergrate audit logs(who accessed what, from where, when, immutable, queryable, separate from app/site data), soc-2requirement.
+3. intergrate data isolation(how is data isolated from other customers/users. architecture level isolation)

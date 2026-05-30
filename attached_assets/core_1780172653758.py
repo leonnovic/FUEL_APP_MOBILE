@@ -7,7 +7,7 @@ circular imports between routers.
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import os
 import uuid
@@ -28,17 +28,23 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 # ---------------------------------------------------------------------------
-# Configuration (env-driven)
+# Configuration (env-driven) with VALIDATION
 # ---------------------------------------------------------------------------
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
-JWT_SECRET = os.environ["JWT_SECRET"]
+MONGO_URL = os.environ.get("MONGO_URL", "")
+if not MONGO_URL:
+    raise RuntimeError("FATAL: MONGO_URL environment variable is required")
+
+DB_NAME = os.environ.get("DB_NAME", "")
+if not DB_NAME:
+    raise RuntimeError("FATAL: DB_NAME environment variable is required")
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET or len(JWT_SECRET) < 32:
+    raise RuntimeError("FATAL: JWT_SECRET must be at least 32 characters long")
+
 JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
-# When the Emergent Stripe proxy can't retrieve a session_id, we fall back to
-# trusting the success-URL redirect. Set this env to "0" to disable that
-# workaround the moment the proxy bug is fixed (no redeploy needed).
 STRIPE_TRUST_REDIRECT = os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"
 PUBLIC_BACKEND_URL = os.environ.get("PUBLIC_BACKEND_URL", "")
 APP_ENV = os.environ.get("APP_ENV", "production").lower()
@@ -49,11 +55,13 @@ MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "")
 MPESA_SHORTCODE = os.environ.get("MPESA_SHORTCODE", "174379")
 MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", "")
 MPESA_CALLBACK_BASE_URL = os.environ.get("MPESA_CALLBACK_BASE_URL", "")
-FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "publican1D#20")
-FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
 
-# Security: Password pepper (server-side secret added to password before hashing)
-PASSWORD_PEPPER = os.environ.get("PASSWORD_PEPPER", "")
+# SECURITY FIX: No default fallback password — must be set explicitly
+FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "")
+if not FOUNDER_DEFAULT_PASSWORD:
+    raise RuntimeError("FATAL: FOUNDER_DEFAULT_PASSWORD environment variable is required")
+
+FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
 
 # Server-authoritative subscription tiers — frontend MUST NOT send prices.
 PLANS: dict[str, dict[str, Any]] = {
@@ -89,85 +97,115 @@ ALLOWED_COLLECTIONS = {
     "deliveries", "expenses", "suppliers", "audit", "documents",
 }
 
-# ---------------------------------------------------------------------------
-# Structured JSON logging (production-grade observability)
-# Outputs one JSON object per line — easy to ship to Datadog / CloudWatch / GCP.
-# In development (LOG_FORMAT=text) falls back to human-readable plain text.
-# ---------------------------------------------------------------------------
+# Sync collection schemas for validation
+SYNC_SCHEMAS: dict[str, dict[str, Any]] = {
+    "stations": {
+        "required": ["name"],
+        "max_items": 1000,
+        "fields": {"name": str, "location": str, "manager": str}
+    },
+    "sales": {
+        "required": ["amount", "date"],
+        "max_items": 50000,
+        "fields": {"amount": (int, float), "date": str, "fuel_type": str, "attendant": str}
+    },
+    "inventory": {
+        "required": ["fuel_type", "quantity_liters"],
+        "max_items": 10000,
+        "fields": {"fuel_type": str, "quantity_liters": (int, float), "reorder_level": (int, float)}
+    },
+    "employees": {
+        "required": ["name"],
+        "max_items": 5000,
+        "fields": {"name": str, "role": str, "phone": str, "salary": (int, float)}
+    },
+    "invoices": {
+        "required": ["amount", "supplier"],
+        "max_items": 20000,
+        "fields": {"amount": (int, float), "supplier": str, "date": str, "status": str}
+    },
+    "deliveries": {
+        "required": ["fuel_type", "quantity_liters"],
+        "max_items": 20000,
+        "fields": {"fuel_type": str, "quantity_liters": (int, float), "date": str, "supplier": str}
+    },
+    "expenses": {
+        "required": ["amount", "category"],
+        "max_items": 50000,
+        "fields": {"amount": (int, float), "category": str, "date": str, "description": str}
+    },
+    "suppliers": {
+        "required": ["name"],
+        "max_items": 1000,
+        "fields": {"name": str, "phone": str, "email": str, "address": str}
+    },
+    "audit": {
+        "required": ["action"],
+        "max_items": 100000,
+        "fields": {"action": str, "at": str, "meta": dict}
+    },
+    "documents": {
+        "required": ["filename"],
+        "max_items": 10000,
+        "fields": {"filename": str, "category": str, "size": int, "url": str}
+    },
+}
 
-class _JSONFormatter(logging.Formatter):
-    """Emit each log record as a single-line JSON object with standard fields."""
+# ---------------------------------------------------------------------------
+# Logger, DB, security primitives
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+log = logging.getLogger("fuelpro")
 
-    def format(self, record: logging.LogRecord) -> str:
-        # Attempt to read the current request_id from the context variable.
-        req_id = ""
+# FIX: Lazy MongoDB connection with retry
+_client: Optional[AsyncIOMotorClient] = None
+_db = None
+
+async def get_db():
+    """Get database connection with lazy initialization and retry."""
+    global _client, _db
+    if _db is not None:
+        return _db
+
+    max_retries = 5
+    for attempt in range(max_retries):
         try:
-            from middleware import request_id_ctx  # local import avoids circular dep
-            req_id = request_id_ctx.get("")
-        except Exception:
-            pass
+            _client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+            await _client.admin.command("ping")
+            _db = _client[DB_NAME]
+            log.info("MongoDB connected successfully")
+            return _db
+        except Exception as e:
+            log.warning("MongoDB connection attempt %d/%d failed: %s", attempt + 1, max_retries, e)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise RuntimeError(f"Failed to connect to MongoDB after {max_retries} attempts: {e}")
 
-        payload: dict[str, Any] = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": record.getMessage(),
-            "module": record.module,
-            "func": record.funcName,
-            "line": record.lineno,
-        }
-        if req_id:
-            payload["request_id"] = req_id
-        if record.exc_info:
-            payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
+# Backward-compatible db reference (will be set after first get_db() call)
+db = None  # type: ignore
 
-
-def _configure_logging() -> logging.Logger:
-    use_json = os.environ.get("LOG_FORMAT", "json" if os.environ.get("APP_ENV", "production") in {"production", "prod"} else "text") == "json"
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    if not root.handlers:
-        handler = logging.StreamHandler()
-        if use_json:
-            handler.setFormatter(_JSONFormatter())
-        else:
-            handler.setFormatter(
-                logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-            )
-        root.addHandler(handler)
-    return logging.getLogger("fuelpro")
-
-
-log = _configure_logging()
-
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer = HTTPBearer(auto_error=False)
 
-# Lazily-constructed Stripe client (single instance — re-creating per request
-# breaks get_checkout_status because of the proxy account binding).
+# FIX: Thread-safe Stripe singleton with asyncio lock
 _stripe_singleton: Optional[StripeCheckout] = None
-
+_stripe_lock = asyncio.Lock()
 
 def _public_base(request: Request) -> str:
     if PUBLIC_BACKEND_URL:
         return PUBLIC_BACKEND_URL.rstrip("/")
     return str(request.base_url).rstrip("/")
 
-
-def get_stripe(request: Request) -> StripeCheckout:
+async def get_stripe(request: Request) -> StripeCheckout:
     global _stripe_singleton
-    # Re-build the client when STRIPE_API_KEY changes at runtime (founder paste)
-    current_key = os.environ.get("STRIPE_API_KEY", "")
-    if _stripe_singleton is None or getattr(_stripe_singleton, "_api_key_snapshot", None) != current_key:
-        webhook_url = f"{_public_base(request)}/api/webhook/stripe"
-        _stripe_singleton = StripeCheckout(api_key=current_key, webhook_url=webhook_url)
-        # Track the key we built with so we can rebuild on rotation
-        _stripe_singleton._api_key_snapshot = current_key  # type: ignore[attr-defined]
-    return _stripe_singleton
-
+    async with _stripe_lock:
+        current_key = os.environ.get("STRIPE_API_KEY", "")
+        if _stripe_singleton is None or getattr(_stripe_singleton, "_api_key_snapshot", None) != current_key:
+            webhook_url = f"{_public_base(request)}/api/webhook/stripe"
+            _stripe_singleton = StripeCheckout(api_key=current_key, webhook_url=webhook_url)
+            _stripe_singleton._api_key_snapshot = current_key  # type: ignore[attr-defined]
+        return _stripe_singleton
 
 # ---------------------------------------------------------------------------
 # Pydantic models (shared)
@@ -177,11 +215,9 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=120)
 
-
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
-
 
 class UserOut(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -195,88 +231,29 @@ class UserOut(BaseModel):
     is_guest: bool = False
     created_at: str
 
-
 class TokenResponse(BaseModel):
     token: str
     user: UserOut
-
 
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 def _hash_pw(pw: str) -> str:
-    """Hash password with bcrypt + server-side pepper (if configured)"""
-    if PASSWORD_PEPPER:
-        pw = pw + PASSWORD_PEPPER
     return pwd_ctx.hash(pw)
 
-
 def _verify_pw(pw: str, hashed: str) -> bool:
-    """Verify password with pepper support (constant-time comparison).
-    Tries pepper-prefixed version first, then falls back to non-peppered for legacy compatibility.
-    """
     try:
-        if PASSWORD_PEPPER:
-            # Try with pepper first
-            if pwd_ctx.verify(pw + PASSWORD_PEPPER, hashed):
-                return True
-            # Fallback: try without pepper (for legacy hashes created before pepper was added)
-            return pwd_ctx.verify(pw, hashed)
         return pwd_ctx.verify(pw, hashed)
     except Exception:
         return False
 
-
-# Token Revocation Support (for logout/session termination)
-async def is_token_revoked(jti: str) -> bool:
-    """Check if token ID is in revocation list (user logged out)"""
-    return await db.revoked_tokens.find_one({
-        "jti": jti,
-        "expires_at": {"$gt": now_iso()}
-    }) is not None
-
-
-async def revoke_token(jti: str, expires_at: str):
-    """Add token to revocation list with TTL.
-    MongoDB will auto-delete after expiry via TTL index.
-    """
-    await db.revoked_tokens.insert_one({
-        "jti": jti,
-        "revoked_at": now_iso(),
-        "expires_at": expires_at,
-    })
-    # Ensure TTL index exists (run once during startup)
-    try:
-        await db.revoked_tokens.create_index(
-            [("expires_at", 1)],
-            expireAfterSeconds=0,
-            background=True
-        )
-    except Exception:
-        pass  # Index may already exist
-
-
-def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
-    """Generate JWT with SOC-2 compliant claims including token ID for revocation"""
+def _make_token(user_id: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
-    now = datetime.now(timezone.utc)
-    payload = {
-        "sub": user_id,
-        "iss": "fuelpro-backend",      # Token issuer
-        "aud": "fuelpro-client",        # Intended audience
-        "exp": exp,
-        "iat": now,
-        "jti": new_id(),                # ← Unique token ID for revocation
-        "scope": "user",
-        **(extra_claims or {}),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
-
+    return jwt.encode({"sub": user_id, "exp": exp}, JWT_SECRET, algorithm=JWT_ALG)
 
 def _strip_oid(d: dict) -> dict:
     d.pop("_id", None)
     return d
-
 
 async def _user_doc_to_out(doc: dict) -> UserOut:
     return UserOut(
@@ -291,7 +268,6 @@ async def _user_doc_to_out(doc: dict) -> UserOut:
         created_at=doc.get("created_at", ""),
     )
 
-
 async def get_current_user(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ) -> dict:
@@ -300,21 +276,17 @@ async def get_current_user(
     try:
         payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         uid = payload.get("sub")
-        jti = payload.get("jti")
-        
-        # CRITICAL: Check if token was revoked (user logged out)
-        if jti and await is_token_revoked(jti):
-            raise HTTPException(status_code=401, detail="Session ended. Please log in again.")
-            
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid token payload")
-    user = await db.users.find_one({"id": uid}, {"_id": 0})
+
+    # FIX: Use lazy db connection
+    database = await get_db()
+    user = await database.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
-
 
 async def get_current_user_optional(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
@@ -326,10 +298,10 @@ async def get_current_user_optional(
         uid = payload.get("sub")
         if not uid:
             return None
-        return await db.users.find_one({"id": uid}, {"_id": 0})
+        database = await get_db()
+        return await database.users.find_one({"id": uid}, {"_id": 0})
     except JWTError:
         return None
-
 
 def require_founder(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
     if not creds:
@@ -341,7 +313,6 @@ def require_founder(creds: Optional[HTTPAuthorizationCredentials] = Depends(bear
     if payload.get("scope") != "founder":
         raise HTTPException(status_code=403, detail="Founder scope required")
     return payload
-
 
 async def scoped_user_id(
     request: Request,
@@ -357,7 +328,6 @@ async def scoped_user_id(
         or "anonymous"
     )
 
-
 def normalize_phone(p: str) -> str:
     p = p.strip().replace(" ", "").replace("-", "").replace("+", "")
     if p.startswith("0") and len(p) == 10:
@@ -366,10 +336,38 @@ def normalize_phone(p: str) -> str:
         return "254" + p
     return p
 
-
 def new_id() -> str:
     return str(uuid.uuid4())
 
-
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+# XSS sanitization helper
+def sanitize_html(text: str) -> str:
+    """Basic HTML sanitization to prevent XSS in sync data."""
+    import html
+    return html.escape(text)
+
+def validate_sync_item(collection: str, item: dict) -> tuple[bool, str]:
+    """Validate a sync item against the collection schema."""
+    schema = SYNC_SCHEMAS.get(collection)
+    if not schema:
+        return False, f"Unknown collection: {collection}"
+
+    # Check required fields
+    for field in schema["required"]:
+        if field not in item or item[field] is None:
+            return False, f"Missing required field: {field}"
+
+    # Check field types
+    for field, expected_type in schema["fields"].items():
+        if field in item and item[field] is not None:
+            if not isinstance(item[field], expected_type):
+                return False, f"Field {field} must be of type {expected_type}"
+
+    # Sanitize string fields
+    for key, value in item.items():
+        if isinstance(value, str):
+            item[key] = sanitize_html(value)
+
+    return True, ""

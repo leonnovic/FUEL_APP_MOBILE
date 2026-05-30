@@ -1,0 +1,1446 @@
+# 🔐 Security Integration Plan for FUEL_APP_MOBILE (Part 2)
+## Migration Scripts, Testing, Frontend Integration & Compliance Documentation
+
+Continuing from Part 1, here are the **production-ready implementations** for migrating existing data, testing security controls, frontend integration, and SOC-2 compliance documentation.
+
+---
+
+# 4️⃣ DATA MIGRATION SCRIPTS
+## Backfill Existing Data with Station Isolation & Audit History
+
+### A. Migration: Add `station_id` to Existing Records (`scripts/migrate_add_station_id.py`)
+
+```python
+#!/usr/bin/env python3
+"""
+Migration script: Backfill station_id on existing records for users with single-station assignment.
+Run during maintenance window. Idempotent and reversible.
+"""
+import asyncio
+import sys
+from datetime import datetime
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.core import MONGO_URL, new_id, now_iso
+
+# Collections requiring station_id isolation
+TARGET_COLLECTIONS = ["sales", "inventory", "expenses", "invoices", "employees"]
+
+async def migrate_collection(db, collection_name: str, dry_run: bool = True):
+    """Add station_id to documents missing it, based on user assignment"""
+    coll = db[collection_name]
+    
+    # Find docs without station_id but with created_by reference
+    query = {"station_id": {"$exists": False}, "created_by": {"$exists": True}}
+    cursor = coll.find(query, {"created_by": 1, "_id": 1})
+    
+    updated = 0
+    errors = 0
+    
+    async for doc in cursor:
+        try:
+            # Fetch user to get their assigned stations
+            user = await db.users.find_one(
+                {"id": doc["created_by"]}, 
+                {"assigned_stations": 1, "role": 1}
+            )
+            
+            if not user or not user.get("assigned_stations"):
+                # Cannot determine station - log for manual review
+                print(f"⚠️  {collection_name}:{doc['_id']} - No station assignment for user {doc['created_by']}")
+                errors += 1
+                continue
+            
+            # Use first assigned station (assumes single-station users for legacy data)
+            station_id = user["assigned_stations"][0]
+            
+            if dry_run:
+                print(f"🔍 WOULD UPDATE {collection_name}:{doc['_id']} → station_id={station_id}")
+                updated += 1
+            else:
+                result = await coll.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {
+                        "station_id": station_id,
+                        "migrated_at": now_iso(),
+                        "migrated_by": "migration_script_v1"
+                    }}
+                )
+                if result.modified_count > 0:
+                    updated += 1
+                    # Log migration to audit trail
+                    await db.audit_logs_soc2.insert_one({
+                        "id": new_id(),
+                        "user_id": "system_migration",
+                        "user_email": "migration@fuelapp.internal",
+                        "user_role": "system",
+                        "action": "data_migration",
+                        "resource_type": collection_name,
+                        "resource_id": str(doc["_id"]),
+                        "station_id": station_id,
+                        "ip_address": "127.0.0.1",
+                        "user_agent": "migration-script/1.0",
+                        "timestamp": now_iso(),
+                        "resource_snapshot_after": {"station_id_added": station_id},
+                        "log_hash": "",  # Will be computed by audit service in production
+                        "log_signature": ""
+                    })
+                    
+        except Exception as e:
+            print(f"❌ Error migrating {collection_name}:{doc.get('_id')}: {e}")
+            errors += 1
+    
+    return updated, errors
+
+async def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--execute":
+        dry_run = False
+        print("🚀 EXECUTING MIGRATION (not dry-run)")
+    else:
+        dry_run = True
+        print("🔍 DRY RUN MODE - No changes will be made")
+        print("   Use '--execute' flag to apply changes")
+    
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client.get_database()  # Uses env DB_NAME
+    
+    total_updated = 0
+    total_errors = 0
+    
+    for coll_name in TARGET_COLLECTIONS:
+        print(f"\n📦 Processing collection: {coll_name}")
+        updated, errors = await migrate_collection(db, coll_name, dry_run=dry_run)
+        total_updated += updated
+        total_errors += errors
+        print(f"   ✓ Updated: {updated} | Errors: {errors}")
+    
+    print(f"\n{'='*60}")
+    print(f"SUMMARY: {total_updated} records processed, {total_errors} errors")
+    if dry_run:
+        print("⚠️  This was a DRY RUN. Run with '--execute' to apply changes.")
+    print(f"{'='*60}")
+    
+    await client.close()
+    return 0 if total_errors == 0 else 1
+
+if __name__ == "__main__":
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
+```
+
+### B. Migration: Initialize Permissions for Existing Users (`scripts/migrate_init_permissions.py`)
+
+```python
+#!/usr/bin/env python3
+"""
+Migration: Generate RBAC permissions for existing users based on role/tier/station assignments.
+Creates permission documents in new 'permissions' collection for fast lookup.
+"""
+import asyncio
+import sys
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.core import MONGO_URL, new_id, now_iso
+from backend.services.rbac import RBACService  # Reuse permission generation logic
+
+async def migrate_user_permissions(db, user: dict, dry_run: bool = True):
+    """Generate and store permissions for a single user"""
+    user_id = user.get("id")
+    if not user_id:
+        return 0
+    
+    # Generate permissions using existing RBAC logic
+    permissions = await RBACService._load_user_permissions(user_id)
+    
+    if dry_run:
+        print(f"🔍 WOULD CREATE {len(permissions)} permissions for user {user_id} ({user.get('email')})")
+        return len(permissions)
+    
+    # Store in dedicated permissions collection for O(1) lookup
+    perm_doc = {
+        "id": new_id(),
+        "user_id": user_id,
+        "permissions": [p.model_dump() for p in permissions],
+        "generated_at": now_iso(),
+        "generated_by": "migration_script_v1",
+        "role_snapshot": user.get("role"),
+        "tier_snapshot": user.get("tier"),
+        "stations_snapshot": user.get("assigned_stations")
+    }
+    
+    # Upsert: replace existing if re-running migration
+    await db.permissions.update_one(
+        {"user_id": user_id},
+        {"$set": perm_doc},
+        upsert=True
+    )
+    
+    # Log to audit trail
+    await db.audit_logs_soc2.insert_one({
+        "id": new_id(),
+        "user_id": "system_migration",
+        "user_email": "migration@fuelapp.internal", 
+        "user_role": "system",
+        "action": "permissions_generated",
+        "resource_type": "user_permissions",
+        "resource_id": user_id,
+        "station_id": user.get("assigned_stations", [None])[0] if user.get("assigned_stations") else None,
+        "ip_address": "127.0.0.1",
+        "user_agent": "migration-script/1.0",
+        "timestamp": now_iso(),
+        "resource_snapshot_after": {"permission_count": len(permissions)},
+        "log_hash": "",
+        "log_signature": ""
+    })
+    
+    return len(permissions)
+
+async def main():
+    dry_run = not (len(sys.argv) > 1 and sys.argv[1] == "--execute")
+    
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client.get_database()
+    
+    # Process users in batches to avoid memory issues
+    batch_size = 100
+    skip = 0
+    total_users = 0
+    total_perms = 0
+    
+    while True:
+        users = await db.users.find(
+            {"permissions": {"$exists": False}},  # Only migrate users without pre-computed permissions
+            {"id": 1, "email": 1, "role": 1, "tier": 1, "assigned_stations": 1}
+        ).skip(skip).limit(batch_size).to_list(batch_size)
+        
+        if not users:
+            break
+            
+        for user in users:
+            perms = await migrate_user_permissions(db, user, dry_run=dry_run)
+            total_perms += perms
+            total_users += 1
+        
+        skip += batch_size
+        print(f"   Processed {total_users} users...")
+    
+    print(f"\n{'='*60}")
+    print(f"MIGRATION COMPLETE: {total_users} users, {total_perms} permissions generated")
+    if dry_run:
+        print("⚠️  DRY RUN - Use '--execute' to apply changes")
+    print(f"{'='*60}")
+    
+    await client.close()
+    return 0
+
+if __name__ == "__main__":
+    exit(asyncio.run(main()))
+```
+
+### C. Rollback Script (`scripts/rollback_migration.py`)
+
+```python
+#!/usr/bin/env python3
+"""
+Emergency rollback: Remove migration-added fields if issues occur.
+USE WITH CAUTION - Only run if migration caused data corruption.
+"""
+import asyncio
+import sys
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.core import MONGO_URL
+
+async def rollback_collection(db, collection_name: str):
+    """Remove migration-added fields from a collection"""
+    coll = db[collection_name]
+    
+    # Remove station_id if it was added by migration (has migrated_by marker)
+    result = await coll.update_many(
+        {"migrated_by": "migration_script_v1"},
+        {"$unset": {
+            "station_id": "",
+            "migrated_at": "",
+            "migrated_by": ""
+        }}
+    )
+    return result.modified_count
+
+async def rollback_permissions(db):
+    """Remove migration-generated permission documents"""
+    result = await db.permissions.delete_many({
+        "generated_by": "migration_script_v1"
+    })
+    return result.deleted_count
+
+async def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--confirm":
+        print("⚠️  CONFIRMING ROLLBACK - This will REMOVE migration changes!")
+        confirmation = input("Type 'ROLLBACK' to proceed: ")
+        if confirmation != "ROLLBACK":
+            print("❌ Rollback cancelled")
+            return 1
+    else:
+        print("🔒 Rollback requires '--confirm' flag and manual confirmation")
+        return 1
+    
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client.get_database()
+    
+    print("🔄 Rolling back collection migrations...")
+    for coll_name in ["sales", "inventory", "expenses", "invoices", "employees"]:
+        count = await rollback_collection(db, coll_name)
+        print(f"   {coll_name}: removed {count} migrated fields")
+    
+    print("🔄 Rolling back permissions...")
+    perm_count = await rollback_permissions(db)
+    print(f"   permissions: removed {perm_count} documents")
+    
+    print("✅ Rollback complete")
+    await client.close()
+    return 0
+
+if __name__ == "__main__":
+    exit(asyncio.run(main()))
+```
+
+---
+
+# 5️⃣ TESTING STRATEGY
+## Security Control Validation & Automated Tests
+
+### A. RBAC Unit Tests (`tests/unit/test_rbac.py`)
+
+```python
+# === CREATE FILE: tests/unit/test_rbac.py ===
+import pytest
+from backend.services.rbac import RBACService
+from backend.core import ActionType, DataType, TeamScope, Permission
+
+class TestRBACService:
+    
+    @pytest.fixture
+    def founder_user(self):
+        return {"email": "founder@fuelapp.com", "role": "founder", "tier": "enterprise"}
+    
+    @pytest.fixture
+    def station_manager(self):
+        return {
+            "id": "user_123",
+            "email": "manager@station1.com",
+            "role": "manager",
+            "tier": "pro",
+            "assigned_stations": ["station_abc"],
+            "permissions": [
+                Permission(action=ActionType.READ, data_type=DataType.SALE, team_scope=TeamScope.STATION, station_id="station_abc"),
+                Permission(action=ActionType.CREATE, data_type=DataType.SALE, team_scope=TeamScope.STATION, station_id="station_abc"),
+            ]
+        }
+    
+    @pytest.mark.asyncio
+    async def test_founder_bypass(self, founder_user):
+        """Founder can access any resource"""
+        result = await RBACService.check_permission(
+            user=founder_user,
+            action=ActionType.DELETE,
+            data_type=DataType.AUDIT_LOG,
+            resource_context={},
+            request=None
+        )
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_station_scope_enforcement(self, station_manager):
+        """Manager can only access their assigned station"""
+        # Allowed: correct station
+        context = {"station_id": "station_abc"}
+        result = await RBACService.check_permission(
+            user=station_manager,
+            action=ActionType.READ,
+            data_type=DataType.SALE,
+            resource_context=context,
+            request=None
+        )
+        assert result is True
+        
+        # Denied: wrong station
+        context = {"station_id": "station_xyz"}
+        with pytest.raises(Exception) as exc_info:
+            await RBACService.check_permission(
+                user=station_manager,
+                action=ActionType.READ,
+                data_type=DataType.SALE,
+                resource_context=context,
+                request=None
+            )
+        assert exc_info.value.status_code == 403
+    
+    @pytest.mark.asyncio
+    async def test_personal_scope_owner_only(self):
+        """Personal scope only allows access to user's own resources"""
+        user = {
+            "id": "user_456",
+            "permissions": [
+                Permission(action=ActionType.READ, data_type=DataType.SALE, team_scope=TeamScope.PERSONAL)
+            ]
+        }
+        # Allowed: user is owner
+        context = {"owner_id": "user_456"}
+        result = await RBACService.check_permission(
+            user=user,
+            action=ActionType.READ,
+            data_type=DataType.SALE,
+            resource_context=context,
+            request=None
+        )
+        assert result is True
+        
+        # Denied: different owner
+        context = {"owner_id": "user_789"}
+        with pytest.raises(Exception):
+            await RBACService.check_permission(
+                user=user,
+                action=ActionType.READ,
+                data_type=DataType.SALE,
+                resource_context=context,
+                request=None
+            )
+```
+
+### B. Audit Log Integration Tests (`tests/integration/test_audit.py`)
+
+```python
+# === CREATE FILE: tests/integration/test_audit.py ===
+import pytest
+from httpx import AsyncClient
+from backend.core import app, MONGO_URL, new_id
+from backend.services.audit import AuditService
+from motor.motor_asyncio import AsyncIOMotorClient
+
+@pytest.fixture(scope="module")
+async def test_db():
+    """Isolated test database"""
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client["fuelapp_test_" + new_id()[:8]]
+    yield db
+    await client.drop_database(db.name)
+    await client.close()
+
+@pytest.mark.asyncio
+async def test_audit_log_immutability(test_db):
+    """Verify audit logs cannot be modified after creation"""
+    # Create a log entry
+    log_id = await AuditService.log_access(
+        user_id="test_user",
+        user_email="test@example.com",
+        user_role="staff",
+        action="create",
+        resource_type="sale",
+        resource_id="sale_123",
+        ip_address="192.168.1.1"
+    )
+    
+    # Fetch the log
+    log = await test_db.audit_logs_soc2.find_one({"id": log_id})
+    original_hash = log["log_hash"]
+    original_sig = log["log_signature"]
+    
+    # Attempt to modify the log directly (simulating tampering)
+    await test_db.audit_logs_soc2.update_one(
+        {"id": log_id},
+        {"$set": {"action": "deleted", "ip_address": "10.0.0.1"}}
+    )
+    
+    # Verify integrity check fails
+    verification = await AuditService.verify_log_integrity(log_id)
+    assert verification["valid"] is False
+    assert verification["hash_match"] is False
+    assert verification["signature_match"] is False
+
+@pytest.mark.asyncio
+async def test_audit_query_isolation(test_db):
+    """Verify audit log queries respect station scoping"""
+    # Create logs for two stations
+    await AuditService.log_access(
+        user_id="user_a", user_email="a@test.com", user_role="manager",
+        action="create", resource_type="sale", station_id="station_1",
+        ip_address="1.1.1.1"
+    )
+    await AuditService.log_access(
+        user_id="user_b", user_email="b@test.com", user_role="manager", 
+        action="create", resource_type="sale", station_id="station_2",
+        ip_address="2.2.2.2"
+    )
+    
+    # Query as station_1 manager
+    requester = {
+        "role": "auditor",
+        "assigned_stations": ["station_1"],
+        "permissions": []  # Will be loaded by service
+    }
+    
+    logs = await AuditService.query_logs(
+        station_id="station_1",
+        requester_user=requester
+    )
+    
+    # Should only see station_1 logs
+    assert len(logs) == 1
+    assert logs[0]["station_id"] == "station_1"
+    assert logs[0]["ip_address"] == "1.1.1.1"
+```
+
+### C. Data Isolation Penetration Tests (`tests/security/test_isolation.py`)
+
+```python
+# === CREATE FILE: tests/security/test_isolation.py ===
+import pytest
+from httpx import AsyncClient
+from backend.core import app, new_id
+
+@pytest.mark.asyncio
+async def test_cross_station_data_access_blocked():
+    """Verify users cannot access data from unassigned stations via ID enumeration"""
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        
+        # Login as station_1 manager
+        auth_resp = await client.post("/api/auth/login", json={
+            "email": "manager1@station1.com",
+            "password": "testpass123"
+        })
+        token = auth_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}", "X-Station-ID": "station_1"}
+        
+        # Attempt to fetch sale from station_2 (known ID from test data)
+        response = await client.get(
+            "/api/sales/sale_from_station_2",
+            headers=headers
+        )
+        
+        # Should be blocked with 403, not 404 (to prevent ID enumeration)
+        assert response.status_code == 403
+        assert "station_scope_violation" in response.headers.get("X-Isolation-Error", "")
+        
+        # Verify attempt was logged to audit trail
+        # (Check test_db.audit_logs_soc2 for "read_denied" entry)
+
+@pytest.mark.asyncio
+async def test_query_injection_isolation_bypass():
+    """Verify MongoDB query injection cannot bypass station isolation"""
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        
+        auth_resp = await client.post("/api/auth/login", json={
+            "email": "staff@station1.com",
+            "password": "testpass123"
+        })
+        token = auth_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        # Attempt injection via query parameter
+        response = await client.get(
+            '/api/sales?station_id={"$ne":"station_1"}',  # MongoDB injection attempt
+            headers=headers
+        )
+        
+        # Should either:
+        # 1. Reject the malformed query (400), OR
+        # 2. Apply isolation filter anyway and return only station_1 data
+        assert response.status_code in [200, 400]
+        
+        if response.status_code == 200:
+            results = response.json()
+            # Every result must have station_id = station_1
+            for item in results:
+                assert item.get("station_id") == "station_1"
+```
+
+### D. Test Execution Script (`scripts/run_security_tests.sh`)
+
+```bash
+#!/bin/bash
+# Run all security-focused tests with coverage reporting
+
+set -e
+
+echo "🔐 Running Security Test Suite for FUEL_APP_MOBILE"
+echo "=================================================="
+
+# Install test dependencies
+pip install -r backend/requirements.txt
+pip install pytest pytest-asyncio pytest-cov httpx motor
+
+# Run unit tests
+echo -e "\n🧪 Running RBAC unit tests..."
+pytest tests/unit/test_rbac.py -v --cov=backend.services.rbac
+
+# Run integration tests (requires test MongoDB)
+echo -e "\n🔗 Running audit integration tests..."
+pytest tests/integration/test_audit.py -v --cov=backend.services.audit
+
+# Run security penetration tests
+echo -e "\n🛡️  Running isolation security tests..."
+pytest tests/security/test_isolation.py -v --cov=backend.services.isolation
+
+# Generate combined coverage report
+echo -e "\n📊 Generating coverage report..."
+pytest --cov=backend --cov-report=html --cov-report=term
+
+echo -e "\n✅ Security test suite complete"
+echo "📁 Coverage report: htmlcov/index.html"
+
+# Optional: Fail if coverage below threshold
+if command -v coverage &> /dev/null; then
+    COVERAGE=$(coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
+    if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+        echo "❌ Coverage ${COVERAGE}% below 80% threshold"
+        exit 1
+    fi
+    echo "✓ Coverage ${COVERAGE}% meets threshold"
+fi
+```
+
+---
+
+# 6️⃣ FRONTEND INTEGRATION: React/TypeScript + tRPC
+## Enforcing RBAC & Station Scope in the Mobile App
+
+### A. Auth Store with Permission Cache (`frontend/src/stores/authStore.ts`)
+
+```typescript
+// === CREATE FILE: frontend/src/stores/authStore.ts ===
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { Permission, ActionType, DataType, TeamScope } from '../../backend/core';
+
+export interface UserSession {
+  id: string;
+  email: string;
+  role: 'founder' | 'owner' | 'manager' | 'staff' | 'auditor' | 'guest';
+  tier: 'free' | 'pro' | 'enterprise';
+  assigned_stations: string[];
+  permissions: Permission[];
+  token: string;
+  expires_at: string;
+}
+
+interface AuthState {
+  user: UserSession | null;
+  activeStationId: string | null;
+  
+  // Actions
+  login: (credentials: {email: string, password: string}) => Promise<void>;
+  logout: () => void;
+  setActiveStation: (stationId: string | null) => void;
+  
+  // Permission helpers
+  can: (action: ActionType, dataType: DataType, stationId?: string) => boolean;
+  hasStationAccess: (stationId: string) => boolean;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      activeStationId: null,
+      
+      login: async (credentials) => {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(credentials)
+        });
+        
+        if (!response.ok) throw new Error('Authentication failed');
+        
+        const session = await response.json();
+        set({ user: session });
+        
+        // Auto-select first station if none active
+        if (!get().activeStationId && session.assigned_stations?.[0]) {
+          set({ activeStationId: session.assigned_stations[0] });
+        }
+      },
+      
+      logout: () => {
+        // Revoke token server-side
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${get().user?.token}`
+          }
+        }).catch(() => {}); // Ignore errors
+        
+        set({ user: null, activeStationId: null });
+      },
+      
+      setActiveStation: (stationId) => {
+        const { user } = get();
+        // Validate station is in user's assignments
+        if (stationId && !user?.assigned_stations.includes(stationId)) {
+          console.warn(`Station ${stationId} not assigned to user`);
+          return;
+        }
+        set({ activeStationId: stationId });
+      },
+      
+      // Permission evaluation helper for UI conditional rendering
+      can: (action: ActionType, dataType: DataType, stationId?: string) => {
+        const { user, activeStationId } = get();
+        if (!user) return false;
+        
+        // Founder bypass
+        if (user.role === 'founder') return true;
+        
+        // Guest restrictions
+        if (user.role === 'guest') {
+          return action === 'read' && ['station', 'inventory'].includes(dataType);
+        }
+        
+        // Check permissions array (pre-computed by backend)
+        const targetStation = stationId || activeStationId;
+        
+        return user.permissions.some(perm => {
+          if (perm.action !== action || perm.data_type !== dataType) return false;
+          
+          switch (perm.team_scope) {
+            case 'global':
+              return ['pro', 'enterprise'].includes(user.tier);
+            case 'station':
+              return perm.station_id === targetStation && 
+                     user.assigned_stations.includes(targetStation || '');
+            case 'team':
+              // Implement team logic if used
+              return false;
+            case 'personal':
+              // For personal scope, UI should filter by owner_id client-side
+              return true;
+            default:
+              return false;
+          }
+        });
+      },
+      
+      hasStationAccess: (stationId: string) => {
+        const { user } = get();
+        return user?.assigned_stations.includes(stationId) || user?.role === 'founder';
+      }
+    }),
+    {
+      name: 'fuelapp-auth',
+      partialize: (state) => ({ 
+        user: state.user, 
+        activeStationId: state.activeStationId 
+      }),
+      // Re-validate session on app resume
+      onRehydrateStorage: () => (state) => {
+        if (state?.user?.expires_at) {
+          const expires = new Date(state.user.expires_at);
+          if (expires < new Date()) {
+            console.log('Session expired, clearing auth');
+            state.logout();
+          }
+        }
+      }
+    }
+  )
+);
+```
+
+### B. tRPC Middleware for Station Header Injection (`frontend/src/lib/trpc.ts`)
+
+```typescript
+// === MODIFY: frontend/src/lib/trpc.ts ===
+import { createTRPCProxyClient, httpLink, TRPCLink } from '@trpc/client';
+import { observable } from '@trpc/server/observable';
+import type { AppRouter } from '../../backend/routers/_app';
+import { useAuthStore } from '../stores/authStore';
+
+// Custom link to inject auth & station headers on every request
+const authLink: TRPCLink<AppRouter> = () => {
+  return ({ next, op }) => {
+    return observable((observer) => {
+      const { user, activeStationId } = useAuthStore.getState();
+      
+      const headers = new Headers();
+      
+      if (user?.token) {
+        headers.set('Authorization', `Bearer ${user.token}`);
+      }
+      
+      // Critical: Always send active station for isolation enforcement
+      if (activeStationId) {
+        headers.set('X-Station-ID', activeStationId);
+      }
+      
+      // Add request metadata for audit logging
+      headers.set('X-Request-Source', 'mobile-app');
+      headers.set('X-App-Version', import.meta.env.VITE_APP_VERSION || 'dev');
+      
+      // Continue with modified context
+      const unsubscribe = next({
+        ...op,
+        context: {
+          ...op.context,
+          headers: Object.fromEntries(headers.entries())
+        }
+      }).subscribe(observer);
+      
+      return unsubscribe;
+    });
+  };
+};
+
+export const trpc = createTRPCProxyClient<AppRouter>({
+  links: [
+    authLink,  // Must be first to modify headers
+    httpLink({
+      url: import.meta.env.VITE_API_URL || '/api',
+    }),
+  ],
+});
+
+// Type-safe hook for station-scoped queries
+export function useStationQuery<T>(
+  queryKey: string[],
+  queryFn: (stationId: string) => Promise<T>,
+  options?: { enabled?: boolean; staleTime?: number }
+) {
+  const { activeStationId } = useAuthStore();
+  
+  return {
+    ...useQuery({
+      queryKey: [...queryKey, activeStationId],
+      queryFn: () => activeStationId ? queryFn(activeStationId) : Promise.resolve(null),
+      enabled: options?.enabled !== false && !!activeStationId,
+      staleTime: options?.staleTime || 30000, // 30s default
+      // Auto-refetch when station changes
+      refetchOnMount: 'always',
+    }),
+    // Helper to manually trigger with specific station (for cross-station views)
+    fetchForStation: (stationId: string) => queryFn(stationId)
+  };
+}
+```
+
+### C. UI Component: Permission-Gated Actions (`frontend/src/components/PermissionGate.tsx`)
+
+```tsx
+// === CREATE FILE: frontend/src/components/PermissionGate.tsx ===
+import { ReactNode } from 'react';
+import { useAuthStore } from '../stores/authStore';
+import type { ActionType, DataType } from '../../backend/core';
+
+interface PermissionGateProps {
+  action: ActionType;
+  dataType: DataType;
+  stationId?: string;  // Optional: check for specific station
+  fallback?: ReactNode;  // What to show if denied
+  children: ReactNode;
+}
+
+export function PermissionGate({
+  action,
+  dataType,
+  stationId,
+  fallback = null,
+  children
+}: PermissionGateProps) {
+  const { can, user } = useAuthStore();
+  
+  // Show fallback for unauthenticated users
+  if (!user) return <>{fallback}</>;
+  
+  // Evaluate permission
+  const hasPermission = can(action, dataType, stationId);
+  
+  if (!hasPermission) {
+    // Log denied access attempt for audit (client-side telemetry)
+    console.debug(`Permission denied: ${action} on ${dataType}`, {
+      userId: user.id,
+      stationId: stationId || useAuthStore.getState().activeStationId,
+      role: user.role
+    });
+    
+    return <>{fallback}</>;
+  }
+  
+  return <>{children}</>;
+}
+
+// Convenience components for common patterns
+export const CanEditSales = ({ children, stationId }: { children: ReactNode, stationId?: string }) => (
+  <PermissionGate action="update" dataType="sale" stationId={stationId}>
+    {children}
+  </PermissionGate>
+);
+
+export const CanViewAuditLogs = ({ children }: { children: ReactNode }) => (
+  <PermissionGate action="read" dataType="audit_log">
+    {children}
+  </PermissionGate>
+);
+
+export const CanDeleteInventory = ({ children, stationId }: { children: ReactNode, stationId?: string }) => (
+  <PermissionGate action="delete" dataType="inventory" stationId={stationId}>
+    {children}
+  </PermissionGate>
+);
+```
+
+### D. Usage Example: Sales Screen with Permission Gates (`frontend/src/screens/SalesScreen.tsx`)
+
+```tsx
+// === EXAMPLE: frontend/src/screens/SalesScreen.tsx ===
+import { View, Text, Button, FlatList } from 'react-native';
+import { trpc, useStationQuery } from '../lib/trpc';
+import { PermissionGate, CanEditSales } from '../components/PermissionGate';
+import { useAuthStore } from '../stores/authStore';
+
+export function SalesScreen() {
+  const { activeStationId } = useAuthStore();
+  
+  // Station-scoped query with automatic isolation
+  const { data: sales, isLoading, refetch } = useStationQuery(
+    ['sales', 'list'],
+    (stationId) => trpc.sales.list.query({ stationId }),
+    { staleTime: 15000 }
+  );
+  
+  const utils = trpc.useUtils();
+  
+  const handleCreateSale = async () => {
+    try {
+      await trpc.sales.create.mutate({
+        station_id: activeStationId!,
+        amount: 1500,
+        liters: 25,
+        // ... other fields
+      });
+      // Invalidate cache to refetch list
+      await utils.sales.list.invalidate();
+    } catch (error) {
+      // Error handling: 403 will be caught if permission denied
+      console.error('Create sale failed:', error);
+    }
+  };
+  
+  if (!activeStationId) {
+    return <Text>Please select a station to view sales</Text>;
+  }
+  
+  return (
+    <View>
+      <Text>Sales for Station {activeStationId}</Text>
+      
+      {/* Create button: only visible if user has permission */}
+      <PermissionGate action="create" dataType="sale" stationId={activeStationId}>
+        <Button title="New Sale" onPress={handleCreateSale} />
+      </PermissionGate>
+      
+      {/* Sales list */}
+      <FlatList
+        data={sales}
+        renderItem={({ item }) => (
+          <View>
+            <Text>KSh {item.amount} - {item.liters}L</Text>
+            
+            {/* Edit button: permission-gated */}
+            <CanEditSales stationId={activeStationId}>
+              <Button 
+                title="Edit" 
+                onPress={() => {/* navigate to edit screen */}} 
+              />
+            </CanEditSales>
+          </View>
+        )}
+        refreshing={isLoading}
+        onRefresh={refetch}
+      />
+      
+      {/* Audit log access: only for auditors/founders */}
+      <PermissionGate action="read" dataType="audit_log">
+        <Button 
+          title="View Audit Trail" 
+          onPress={() => navigation.navigate('AuditLogs', { stationId: activeStationId })} 
+        />
+      </PermissionGate>
+    </View>
+  );
+}
+```
+
+---
+
+# 7️⃣ SOC-2 COMPLIANCE DOCUMENTATION TEMPLATES
+## Evidence Collection & Policy Documentation
+
+### A. Audit Log Export Script for SOC-2 Auditors (`scripts/export_audit_soc2.py`)
+
+```python
+#!/usr/bin/env python3
+"""
+Export audit logs in SOC-2 compliant format for external auditors.
+Generates immutable, signed CSV/JSONL with chain-of-custody metadata.
+"""
+import asyncio
+import csv
+import hashlib
+import hmac
+import json
+import sys
+from datetime import datetime, timedelta
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.core import MONGO_URL, AUDIT_COLLECTION
+
+# SOC-2 required fields per CC7.2 (Audit & Monitoring)
+SOC2_REQUIRED_FIELDS = [
+    "timestamp", "user_id", "user_email", "action", "resource_type", 
+    "resource_id", "ip_address", "station_id", "log_hash", "log_signature"
+]
+
+async def export_audit_logs(
+    start_date: str,
+    end_date: str,
+    output_format: str = "jsonl",
+    output_path: str = "audit_export",
+    signer_key: str = None
+):
+    """Export logs with SOC-2 compliance metadata"""
+    
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client.get_database()
+    
+    # Query with time range
+    query = {
+        "timestamp": {
+            "$gte": start_date,
+            "$lte": end_date
+        }
+    }
+    
+    # Project only required fields + integrity fields
+    projection = {field: 1 for field in SOC2_REQUIRED_FIELDS}
+    projection["_id"] = 0  # Exclude MongoDB internal ID
+    
+    cursor = db[AUDIT_COLLECTION].find(query, projection).sort("timestamp", 1)
+    
+    # Prepare export metadata (required for chain of custody)
+    export_metadata = {
+        "export_id": hashlib.sha256(f"{start_date}{end_date}{datetime.now().isoformat()}".encode()).hexdigest()[:16],
+        "export_timestamp": datetime.now().isoformat(),
+        "date_range": {"start": start_date, "end": end_date},
+        "field_schema": SOC2_REQUIRED_FIELDS,
+        "record_count": 0,
+        "integrity": {}
+    }
+    
+    records = []
+    prev_hash = None
+    
+    async for doc in cursor:
+        # Re-compute hash for verification
+        critical_fields = {k: doc[k] for k in ["user_id", "action", "resource_type", "timestamp", "ip_address"]}
+        computed_hash = hashlib.sha256(
+            json.dumps(critical_fields, sort_keys=True).encode()
+        ).hexdigest()
+        
+        # Add chain hash
+        doc["chain_hash"] = hashlib.sha256(
+            (prev_hash or "") + computed_hash
+        ).hexdigest()
+        prev_hash = doc["chain_hash"]
+        
+        records.append(doc)
+        export_metadata["record_count"] += 1
+    
+    # Sign the export manifest
+    if signer_key:
+        manifest_json = json.dumps(export_metadata, sort_keys=True)
+        export_metadata["manifest_signature"] = hmac.new(
+            signer_key.encode(),
+            manifest_json.encode(),
+            hashlib.sha256
+        ).hexdigest()
+    
+    # Write output
+    if output_format == "jsonl":
+        with open(f"{output_path}.jsonl", "w") as f:
+            # Write metadata as first line (prefixed)
+            f.write(f"# METADATA: {json.dumps(export_metadata)}\n")
+            for record in records:
+                f.write(json.dumps(record) + "\n")
+    
+    elif output_format == "csv":
+        with open(f"{output_path}.csv", "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=SOC2_REQUIRED_FIELDS + ["chain_hash"])
+            writer.writeheader()
+            # Write metadata as comment
+            f.write(f"# SOC-2 Export Metadata: {json.dumps(export_metadata)}\n")
+            for record in records:
+                writer.writerow(record)
+    
+    await client.close()
+    
+    print(f"✅ Exported {export_metadata['record_count']} records to {output_path}.{output_format}")
+    print(f"🔐 Export ID: {export_metadata['export_id']}")
+    if signer_key:
+        print(f"✍️  Manifest signed with HMAC-SHA256")
+    
+    return export_metadata
+
+if __name__ == "__main__":
+    # Usage: python export_audit_soc2.py --start 2026-01-01 --end 2026-05-30 --format jsonl --output /secure/audit_2026Q2
+    import argparse
+    parser = argparse.ArgumentParser(description="SOC-2 Audit Log Export")
+    parser.add_argument("--start", required=True, help="Start date (ISO 8601)")
+    parser.add_argument("--end", required=True, help="End date (ISO 8601)")
+    parser.add_argument("--format", choices=["jsonl", "csv"], default="jsonl")
+    parser.add_argument("--output", required=True, help="Output path (without extension)")
+    parser.add_argument("--signer-key", help="HMAC key for manifest signing (optional but recommended)")
+    
+    args = parser.parse_args()
+    
+    asyncio.run(export_audit_logs(
+        start_date=args.start,
+        end_date=args.end,
+        output_format=args.format,
+        output_path=args.output,
+        signer_key=args.signer_key
+    ))
+```
+
+### B. SOC-2 Control Mapping Document (`docs/SOC2_Control_Mapping.md`)
+
+```markdown
+# SOC 2 Type II Control Mapping: FUEL_APP_MOBILE
+
+## Trust Services Criteria Addressed
+
+### CC6.1: Logical Access Security
+| Control | Implementation | Evidence Location |
+|---------|---------------|-------------------|
+| RBAC with team/data/action scoping | `backend/services/rbac.py` | Unit tests: `tests/unit/test_rbac.py` |
+| Permission evaluation at API gateway | `backend/middleware/auth.py` | Integration tests: `tests/integration/test_auth.py` |
+| Frontend permission gating | `frontend/src/components/PermissionGate.tsx` | E2E tests: `tests/e2e/rbac_flow.spec.ts` |
+
+### CC7.2: System Monitoring & Audit Logging
+| Control | Implementation | Evidence Location |
+|---------|---------------|-------------------|
+| Immutable audit logs with HMAC signing | `backend/services/audit.py` | Test: `tests/integration/test_audit.py::test_audit_log_immutability` |
+| Separation of audit data from application data | Dedicated `audit_logs_soc2` collection | MongoDB schema: `scripts/init-mongo.js` |
+| Queryable audit interface with RBAC | `AuditService.query_logs()` | API docs: `/api/docs#/audit` |
+| Log export for external auditors | `scripts/export_audit_soc2.py` | Sample export: `samples/audit_export_sample.jsonl` |
+
+### CC3.2: Data Isolation & Tenant Separation
+| Control | Implementation | Evidence Location |
+|---------|---------------|-------------------|
+| Mandatory station_id filtering on all queries | `backend/services/isolation.py` | Security test: `tests/security/test_isolation.py` |
+| Repository pattern with built-in isolation | `backend/services/repositories/base.py` | Code review checklist |
+| Frontend station context enforcement | `frontend/src/lib/trpc.ts` authLink | Mobile app network logs |
+
+## Evidence Collection Procedures
+
+### For Annual SOC 2 Audit:
+1. **Quarterly**: Run `scripts/export_audit_soc2.py` for preceding quarter, store in write-once S3 bucket with Object Lock
+2. **Monthly**: Execute `scripts/run_security_tests.sh`, archive coverage reports to compliance bucket
+3. **Per Deployment**: Capture git commit hash, migration script checksums, and infrastructure config in audit log
+4. **Access Reviews**: Use `scripts/generate_access_report.py` to list all users with permissions, review quarterly
+
+### Key Artifacts for Auditor:
+```
+/compliance/
+├── SOC2_Control_Mapping.md          # This document
+├── audit_exports/                   # Quarterly immutable exports
+│   ├── 2026Q1/audit_2026Q1.jsonl.sig
+│   └── 2026Q2/audit_2026Q2.jsonl.sig
+├── test_reports/                    # Security test results
+│   └── security_tests_2026-05-30.html
+├── access_reviews/                  # Quarterly permission reviews
+│   └── access_review_2026-Q2_signed.pdf
+└── infrastructure/                  # IaC configs for environment validation
+    └── terraform/audit_bucket.tf
+```
+
+## Incident Response Integration
+All security-relevant events (403 denials, permission changes, isolation violations) are automatically logged to `audit_logs_soc2` with:
+- `action` field set to descriptive value (`permission_denied`, `isolation_bypass_attempt`)
+- `reason` field with diagnostic code
+- Full request context (IP, user-agent, station_id)
+
+These logs feed into the SIEM integration via webhook (`/api/webhooks/siem`) for real-time alerting per CC7.4.
+```
+
+### C. Access Review Report Generator (`scripts/generate_access_report.py`)
+
+```python
+#!/usr/bin/env python3
+"""
+Generate quarterly access review report for SOC-2 compliance.
+Lists all users with permissions, station assignments, and last activity.
+"""
+import asyncio
+import csv
+from datetime import datetime, timedelta
+from motor.motor_asyncio import AsyncIOMotorClient
+from backend.core import MONGO_URL, now_iso
+
+async def generate_access_report(output_path: str = "access_review.csv"):
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client.get_database()
+    
+    # Fetch all non-system users with permissions
+    users_cursor = db.users.find(
+        {"role": {"$nin": ["system", "migration"]}},
+        {
+            "id": 1, "email": 1, "role": 1, "tier": 1,
+            "assigned_stations": 1, "permissions": 1,
+            "last_login": 1, "created_at": 1
+        }
+    )
+    
+    # Fetch recent audit activity for each user (last 90 days)
+    cutoff = (datetime.now() - timedelta(days=90)).isoformat()
+    
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        # SOC-2 required headers for access reviews
+        writer.writerow([
+            "User ID", "Email", "Role", "Tier", "Assigned Stations",
+            "Permission Count", "Last Login", "Account Created",
+            "Recent Actions (90d)", "Review Status", "Reviewer Notes"
+        ])
+        
+        async for user in users_cursor:
+            # Count recent activity from audit logs
+            activity_count = await db.audit_logs_soc2.count_documents({
+                "user_id": user["id"],
+                "timestamp": {"$gte": cutoff}
+            })
+            
+            # Format stations list
+            stations = ", ".join(user.get("assigned_stations", [])) or "NONE"
+            
+            # Permission count (from cached array or compute)
+            perm_count = len(user.get("permissions", []))
+            
+            writer.writerow([
+                user["id"],
+                user["email"],
+                user["role"],
+                user["tier"],
+                stations,
+                perm_count,
+                user.get("last_login", "NEVER"),
+                user.get("created_at", "UNKNOWN"),
+                f"{activity_count} events",
+                "PENDING_REVIEW",  # Default status
+                ""  # Notes for reviewer
+            ])
+    
+    await client.close()
+    
+    # Generate summary metadata
+    summary = {
+        "report_id": f"AR-{datetime.now().strftime('%YQ%m')}",
+        "generated_at": now_iso(),
+        "review_period": "90 days",
+        "total_users": await db.users.count_documents({"role": {"$nin": ["system", "migration"]}}),
+        "output_file": output_path,
+        "next_review_due": (datetime.now() + timedelta(days=90)).isoformat()
+    }
+    
+    # Write summary alongside CSV
+    with open(output_path.replace(".csv", ".metadata.json"), "w") as f:
+        import json
+        json.dump(summary, f, indent=2)
+    
+    print(f"✅ Access review report generated: {output_path}")
+    print(f"📋 Summary: {summary['total_users']} users, review due {summary['next_review_due']}")
+    return summary
+
+if __name__ == "__main__":
+    asyncio.run(generate_access_report())
+```
+
+---
+
+# 🚀 Final Deployment Checklist
+
+### Pre-Production Validation
+```bash
+# 1. Run migration dry-run
+python scripts/migrate_add_station_id.py
+python scripts/migrate_init_permissions.py
+
+# 2. Execute full security test suite
+./scripts/run_security_tests.sh
+
+# 3. Validate audit log integrity
+python -c "
+from backend.services.audit import AuditService
+import asyncio
+result = asyncio.run(AuditService.verify_log_integrity('sample_log_id'))
+assert result['valid'], 'Audit integrity check failed'
+"
+
+# 4. Test cross-tenant isolation manually
+#    - Login as station_1 user, attempt to access station_2 resource
+#    - Verify 403 response with X-Isolation-Error header
+
+# 5. Generate sample SOC-2 export
+python scripts/export_audit_soc2.py \
+  --start 2026-01-01T00:00:00Z \
+  --end 2026-05-30T23:59:59Z \
+  --format jsonl \
+  --output /tmp/audit_sample \
+  --signer-key "temp-key-for-testing"
+```
+
+### Production Deployment Steps
+```bash
+# 1. Backup current database
+mongodump --uri="$MONGO_URL" --out=./backup/pre_security_migration
+
+# 2. Apply database schema changes
+mongosh < scripts/init-mongo.js
+
+# 3. Run migrations with --execute flag
+python scripts/migrate_add_station_id.py --execute
+python scripts/migrate_init_permissions.py --execute
+
+# 4. Deploy backend with new middleware
+#    - Ensure AUDIT_HMAC_KEY is set in production env
+#    - Enable MongoDB replica set for write concern "majority"
+
+# 5. Deploy frontend with new auth store
+#    - Verify X-Station-ID header is sent on all API calls
+
+# 6. Post-deployment validation
+curl -H "Authorization: Bearer $TEST_TOKEN" \
+     -H "X-Station-ID: station_test" \
+     https://api.fuelapp.com/health
+
+# 7. Generate initial compliance baseline
+python scripts/generate_access_report.py
+python scripts/export_audit_soc2.py --start $(date -d "30 days ago" -I) --end $(date -I) --output /compliance/baseline
+```
+
+### Monitoring & Alerting Configuration
+```yaml
+# === ADD TO: monitoring/alerts.yml ===
+groups:
+- name: security_alerts
+  rules:
+  # Alert on repeated permission denials (potential attack)
+  - alert: HighPermissionDenialRate
+    expr: rate(http_requests_total{status="403", path=~"/api/.*"}[5m]) > 10
+    for: 2m
+    labels:
+      severity: warning
+      team: security
+    annotations:
+      summary: "Elevated 403 responses - possible enumeration attempt"
+      
+  # Alert on audit log write failures (SOC-2 critical)
+  - alert: AuditLogWriteFailure
+    expr: rate(audit_log_write_errors_total[5m]) > 0
+    for: 1m
+    labels:
+      severity: critical
+      team: compliance
+    annotations:
+      summary: "Audit logging failed - SOC-2 compliance at risk"
+      
+  # Alert on cross-station access attempts
+  - alert: IsolationBypassAttempt
+    expr: increase(audit_log_events_total{action="read_denied", reason="station_scope_violation"}[1h]) > 5
+    for: 0m
+    labels:
+      severity: critical
+      team: security
+    annotations:
+      summary: "Multiple station scope violations detected"
+```
+
+---
+
+# 📦 Repository Structure After Integration
+
+```
+FUEL_APP_MOBILE/
+├── backend/
+│   ├── core.py                 # [MODIFIED] RBAC enums, AuditLogEntry, isolation config
+│   ├── server.py               # [MODIFIED] Register audit middleware, init indexes
+│   ├── middleware/
+│   │   ├── auth.py             # [NEW] RBAC dependency injector
+│   │   └── audit.py            # [NEW] Auto-audit request middleware
+│   ├── services/
+│   │   ├── rbac.py             # [NEW] Permission evaluation engine
+│   │   ├── audit.py            # [NEW] SOC-2 audit service
+│   │   ├── isolation.py        # [NEW] Data isolation enforcement
+│   │   └── repositories/
+│   │       ├── base.py         # [NEW] Isolated repository base class
+│   │       └── sales.py        # [NEW] Example isolated repository
+│   └── routers/                # [MODIFIED] Add permission dependencies to routes
+│
+├── frontend/
+│   ├── src/
+│   │   ├── stores/
+│   │   │   └── authStore.ts    # [NEW] Auth state with permission cache
+│   │   ├── lib/
+│   │   │   └── trpc.ts         # [MODIFIED] Add station-id header injection
+│   │   ├── components/
+│   │   │   └── PermissionGate.tsx  # [NEW] UI permission gating component
+│   │   └── screens/
+│   │       └── SalesScreen.tsx # [EXAMPLE] Usage of permission gates
+│   └── capacitor.config.ts     # [OPTIONAL] Add security headers config
+│
+├── scripts/
+│   ├── migrate_add_station_id.py    # [NEW] Backfill station_id migration
+│   ├── migrate_init_permissions.py  # [NEW] Initialize RBAC permissions
+│   ├── rollback_migration.py        # [NEW] Emergency rollback script
+│   ├── export_audit_soc2.py         # [NEW] SOC-2 compliant audit export
+│   ├── generate_access_report.py    # [NEW] Quarterly access review generator
+│   ├── init-mongo.js                # [NEW] MongoDB schema setup
+│   └── run_security_tests.sh        # [NEW] Security test runner
+│
+├── tests/
+│   ├── unit/test_rbac.py            # [NEW] RBAC unit tests
+│   ├── integration/test_audit.py    # [NEW] Audit integration tests
+│   └── security/test_isolation.py   # [NEW] Isolation penetration tests
+│
+├── docs/
+│   └── SOC2_Control_Mapping.md      # [NEW] SOC-2 compliance documentation
+│
+├── .github/workflows/
+│   └── security.yml                 # [NEW] Automated security scanning
+│
+├── backend/.env.example             # [APPENDED] New security variables
+├── requirements.txt                 # [APPENDED] pytest, httpx for testing
+└── README.md                        # [APPENDED] Security setup instructions
+```
+
+---
+
+# ✅ Final Verification Checklist
+
+Before merging to production:
+
+- [ ] All migration scripts tested in staging with production-like data volume
+- [ ] RBAC permission matrix validated against business requirements document
+- [ ] Audit log immutability verified: tamper attempts detected and logged
+- [ ] Cross-tenant isolation penetration test passed: no data leakage between stations
+- [ ] Frontend permission gates prevent unauthorized UI actions client-side
+- [ ] SOC-2 export script generates valid, signed output with chain-of-custody metadata
+- [ ] Access review report includes all required fields for auditor sign-off
+- [ ] Monitoring alerts configured for security-relevant events
+- [ ] Key rotation procedure documented for `AUDIT_HMAC_KEY` and `JWT_SECRET`
+- [ ] Incident response playbook updated to reference new audit log fields
+
+---
+
+This completes the **fully detailed, production-ready integration** of RBAC, SOC-2 audit logging, and multi-tenant data isolation for your FUEL_APP_MOBILE repository. All components are designed for incremental adoption and include migration paths for existing data.
+
+**also rollout**:
+1. Start with RBAC middleware integration (lowest risk, highest immediate value)
+2. Add audit logging middleware with dry-run mode to validate log volume
+3. Run migration scripts in staging to backfill `station_id` fields
+4. Enable isolation enforcement at repository layer after validation
+5. Schedule first quarterly access review using `generate_access_report.py`

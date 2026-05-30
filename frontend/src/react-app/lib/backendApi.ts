@@ -16,6 +16,7 @@ const TOKEN_KEY = 'fuelpro_jwt';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000; // Start at 1s, exponential backoff
 const TIMEOUT_MS = 30000; // 30 second timeout
+const APP_VERSION = '1.0.0';
 
 export function getToken(): string | null {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
@@ -127,12 +128,52 @@ async function fetchWithTimeout<T>(
  * Main API fetch with auth and retry
  */
 async function apiFetch<T = unknown>(
+/** Generate a short random request correlation ID (UUID v4 or fallback). */
+function newRequestId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch { /* ignore */ }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+/** Attempt a silent token refresh. Returns new token on success, null on failure. */
+async function _refreshToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Request-ID': newRequestId() },
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const body = await res.json() as { token?: string };
+    if (body.token) { setToken(body.token); return body.token; }
+  } catch { /* network error */ }
+  return null;
+}
+
+async function _parseError(res: Response): Promise<string> {
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) {
+    try { return (await res.json()).detail ?? res.statusText; } catch { /* ignore */ }
+  } else {
+    try {
+      const snippet = (await res.text()).slice(0, 80);
+      return `Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`;
+    } catch { /* ignore */ }
+  }
+  return res.statusText;
+}
+
+export async function apiFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
   withAuth = true,
+  _isRetry = false,
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-Request-ID': newRequestId(),
+    'X-App-Version': APP_VERSION,
     ...(init.headers as Record<string, string> | undefined),
   };
   
@@ -150,6 +191,24 @@ async function apiFetch<T = unknown>(
       throw new Error('Your session has expired. Please log in again.');
     }
     throw err;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+
+  // — silent token refresh on first 401 —
+  if (res.status === 401 && withAuth && !_isRetry) {
+    const fresh = await _refreshToken();
+    if (fresh) {
+      // retry original call once with new token
+      return apiFetch<T>(path, init, true, true);
+    }
+    // refresh failed — clear stale token so UI can redirect to login
+    setToken(null);
+  }
+
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (!res.ok) {
+    const detail = await _parseError(res);
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   }
 }
 
@@ -192,7 +251,13 @@ export async function backendMe(): Promise<BackendUser | null> {
   }
 }
 
-export function backendLogout(): void { setToken(null); }
+/** Server-side logout: revokes the JWT, then clears local storage. */
+export async function backendLogout(): Promise<void> {
+  try {
+    await apiFetch('/api/auth/logout', { method: 'POST' }, true, true);
+  } catch { /* ignore — still clear local token */ }
+  setToken(null);
+}
 
 // ─── Subscriptions ────────────────────────────────────────────────────────
 export interface BackendPlan {
