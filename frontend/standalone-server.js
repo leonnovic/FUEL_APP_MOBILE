@@ -43,9 +43,27 @@ function findDistDir() {
 }
 
 const DIST_DIR = findDistDir();
+const DIST_DIR_RESOLVED = path.resolve(DIST_DIR) + path.sep;
 
 const server = http.createServer((req, res) => {
-  let filePath = path.join(DIST_DIR, req.url === '/' ? 'index.html' : decodeURIComponent(req.url));
+  const requestPath = req.url ? req.url.split('?')[0].split('#')[0] : '/';
+  let decodedPath;
+  try {
+    decodedPath = requestPath === '/' ? 'index.html' : decodeURIComponent(requestPath);
+  } catch (e) {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  const relativePath = decodedPath.replace(/^[/\\]+/, '');
+  const filePath = path.resolve(DIST_DIR, relativePath);
+  if (!filePath.startsWith(DIST_DIR_RESOLVED)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
