@@ -52,19 +52,12 @@ jobs:
 
       - name: Validate wrangler.toml (root)
         run: |
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            // wrangler.toml is TOML format, not JSON — check required keys by string matching
-            const content = fs.readFileSync(path.join('..', 'wrangler.toml'), 'utf8');
-            const required = ['name', 'main', 'assets', 'build'];
-            const missing = required.filter(k => {
-              const re = new RegExp('\\\\b' + k + '\\\\s*[=\\\\[]');
-              return !re.test(content);
-            });
-            if (missing.length) {
-              console.error('wrangler.toml missing required fields:', missing.join(', '));
-              process.exit(1);
-            }
-            console.log('✓ wrangler.toml contains all required fields:', required.join(', '));
-          "
+          echo "Validating ../wrangler.toml..."
+          for field in name main assets build; do
+            if ! grep -q "$field" ../wrangler.toml; then
+              echo "ERROR: wrangler.toml is missing required field: $field"
+              exit 1
+            fi
+            echo "  ✓ $field"
+          done
+          echo "✓ wrangler.toml valid"
