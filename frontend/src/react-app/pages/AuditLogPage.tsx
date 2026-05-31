@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { History, Search, Filter, ArrowLeft, Loader2, Calendar, User as UserIcon } from 'lucide-react';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 interface AuditRow {
   id: string;

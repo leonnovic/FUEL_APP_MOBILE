@@ -14,7 +14,7 @@
 const ANON_KEY = 'fuelpro_anonymous_id';
 
 const API_BASE = (
-  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
+  import.meta.env.VITE_REACT_APP_BACKEND_URL
   || (typeof window !== 'undefined' ? window.location.origin : '')
 ).replace(/\/$/, '');
 

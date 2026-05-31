@@ -1,16 +1,16 @@
 {
   "name": "fuelappmobile",
-  "compatibility_date": "2026-05-29",
+  "main": "frontend/src/worker/index.ts",
+  "compatibility_date": "2026-05-31",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
   "assets": {
-    "directory": "frontend/dist"
+    "directory": "frontend/dist",
+    "not_found_handling": "single-page-application"
   },
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
   "build": {
-    "command": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install && npm run build"
+    "command": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 ELECTRON_BUILDER_SKIP_PUBLISH=1 npm install --legacy-peer-deps && npm run build"
   }
 }

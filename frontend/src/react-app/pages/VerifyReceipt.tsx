@@ -8,7 +8,7 @@ import { useSearchParams, useNavigate } from 'react-router';
 import { ShieldCheck, AlertTriangle, Loader2, Receipt, ArrowRight, Copy, CheckCircle2, Share2 } from 'lucide-react';
 import { smartShare, supportsNativeShare } from '@/react-app/lib/smartShare';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 interface VerifyResult {
   verified: boolean;

@@ -294,7 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Backend-first: hits Resend if RESEND_API_KEY is set, otherwise logs the code server-side.
     try {
-      const r = await fetch(`${(import.meta as any).env?.REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/request`, {
+      const r = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/request`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
@@ -352,7 +352,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const entry = codes[email];
     if (entry) {
       try {
-        const r = await fetch(`${(import.meta as any).env?.REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/confirm`, {
+        const r = await fetch(`${import.meta.env.VITE_REACT_APP_BACKEND_URL || ''}/api/auth/password-reset/confirm`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, code: entry.code, new_password: newPassword }),
         });

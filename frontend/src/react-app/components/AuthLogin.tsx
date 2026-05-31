@@ -227,7 +227,7 @@ export default function AuthLogin() {
                 setLocalError(''); setQuickStartBusy(true);
                 try {
                   const { fetchJson } = await import('@/react-app/lib/fetchJson');
-                  const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || window.location.origin;
+                  const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || window.location.origin;
                   const data = await fetchJson<{ token: string; user: { email: string; name: string; id: string } }>(
                     `${API_BASE}/api/auth/quick-start`,
                     { method: 'POST', headers: { 'Content-Type': 'application/json' } },

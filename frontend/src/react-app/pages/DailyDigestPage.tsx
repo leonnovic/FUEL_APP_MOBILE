@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router';
 import { ArrowLeft, Mail, Send, RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History } from 'lucide-react';
 import PushNotificationToggle from '@/react-app/components/PushNotificationToggle';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 interface DigestRow {
   date: string;

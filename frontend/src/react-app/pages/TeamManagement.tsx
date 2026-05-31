@@ -14,7 +14,7 @@ import {
   CheckCircle2, Clock, Loader2, ArrowLeft, AlertCircle, ExternalLink, Settings,
 } from 'lucide-react';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 interface Invite {
   id: string;

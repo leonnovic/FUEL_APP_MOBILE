@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router';
 import * as XLSX from 'xlsx';
 import { Upload, FileSpreadsheet, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Database } from 'lucide-react';
 
-const API_BASE = (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const API_BASE = import.meta.env.VITE_REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 const COLLECTIONS = [
   { id: 'sales',       label: 'Sales',       desc: 'Pump sales, daily transactions' },

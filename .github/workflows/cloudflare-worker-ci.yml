@@ -1,0 +1,67 @@
+name: Cloudflare Worker CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/src/worker/**'
+      - 'wrangler.jsonc'
+      - 'frontend/wrangler.json'
+      - '.github/workflows/cloudflare-worker-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/src/worker/**'
+      - 'wrangler.jsonc'
+      - 'frontend/wrangler.json'
+
+jobs:
+  worker-typecheck:
+    name: Worker TypeScript Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          ELECTRON_BUILDER_SKIP_PUBLISH: '1'
+        run: npm ci --legacy-peer-deps
+
+      - name: TypeScript check (includes worker)
+        run: npx tsc --noEmit
+
+      - name: Verify worker entry point exists
+        run: |
+          if [ ! -f "src/worker/index.ts" ]; then
+            echo "ERROR: src/worker/index.ts is missing — Cloudflare will fail to build"
+            exit 1
+          fi
+          echo "✓ src/worker/index.ts exists"
+
+      - name: Validate wrangler.jsonc (root)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const content = fs.readFileSync(path.join('..', 'wrangler.jsonc'), 'utf8');
+            const config = JSON.parse(content);
+            const required = ['name', 'main', 'assets', 'build'];
+            const missing = required.filter(k => !config[k]);
+            if (missing.length) {
+              console.error('wrangler.jsonc missing fields:', missing);
+              process.exit(1);
+            }
+            console.log('✓ wrangler.jsonc valid:', Object.keys(config).join(', '));
+          "
