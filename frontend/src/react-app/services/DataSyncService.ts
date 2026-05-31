@@ -871,7 +871,8 @@ export async function syncTaxRates(countryCode: string): Promise<TaxRateData | n
   };
 
   markSuccess(key, country.revenueAuthority.name, taxData, TAX_SYNC_INTERVAL);
-  localStorage.setItem(`fuelpro_tax_rates_${countryCode}`, JSON.stringify(taxData));
+  const { nssfEmployeeRate, nssfEmployerRate, ...taxDataForCache } = taxData;
+  localStorage.setItem(`fuelpro_tax_rates_${countryCode}`, JSON.stringify(taxDataForCache));
   return taxData;
 }
 
