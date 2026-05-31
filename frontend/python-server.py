@@ -10,6 +10,7 @@ import os
 import sys
 import threading
 import time
+import urllib.parse
 
 # Get the dist directory (bundled or adjacent)
 def get_dist_dir():
@@ -39,10 +40,17 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=DIST_DIR, **kwargs)
     
     def do_GET(self):
-        # Try to serve the file
-        file_path = os.path.join(DIST_DIR, self.path.lstrip('/'))
-        if os.path.exists(file_path) and os.path.isfile(file_path):
+        # Try to serve the file safely (prevent path traversal)
+        request_path = self.path.split('?', 1)[0].split('#', 1)[0]
+        decoded_path = urllib.parse.unquote(request_path).lstrip('/')
+        normalized_rel_path = os.path.normpath(decoded_path)
+
+        dist_root = os.path.abspath(DIST_DIR)
+        candidate_path = os.path.abspath(os.path.join(dist_root, normalized_rel_path))
+
+        if os.path.commonpath([dist_root, candidate_path]) == dist_root and os.path.isfile(candidate_path):
             return super().do_GET()
+
         # SPA fallback: serve index.html
         self.path = '/index.html'
         return super().do_GET()
