@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from core import ALLOWED_COLLECTIONS, db, get_current_user, log, new_id, now_iso
 
-router = APIRouter(prefix="/api/location", tags=["location"])
+router = APIRouter(prefix="/location", tags=["location"])
 
 
 class LocationResponse(BaseModel):
@@ -22,6 +22,9 @@ class LocationResponse(BaseModel):
     language: str
     region: Optional[str] = None
     city: Optional[str] = None
+    latitude: float = 0.0
+    longitude: float = 0.0
+    ip: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +267,9 @@ async def detect_location(request: Request):
                     language=config["language"],
                     region=data.get("region"),
                     city=data.get("city"),
+                    latitude=float(data.get("latitude") or 0),
+                    longitude=float(data.get("longitude") or 0),
+                    ip=client_ip,
                 )
     except Exception as exc:
         log.warning("Location detection failed ip=%s: %s", client_ip, exc)
@@ -273,6 +279,7 @@ async def detect_location(request: Request):
         country=cfg["country"], country_code="US",
         timezone=cfg["timezone"], currency=cfg["currency"],
         currency_symbol=cfg["symbol"], language=cfg["language"],
+        ip=client_ip,
     )
 
 

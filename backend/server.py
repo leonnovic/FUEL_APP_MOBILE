@@ -140,19 +140,27 @@ if IS_PRODUCTION:
     allowed_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allowed_headers = [
         "Authorization", "Content-Type", "X-Station-ID",
-        "X-Request-ID", "X-App-Version"
+        "X-Request-ID", "X-App-Version", "Accept",
+        "X-Timestamp", "X-Signature"
     ]
     expose_headers = ["X-Request-ID", "X-RateLimit-Remaining"]
     max_age = 600  # 10 min cache
     log.info("CORS: Production mode - allowed_origins=%s", allowed_origins)
 else:
-    # Development: permissive for local testing
-    allowed_origins = ["*"]
+    # Development: permissive for local testing while keeping credentials safe.
+    allowed_origins = [
+        "https://fuel-app-mobile.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "capacitor://localhost",
+        "http://localhost",
+    ]
     allowed_methods = ["*"]
     allowed_headers = ["*"]
     expose_headers = ["*"]
     max_age = 3600
-    log.info("CORS: Development mode - allowing *")
+    log.info("CORS: Development mode - allowed_origins=%s", allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,
