@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install && npm run build",
+    "build": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 ELECTRON_BUILDER_SKIP_PUBLISH=1 npm install --legacy-peer-deps && npm run build",
     "dev": "cd frontend && npm run dev"
   },
   "engines": {

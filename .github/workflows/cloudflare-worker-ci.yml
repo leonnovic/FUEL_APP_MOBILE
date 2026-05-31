@@ -5,14 +5,14 @@ on:
     branches: [main]
     paths:
       - 'frontend/src/worker/**'
-      - 'wrangler.jsonc'
+      - 'wrangler.toml'
       - 'frontend/wrangler.json'
       - '.github/workflows/cloudflare-worker-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'frontend/src/worker/**'
-      - 'wrangler.jsonc'
+      - 'wrangler.toml'
       - 'frontend/wrangler.json'
 
 jobs:
@@ -50,18 +50,18 @@ jobs:
           fi
           echo "✓ src/worker/index.ts exists"
 
-      - name: Validate wrangler.jsonc (root)
+      - name: Validate wrangler.toml (root)
         run: |
           node -e "
             const fs = require('fs');
             const path = require('path');
-            const content = fs.readFileSync(path.join('..', 'wrangler.jsonc'), 'utf8');
+            const content = fs.readFileSync(path.join('..', 'wrangler.toml'), 'utf8');
             const config = JSON.parse(content);
             const required = ['name', 'main', 'assets', 'build'];
             const missing = required.filter(k => !config[k]);
             if (missing.length) {
-              console.error('wrangler.jsonc missing fields:', missing);
+              console.error('wrangler.toml missing fields:', missing);
               process.exit(1);
             }
-            console.log('✓ wrangler.jsonc valid:', Object.keys(config).join(', '));
+            console.log('✓ wrangler.toml valid:', Object.keys(config).join(', '));
           "
