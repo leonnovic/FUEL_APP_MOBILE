@@ -9,4 +9,6 @@ directory = "frontend/dist"
 not_found_handling = "single-page-application"
 
 [build]
-command = "npm run build"
+# Use npm ci (lockfile-reproducible) and skip binary-only packages that
+# time-out or fail in Cloudflare's build VMs (Electron, Puppeteer, etc.)
+command = "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 ELECTRON_BUILDER_SKIP_PUBLISH=1 PUPPETEER_SKIP_DOWNLOAD=1 npm ci --legacy-peer-deps && npm run build"
