@@ -1,0 +1,16 @@
+{
+  "name": "fuelappmobile",
+  "compatibility_date": "2026-05-29",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "frontend/dist"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "build": {
+    "command": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install && npm run build"
+  }
+}

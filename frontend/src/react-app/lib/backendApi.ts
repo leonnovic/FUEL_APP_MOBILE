@@ -7,11 +7,8 @@
  * - Cross-device compatibility
  */
 
-const ENV = (import.meta as unknown as { env?: Record<string, string> }).env || {};
 const RAW_BASE =
-  ENV.VITE_BACKEND_URL ||
-  ENV.VITE_API_URL ||
-  ENV.REACT_APP_BACKEND_URL ||
+  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '');
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
@@ -127,9 +124,6 @@ async function fetchWithTimeout<T>(
   }
 }
 
-/**
- * Main API fetch with auth, request IDs, retries, and one silent refresh attempt.
- */
 /** Generate a short random request correlation ID (UUID v4 or fallback). */
 function newRequestId(): string {
   try {
@@ -147,11 +141,23 @@ async function _refreshToken(): Promise<string | null> {
       credentials: 'include',
     });
     if (!res.ok) return null;
-    const body = await res.json() as { token?: string; access_token?: string };
-    const token = body.token || body.access_token || null;
-    if (token) { setToken(token); return token; }
+    const body = await res.json() as { token?: string };
+    if (body.token) { setToken(body.token); return body.token; }
   } catch { /* network error */ }
   return null;
+}
+
+async function _parseError(res: Response): Promise<string> {
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) {
+    try { return (await res.json()).detail ?? res.statusText; } catch { /* ignore */ }
+  } else {
+    try {
+      const snippet = (await res.text()).slice(0, 80);
+      return `Server returned ${ct || 'non-JSON'} (HTTP ${res.status})${snippet ? `: ${snippet.replace(/\s+/g, ' ').trim()}` : ''}`;
+    } catch { /* ignore */ }
+  }
+  return res.statusText;
 }
 
 export async function apiFetch<T = unknown>(
@@ -166,18 +172,17 @@ export async function apiFetch<T = unknown>(
     'X-App-Version': APP_VERSION,
     ...(init.headers as Record<string, string> | undefined),
   };
-
+  
   if (withAuth) {
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const t = getToken();
+    if (t) headers.Authorization = `Bearer ${t}`;
   }
-
+  
   try {
     return await retryFetch<T>(path, { ...init, headers });
   } catch (err: any) {
-    if (err.status === 401 && withAuth && !_isRetry) {
-      const fresh = await _refreshToken();
-      if (fresh) return apiFetch<T>(path, init, true, true);
+    // Clear token on 401 (Unauthorized)
+    if (err.status === 401) {
       setToken(null);
       throw new Error('Your session has expired. Please log in again.');
     }
