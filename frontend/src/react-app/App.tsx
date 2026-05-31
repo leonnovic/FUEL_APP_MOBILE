@@ -56,7 +56,7 @@ function useDetectedCountry(): string {
         const cc = parsed.currentCountry || parsed.country;
         if (cc) return cc.toUpperCase();
       }
-    } catch {}
+    } catch { /* ignore parse error, fall through to TZ detection */ }
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz.includes('Nairobi')) return 'KE';
     if (tz.includes('Lagos')) return 'NG';

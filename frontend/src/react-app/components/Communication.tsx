@@ -672,6 +672,7 @@ export default function Communication() {
             </p>
             
             <button
+              // eslint-disable-next-line react-hooks/rules-of-hooks
               onClick={() => useTemplate(template)}
               className="w-full btn btn-primary py-2 flex items-center justify-center gap-2"
             >

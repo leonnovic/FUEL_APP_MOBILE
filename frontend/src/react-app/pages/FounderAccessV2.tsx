@@ -19,7 +19,7 @@ const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
 // Mirror the pattern from /lib/backendApi.ts: prefer the env var, otherwise
 // use window.location.origin so the ingress proxies /api/* correctly.
 const API_BASE = (
-  import.meta.env.VITE_REACT_APP_BACKEND_URL
+  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
   || (typeof window !== 'undefined' ? window.location.origin : '')
 ).replace(/\/$/, '');
 
@@ -92,7 +92,7 @@ function useFounderAuth() {
       // Fall through to client-side check below (back-compat for offline UX)
     } catch (e) {
       // Network error — fall back to client-side check
-      // eslint-disable-next-line no-console
+       
       console.warn('Founder login network error:', e);
     }
     // Back-compat: allow local-only login when username + password match defaults.
@@ -628,6 +628,7 @@ function SecuritySection() {
             {twoFAStep === 'qr' ? (
               <div className="space-y-4">
                 <p className="text-sm text-gray-400">Scan with your authenticator app:</p>
+                {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
                 {twoFASecret && <div className="flex justify-center"><img src={(() => { try { const { formatSecret } = require('@/react-app/lib/totp'); return formatSecret(twoFASecret, 'FuelPro', 'Founder'); } catch { return ''; } })()} alt="2FA QR" className="w-48 h-48 rounded-lg bg-white p-2" /></div>}
                 <div className="bg-gray-800 rounded-lg p-3 flex justify-between"><code className="text-xs text-gray-300 font-mono">{twoFASecret}</code></div>
                 <button onClick={handleEnable2FA} className="w-full py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium">Continue</button>

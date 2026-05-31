@@ -82,7 +82,7 @@ function useCrossTabSync() {
         try {
           const msg = JSON.parse(e.newValue || '{}');
           if (msg.event === event) handler(msg.data);
-        } catch {}
+        } catch { /* ignore */ }
       }
     };
     window.addEventListener('storage', storageHandler);
@@ -421,7 +421,7 @@ export default function Home() {
         const cc = parsed.currentCountry || parsed.country;
         if (cc) return cc.toUpperCase();
       }
-    } catch {}
+    } catch { /* ignore */ }
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     // Map common TZs to countries
     if (tz.includes('Nairobi')) return 'KE';

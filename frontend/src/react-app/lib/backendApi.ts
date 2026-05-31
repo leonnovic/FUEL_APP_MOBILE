@@ -113,10 +113,10 @@ async function fetchWithTimeout<T>(
     return res.json() as Promise<T>;
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      throw new Error('Request timed out. Please check your connection and try again.');
+      throw new Error('Request timed out. Please check your connection and try again.', { cause: err });
     }
     if (err instanceof TypeError) {
-      throw new Error('Network error. Please check your connection.');
+      throw new Error('Network error. Please check your connection.', { cause: err });
     }
     throw err;
   } finally {
@@ -184,7 +184,7 @@ export async function apiFetch<T = unknown>(
     // Clear token on 401 (Unauthorized)
     if (err.status === 401) {
       setToken(null);
-      throw new Error('Your session has expired. Please log in again.');
+      throw new Error('Your session has expired. Please log in again.', { cause: err });
     }
     throw err;
   }

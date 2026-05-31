@@ -27,7 +27,7 @@ const TIER_ICONS: Record<string, typeof Gift> = {
 };
 
 function formatPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s+\-]/g, '');
+  let cleaned = phone.replace(/[\s+-]/g, '');
   if (cleaned.startsWith('0')) cleaned = '254' + cleaned.slice(1);
   if (cleaned.startsWith('+')) cleaned = cleaned.slice(1);
   return cleaned;
@@ -61,7 +61,7 @@ export default function Paywall({ onClose }: PaywallProps) {
 
   const handleMpesaPayment = useCallback(async () => {
     setError('');
-    if (!phone || !/^\+?\d{9,12}$/.test(phone.replace(/[\s\-]/g, ''))) {
+    if (!phone || !/^\+?\d{9,12}$/.test(phone.replace(/[\s-]/g, ''))) {
       setError('Please enter a valid M-PESA phone number (e.g. 0712345678)');
       return;
     }

@@ -33,7 +33,7 @@ export async function fetchJson<T = unknown>(
   try {
     data = await r.json();
   } catch (e) {
-    throw new Error(`Bad JSON from server (HTTP ${r.status}): ${e instanceof Error ? e.message : e}`);
+    throw new Error(`Bad JSON from server (HTTP ${r.status}): ${e instanceof Error ? e.message : e}`, { cause: e });
   }
 
   if (!r.ok) {

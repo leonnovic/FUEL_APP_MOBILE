@@ -125,7 +125,7 @@ function loadCompany(): Company | null {
   try {
     const raw = localStorage.getItem(COMPANY_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -133,7 +133,7 @@ function loadStations(): StationProfile[] {
   try {
     const raw = localStorage.getItem(STATIONS_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
+  } catch { /* ignore */ }
   return [];
 }
 

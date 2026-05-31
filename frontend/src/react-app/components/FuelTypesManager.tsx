@@ -77,7 +77,7 @@ function loadFuelTypes(): CustomFuelType[] {
   try {
     const saved = localStorage.getItem('fuelpro_custom_fuel_types');
     if (saved) return JSON.parse(saved);
-  } catch {}
+  } catch { /* ignore */ }
   return DEFAULT_FUEL_TYPES;
 }
 

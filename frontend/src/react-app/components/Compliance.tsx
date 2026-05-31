@@ -15,7 +15,7 @@ export default function Compliance() {
         const parsed = JSON.parse(saved);
         return (parsed.currentCountry || parsed.country || 'KE').toUpperCase();
       }
-    } catch {}
+    } catch { /* ignore parse error, fall through to TZ detection */ }
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz.includes('Nairobi')) return 'KE';
     if (tz.includes('Lagos')) return 'NG';

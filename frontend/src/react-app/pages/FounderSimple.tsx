@@ -100,7 +100,7 @@ function useFounderAuth() {
       }
     } catch (e) {
       // Network error → fall back to client-side default check
-      // eslint-disable-next-line no-console
+       
       console.warn('Founder login network error:', e);
     }
     // Offline / dev fallback — case-insensitive username
@@ -1360,7 +1360,7 @@ function BatchUpdateSection() {
           if (parsed.tabConfig) { setItem('fuelpro_tabconfig', parsed.tabConfig); affected.push('Tab Config'); }
           if (parsed.config) { const cfg = getItem('fuelpro_config', {}); setItem('fuelpro_config', {...cfg,...parsed.config}); affected.push('Config'); }
           if (parsed.stations) { setItem('fuelpro_stations', parsed.stations); affected.push('Stations'); }
-        } catch {}
+        } catch { /* ignore parse error for this file */ }
       }
     }
     const record = { id: `batch_${Date.now()}`, name: `Batch: ${files.length} file${files.length>1?'s':''}`, files: uploadedFiles, affected: affected.length ? affected : ['Site-wide'], timestamp: new Date().toISOString(), status: 'applied' };
@@ -1925,7 +1925,7 @@ function AIBatchSection() {
       }
 
       if (!actionTaken) {
-        response = `⚠️ I understood: "${prompt}"\n\nHowever, I need more details to process this. Try:\n• "Set Petrol price to 180.50 for station S1"\n• "Add expense \"Maintenance\" amount 5000"\n• "Generate March 2026 report"\n• "Backup all data"\n\nOr select an example below.`;
+        response = `⚠️ I understood: "${prompt}"\n\nHowever, I need more details to process this. Try:\n• "Set Petrol price to 180.50 for station S1"\n• "Add expense "Maintenance" amount 5000"\n• "Generate March 2026 report"\n• "Backup all data"\n\nOr select an example below.`;
       }
 
       setResult(response);
