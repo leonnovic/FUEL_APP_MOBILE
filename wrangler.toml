@@ -1,5 +1,5 @@
-# Cloudflare Workers deployment config for FuelPro SPA
-# Format: TOML (supported by all wrangler versions)
+# Cloudflare Workers + Static Assets config for FuelPro SPA
+# Deployed via .github/workflows/cloudflare-deploy.yml (cloudflare/wrangler-action)
 name = "fuelappmobile"
 main = "frontend/src/worker/index.ts"
 compatibility_date = "2024-09-23"
