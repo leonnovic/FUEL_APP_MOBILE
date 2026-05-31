@@ -265,3 +265,7 @@ credentials.json
 .dev.vars*
 !.dev.vars.example
 !.env.example
+# Allow frontend/dist placeholder so Cloudflare native CI can locate
+# the [assets].directory before the build command runs.
+!frontend/dist/
+!frontend/dist/.gitkeep
