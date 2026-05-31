@@ -33,7 +33,7 @@ if (typeof (Promise as unknown as { withResolvers?: unknown }).withResolvers !==
 // --------------------------------------------------------------------------
 // Array.prototype.at — Safari 15-, older WebViews.
 // --------------------------------------------------------------------------
-if (typeof Array.prototype.at !== 'function') {
+if (typeof (Array.prototype as unknown as { at?: unknown }).at !== 'function') {
   // eslint-disable-next-line no-extend-native
   Object.defineProperty(Array.prototype, 'at', {
     value: function at(this: unknown[], n: number) {

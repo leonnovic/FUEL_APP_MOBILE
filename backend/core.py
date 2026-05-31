@@ -257,9 +257,9 @@ async def revoke_token(jti: str, expires_at: str):
 
 
 def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
-    """Generate JWT with SOC-2 compliant claims including token ID for revocation"""
-    exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    """Generate JWT with SOC-2 compliant claims including token ID for revocation."""
     now = datetime.now(timezone.utc)
+    exp = now + timedelta(hours=JWT_EXPIRE_HOURS)
     payload = {
         "sub": user_id,
         "iss": "fuelpro-backend",      # Token issuer
@@ -292,20 +292,57 @@ async def _user_doc_to_out(doc: dict) -> UserOut:
     )
 
 
+def _decode_app_token(token: str, *, verify_exp: bool = True) -> dict:
+    """Decode FuelPro JWTs with current issuer/audience while accepting legacy tokens."""
+    try:
+        return jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALG],
+            audience="fuelpro-client",
+            issuer="fuelpro-backend",
+            options={"verify_exp": verify_exp},
+        )
+    except JWTError as strict_err:
+        try:
+            claims = jwt.get_unverified_claims(token)
+        except JWTError:
+            raise strict_err
+        # Legacy tokens issued before SOC-2 claims did not have iss/aud. Do not
+        # silently accept tokens with the wrong current issuer or audience.
+        if claims.get("aud") not in (None, "fuelpro-client") or claims.get("iss") not in (None, "fuelpro-backend"):
+            raise strict_err
+        try:
+            return jwt.decode(
+                token,
+                JWT_SECRET,
+                algorithms=[JWT_ALG],
+                options={
+                    "verify_exp": verify_exp,
+                    "verify_aud": False,
+                    "verify_iss": False,
+                },
+            )
+        except JWTError:
+            raise strict_err
+
+
 async def get_current_user(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ) -> dict:
     if not creds:
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = _decode_app_token(creds.credentials)
         uid = payload.get("sub")
         jti = payload.get("jti")
-        
+
         # CRITICAL: Check if token was revoked (user logged out)
         if jti and await is_token_revoked(jti):
             raise HTTPException(status_code=401, detail="Session ended. Please log in again.")
-            
+
+    except HTTPException:
+        raise
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if not uid:
@@ -322,9 +359,10 @@ async def get_current_user_optional(
     if not creds:
         return None
     try:
-        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = _decode_app_token(creds.credentials)
         uid = payload.get("sub")
-        if not uid:
+        jti = payload.get("jti")
+        if not uid or (jti and await is_token_revoked(jti)):
             return None
         return await db.users.find_one({"id": uid}, {"_id": 0})
     except JWTError:
@@ -335,7 +373,7 @@ def require_founder(creds: Optional[HTTPAuthorizationCredentials] = Depends(bear
     if not creds:
         raise HTTPException(status_code=401, detail="Founder token required")
     try:
-        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+        payload = _decode_app_token(creds.credentials)
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if payload.get("scope") != "founder":

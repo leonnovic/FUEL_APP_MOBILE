@@ -16,9 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from core import (
     IS_PRODUCTION,
-    JWT_ALG,
     JWT_EXPIRE_HOURS,
-    JWT_SECRET,
     PUBLIC_BACKEND_URL,
     TokenResponse,
     UserCreate,
@@ -35,6 +33,7 @@ from core import (
     new_id,
     now_iso,
     revoke_token,
+    _decode_app_token,
 )
 
 router = APIRouter()
@@ -142,13 +141,9 @@ async def logout(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ):
     """Logout: revoke current JWT so it cannot be reused even before expiry."""
-    from jose import jwt as _jwt
     if creds:
         try:
-            payload = _jwt.decode(
-                creds.credentials, JWT_SECRET, algorithms=[JWT_ALG],
-                options={"verify_exp": False},
-            )
+            payload = _decode_app_token(creds.credentials, verify_exp=False)
             jti = payload.get("jti")
             exp = payload.get("exp")
             if jti and exp:
@@ -177,13 +172,9 @@ async def refresh_token(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ):
     """Refresh: revoke old JWT and issue a fresh one (sliding session)."""
-    from jose import jwt as _jwt
     if creds:
         try:
-            payload = _jwt.decode(
-                creds.credentials, JWT_SECRET, algorithms=[JWT_ALG],
-                options={"verify_exp": False},
-            )
+            payload = _decode_app_token(creds.credentials, verify_exp=False)
             jti = payload.get("jti")
             exp = payload.get("exp")
             if jti and exp:
@@ -399,7 +390,7 @@ async def _verify_google_token_direct(token: str, platform: str) -> dict:
         raise ValueError("Google OAuth library not installed. Run: pip install google-auth google-auth-oauthlib")
     
     client_id_map = {
-        "web": os.environ.get("GOOGLE_CLIENT_ID_WEB"),
+        "web": os.environ.get("GOOGLE_CLIENT_ID_WEB") or os.environ.get("GOOGLE_CLIENT_ID"),
         "android": os.environ.get("GOOGLE_CLIENT_ID_ANDROID"),
         "ios": os.environ.get("GOOGLE_CLIENT_ID_IOS"),
     }
