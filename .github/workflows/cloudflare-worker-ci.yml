@@ -55,13 +55,16 @@ jobs:
           node -e "
             const fs = require('fs');
             const path = require('path');
+            // wrangler.toml is TOML format, not JSON — check required keys by string matching
             const content = fs.readFileSync(path.join('..', 'wrangler.toml'), 'utf8');
-            const config = JSON.parse(content);
             const required = ['name', 'main', 'assets', 'build'];
-            const missing = required.filter(k => !config[k]);
+            const missing = required.filter(k => {
+              const re = new RegExp('\\\\b' + k + '\\\\s*[=\\\\[]');
+              return !re.test(content);
+            });
             if (missing.length) {
-              console.error('wrangler.toml missing fields:', missing);
+              console.error('wrangler.toml missing required fields:', missing.join(', '));
               process.exit(1);
             }
-            console.log('✓ wrangler.toml valid:', Object.keys(config).join(', '));
+            console.log('✓ wrangler.toml contains all required fields:', required.join(', '));
           "

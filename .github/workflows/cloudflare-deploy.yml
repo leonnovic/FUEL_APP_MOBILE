@@ -28,9 +28,28 @@ jobs:
           VITE_REACT_APP_BACKEND_URL: ${{ secrets.VITE_REACT_APP_BACKEND_URL }}
         run: npm ci --legacy-peer-deps && npm run build
 
+      - name: Check Cloudflare secrets
+        id: check_secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "⚠️  CLOUDFLARE_API_TOKEN secret not set — skipping deploy"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy to Cloudflare Workers
+        if: steps.check_secrets.outputs.skip == 'false'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '3'
+
+      - name: Deploy skipped (secrets not configured)
+        if: steps.check_secrets.outputs.skip == 'true'
+        run: |
+          echo "Deploy skipped. To activate, add these secrets in:"
+          echo "GitHub repo → Settings → Secrets and variables → Actions"
+          echo "  CLOUDFLARE_API_TOKEN  (from dash.cloudflare.com/profile/api-tokens)"
+          echo "  CLOUDFLARE_ACCOUNT_ID (from dash.cloudflare.com Workers & Pages sidebar)"
