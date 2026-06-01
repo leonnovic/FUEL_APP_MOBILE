@@ -7,7 +7,7 @@ circular imports between routers.
 
 from __future__ import annotations
 
-import json
+import hashlib
 import logging
 import os
 import uuid
@@ -35,6 +35,7 @@ DB_NAME = os.environ["DB_NAME"]
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
+PASSWORD_PEPPER = os.environ.get("PASSWORD_PEPPER", "")  # CRITICAL: Set in prod
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 # When the Emergent Stripe proxy can't retrieve a session_id, we fall back to
 # trusting the success-URL redirect. Set this env to "0" to disable that
@@ -49,11 +50,10 @@ MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "")
 MPESA_SHORTCODE = os.environ.get("MPESA_SHORTCODE", "174379")
 MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", "")
 MPESA_CALLBACK_BASE_URL = os.environ.get("MPESA_CALLBACK_BASE_URL", "")
+MPESA_WEBHOOK_SECRET = os.environ.get("MPESA_WEBHOOK_SECRET", "")  # For HMAC validation
 FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "publican1D#20")
 FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
-
-# Security: Password pepper (server-side secret added to password before hashing)
-PASSWORD_PEPPER = os.environ.get("PASSWORD_PEPPER", "")
+CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "https://fuel-app-mobile.vercel.app").split(",")
 
 # Server-authoritative subscription tiers — frontend MUST NOT send prices.
 PLANS: dict[str, dict[str, Any]] = {
@@ -90,60 +90,14 @@ ALLOWED_COLLECTIONS = {
 }
 
 # ---------------------------------------------------------------------------
-# Structured JSON logging (production-grade observability)
-# Outputs one JSON object per line — easy to ship to Datadog / CloudWatch / GCP.
-# In development (LOG_FORMAT=text) falls back to human-readable plain text.
+# Logger, DB, security primitives
 # ---------------------------------------------------------------------------
-
-class _JSONFormatter(logging.Formatter):
-    """Emit each log record as a single-line JSON object with standard fields."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        # Attempt to read the current request_id from the context variable.
-        req_id = ""
-        try:
-            from middleware import request_id_ctx  # local import avoids circular dep
-            req_id = request_id_ctx.get("")
-        except Exception:
-            pass
-
-        payload: dict[str, Any] = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": record.getMessage(),
-            "module": record.module,
-            "func": record.funcName,
-            "line": record.lineno,
-        }
-        if req_id:
-            payload["request_id"] = req_id
-        if record.exc_info:
-            payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
-
-
-def _configure_logging() -> logging.Logger:
-    use_json = os.environ.get("LOG_FORMAT", "json" if os.environ.get("APP_ENV", "production") in {"production", "prod"} else "text") == "json"
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    if not root.handlers:
-        handler = logging.StreamHandler()
-        if use_json:
-            handler.setFormatter(_JSONFormatter())
-        else:
-            handler.setFormatter(
-                logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-            )
-        root.addHandler(handler)
-    return logging.getLogger("fuelpro")
-
-
-log = _configure_logging()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+log = logging.getLogger("fuelpro")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 bearer = HTTPBearer(auto_error=False)
 
 # Lazily-constructed Stripe client (single instance — re-creating per request
@@ -205,72 +159,31 @@ class TokenResponse(BaseModel):
 # Auth helpers
 # ---------------------------------------------------------------------------
 def _hash_pw(pw: str) -> str:
-    """Hash password with bcrypt + server-side pepper (if configured)"""
+    """Hash password with pepper (server-side secret) for defense-in-depth."""
     if PASSWORD_PEPPER:
-        pw = pw + PASSWORD_PEPPER
+        pw = f"{pw}{PASSWORD_PEPPER}"
     return pwd_ctx.hash(pw)
 
 
 def _verify_pw(pw: str, hashed: str) -> bool:
-    """Verify password with pepper support (constant-time comparison).
-    Tries pepper-prefixed version first, then falls back to non-peppered for legacy compatibility.
-    """
+    """Verify password with pepper support."""
     try:
         if PASSWORD_PEPPER:
-            # Try with pepper first
-            if pwd_ctx.verify(pw + PASSWORD_PEPPER, hashed):
-                return True
-            # Fallback: try without pepper (for legacy hashes created before pepper was added)
-            return pwd_ctx.verify(pw, hashed)
+            pw = f"{pw}{PASSWORD_PEPPER}"
         return pwd_ctx.verify(pw, hashed)
     except Exception:
         return False
 
 
-# Token Revocation Support (for logout/session termination)
-async def is_token_revoked(jti: str) -> bool:
-    """Check if token ID is in revocation list (user logged out)"""
-    return await db.revoked_tokens.find_one({
-        "jti": jti,
-        "expires_at": {"$gt": now_iso()}
-    }) is not None
-
-
-async def revoke_token(jti: str, expires_at: str):
-    """Add token to revocation list with TTL.
-    MongoDB will auto-delete after expiry via TTL index.
-    """
-    await db.revoked_tokens.insert_one({
-        "jti": jti,
-        "revoked_at": now_iso(),
-        "expires_at": expires_at,
-    })
-    # Ensure TTL index exists (run once during startup)
-    try:
-        await db.revoked_tokens.create_index(
-            [("expires_at", 1)],
-            expireAfterSeconds=0,
-            background=True
-        )
-    except Exception:
-        pass  # Index may already exist
-
-
-def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
-    """Generate JWT with SOC-2 compliant claims including token ID for revocation."""
-    now = datetime.now(timezone.utc)
-    exp = now + timedelta(hours=JWT_EXPIRE_HOURS)
-    payload = {
-        "sub": user_id,
-        "iss": "fuelpro-backend",      # Token issuer
-        "aud": "fuelpro-client",        # Intended audience
-        "exp": exp,
-        "iat": now,
-        "jti": new_id(),                # ← Unique token ID for revocation
-        "scope": "user",
-        **(extra_claims or {}),
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+def _make_token(user_id: str) -> str:
+    """Create JWT with jti claim for revocation support."""
+    jti = str(uuid.uuid4())  # Unique token ID for revocation
+    exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    return jwt.encode(
+        {"sub": user_id, "exp": exp, "jti": jti, "iat": datetime.now(timezone.utc)},
+        JWT_SECRET,
+        algorithm=JWT_ALG
+    )
 
 
 def _strip_oid(d: dict) -> dict:
@@ -292,61 +205,27 @@ async def _user_doc_to_out(doc: dict) -> UserOut:
     )
 
 
-def _decode_app_token(token: str, *, verify_exp: bool = True) -> dict:
-    """Decode FuelPro JWTs with current issuer/audience while accepting legacy tokens."""
-    try:
-        return jwt.decode(
-            token,
-            JWT_SECRET,
-            algorithms=[JWT_ALG],
-            audience="fuelpro-client",
-            issuer="fuelpro-backend",
-            options={"verify_exp": verify_exp},
-        )
-    except JWTError as strict_err:
-        try:
-            claims = jwt.get_unverified_claims(token)
-        except JWTError:
-            raise strict_err
-        # Legacy tokens issued before SOC-2 claims did not have iss/aud. Do not
-        # silently accept tokens with the wrong current issuer or audience.
-        if claims.get("aud") not in (None, "fuelpro-client") or claims.get("iss") not in (None, "fuelpro-backend"):
-            raise strict_err
-        try:
-            return jwt.decode(
-                token,
-                JWT_SECRET,
-                algorithms=[JWT_ALG],
-                options={
-                    "verify_exp": verify_exp,
-                    "verify_aud": False,
-                    "verify_iss": False,
-                },
-            )
-        except JWTError:
-            raise strict_err
-
-
 async def get_current_user(
     creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ) -> dict:
+    """Verify JWT and check revocation list."""
     if not creds:
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = _decode_app_token(creds.credentials)
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         uid = payload.get("sub")
         jti = payload.get("jti")
-
-        # CRITICAL: Check if token was revoked (user logged out)
-        if jti and await is_token_revoked(jti):
-            raise HTTPException(status_code=401, detail="Session ended. Please log in again.")
-
-    except HTTPException:
-        raise
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid token payload")
+    
+    # Check revocation list (logout)
+    if jti:
+        revoked = await db.token_revocations.find_one({"jti": jti})
+        if revoked:
+            raise HTTPException(status_code=401, detail="Token has been revoked (logout)")
+    
     user = await db.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -359,11 +238,18 @@ async def get_current_user_optional(
     if not creds:
         return None
     try:
-        payload = _decode_app_token(creds.credentials)
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         uid = payload.get("sub")
         jti = payload.get("jti")
-        if not uid or (jti and await is_token_revoked(jti)):
+        if not uid:
             return None
+        
+        # Check revocation
+        if jti:
+            revoked = await db.token_revocations.find_one({"jti": jti})
+            if revoked:
+                return None
+        
         return await db.users.find_one({"id": uid}, {"_id": 0})
     except JWTError:
         return None
@@ -373,7 +259,7 @@ def require_founder(creds: Optional[HTTPAuthorizationCredentials] = Depends(bear
     if not creds:
         raise HTTPException(status_code=401, detail="Founder token required")
     try:
-        payload = _decode_app_token(creds.credentials)
+        payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     if payload.get("scope") != "founder":
@@ -411,3 +297,15 @@ def new_id() -> str:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def verify_mpesa_webhook(body: str, signature: str) -> bool:
+    """Verify M-PESA webhook signature using HMAC."""
+    if not MPESA_WEBHOOK_SECRET:
+        log.warning("MPESA_WEBHOOK_SECRET not configured; skipping signature verification")
+        return IS_PRODUCTION is False  # Only allow in non-prod
+    
+    expected_sig = hashlib.sha256(
+        f"{body}{MPESA_WEBHOOK_SECRET}".encode()
+    ).hexdigest()
+    return signature == expected_sig

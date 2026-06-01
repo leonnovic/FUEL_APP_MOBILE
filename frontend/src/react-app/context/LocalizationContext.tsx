@@ -37,7 +37,7 @@ function resolveCountryKey(): string {
       const key = (parsed.currentCountry || parsed.country || 'kenya').toLowerCase().replace(/\s+/g, '');
       if (COUNTRY_KEY_MAP[key]) return COUNTRY_KEY_MAP[key];
     }
-  } catch {}
+  } catch { /* ignore */ }
   return 'kenya';
 }
 

@@ -5,7 +5,7 @@ import { formatNumber } from '@/react-app/utils/formatUtils';
 import ExportDropdown from '@/react-app/components/ExportDropdown';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@/react-app/lib/xlsxShim';
 import { saveAs } from 'file-saver';
 
 type ReportType = 'overall' | 'profit-loss' | 'expenses' | 'vat-return' | 'daily-sales' | 'kra-summary';
@@ -42,10 +42,11 @@ export default function ReportsCenter() {
         case 'daily':
           key = date.toISOString().split('T')[0];
           break;
-        case 'weekly':
+        case 'weekly': {
           const week = getWeekNumber(date);
           key = `${date.getFullYear()}-W${week}`;
           break;
+        }
         case 'monthly':
           key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
           break;
@@ -712,11 +713,11 @@ export default function ReportsCenter() {
     return titles[activeReport];
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const reportTitle = getReportTitle();
     const wb = XLSX.utils.book_new();
     
-    let ws_data: any[][] = [
+    const ws_data: any[][] = [
       [reportTitle],
       [state.companyData.name],
       [`KRA PIN: ${state.companyData.kraPin || 'N/A'} | VAT Reg: ${state.companyData.vatRegNo || 'N/A'}`],
@@ -810,7 +811,7 @@ export default function ReportsCenter() {
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
     ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Report');
-    XLSX.writeFile(wb, `${reportTitle.replace(/ /g, '_')}_${startDate}_${endDate}.xlsx`);
+    await XLSX.writeFile(wb, `${reportTitle.replace(/ /g, '_')}_${startDate}_${endDate}.xlsx`);
   };
 
   const exportToTXT = () => {

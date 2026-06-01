@@ -45,12 +45,12 @@ const STORAGE_KEY = 'fuelpro_documents';
 const FOLDERS_KEY = 'fuelpro_doc_folders';
 
 function loadDocs(): DocItem[] {
-  try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return JSON.parse(saved); } catch {}
+  try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
   return [];
 }
 
 function loadFolders(): DocFolder[] {
-  try { const saved = localStorage.getItem(FOLDERS_KEY); if (saved) return JSON.parse(saved); } catch {}
+  try { const saved = localStorage.getItem(FOLDERS_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
   return DEFAULT_FOLDERS;
 }
 

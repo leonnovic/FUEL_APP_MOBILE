@@ -106,6 +106,7 @@ export default function PaywallScreen({ onSubscriptionActive }: PaywallScreenPro
     const result = applyCoupon(couponCode, selectedTier, country.code);
     setCouponResult(result);
     if (result.valid) {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       useCoupon(couponCode);
     }
   };

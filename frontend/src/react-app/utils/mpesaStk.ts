@@ -32,7 +32,7 @@ function loadConfig(): DarajaConfig {
         environment: apiKeys.mpesaEnvironment || 'sandbox',
       };
     }
-  } catch {}
+  } catch { /* ignore */ }
   return {
     consumerKey: '',
     consumerSecret: '',
@@ -288,7 +288,7 @@ function storePendingTransaction(checkoutRequestId: string, request: STKPushRequ
       timestamp: new Date().toISOString(),
     });
     localStorage.setItem('fuelpro_mpesa_pending', JSON.stringify(pending.slice(0, 100)));
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 export function getPendingTransactions(): PendingTransaction[] {
@@ -308,7 +308,7 @@ export function updateTransactionStatus(checkoutRequestId: string, status: Pendi
         : tx
     );
     localStorage.setItem('fuelpro_mpesa_pending', JSON.stringify(updated));
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 export function getTransactionHistory(): PendingTransaction[] {
@@ -322,7 +322,7 @@ export function addToHistory(tx: PendingTransaction) {
     const history = getTransactionHistory();
     history.unshift(tx);
     localStorage.setItem('fuelpro_mpesa_history', JSON.stringify(history.slice(0, 500)));
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 // ═══════════════════════════════════════════════════
