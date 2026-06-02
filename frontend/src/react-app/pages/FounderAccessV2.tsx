@@ -199,7 +199,7 @@ function FounderLogin({ onLogin }: { onLogin: () => void }) {
                   onKeyDown={onKeyDown}
                   autoComplete="current-password"
                   name="password"
-                  placeholder="publican1D#20 (default)"
+                  placeholder="Enter founder password"
                   data-testid="founder-password-input"
                   className="w-full px-4 py-3 pr-10 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm"
                   autoFocus
@@ -217,7 +217,7 @@ function FounderLogin({ onLogin }: { onLogin: () => void }) {
               <Shield size={16} /> {isSubmitting ? 'Authenticating...' : 'Access Backend'}
             </button>
             <p className="text-[11px] text-gray-600 text-center mt-3">
-              Default: <code className="px-1.5 py-0.5 bg-gray-800 rounded text-amber-400 font-mono">publican1D#20</code> · Rate-limited 5/h per IP
+              Rate-limited 5/h per IP
             </p>
           </div>
         </div>

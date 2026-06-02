@@ -11,11 +11,11 @@ import { getDb } from "./queries/connection";
 import { desc } from "drizzle-orm";
 
 // ─── Credential Store ───
-// Default credentials (configurable via localStorage on frontend)
-const DEFAULT_CREDS = { username: "FOUNDER", password: "publican1D#20" };
+// Auth is performed server-side — no default password in client code.
+const DEFAULT_CREDS = { username: "FOUNDER", password: "" };
 
 function getStoredCreds(): { username: string; password: string } {
-  // In production, this could read from environment variables or encrypted store
+  // In production, credentials are validated by the backend via /api/founder/login.
   return DEFAULT_CREDS;
 }
 

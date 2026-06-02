@@ -2313,7 +2313,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
       if (result) return; // parent state flip handles redirect
       // Hook's setError already surfaced the precise reason (rate limit / 401 / network).
       // Try to read it from localStorage marker the hook leaves; fall back to generic.
-      setErr('Invalid password. Default: "publican1D#20" (case-sensitive). Check Caps Lock & trailing whitespace.');
+      setErr('Invalid password. Please contact support if you have forgotten your credentials.');
       setPw('');
       if (pwRef.current) pwRef.current.value = '';
     } finally {
@@ -2369,7 +2369,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
                   defaultValue=""
                   onChange={e => { setPw(e.target.value); setErr(''); }}
                   onKeyDown={handleKeyDown}
-                  placeholder="publican1D#20 (default)"
+                  placeholder="Enter founder password"
                   autoComplete="current-password"
                   name="password"
                   autoFocus
@@ -2393,7 +2393,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
               <Shield size={16} /> {submitting ? 'Authenticating…' : 'Access Backend'}
             </button>
             <p style={{ fontSize: 10, color: '#444', textAlign: 'center', margin: '4px 0 0' }}>
-              Default password: <code style={{ background: '#1a1a1f', padding: '2px 6px', borderRadius: 4, color: '#f59e0b', fontFamily: 'monospace' }}>publican1D#20</code> · Rate-limited 5/h per IP
+              Rate-limited 5/h per IP
             </p>
           </div>
         </div>
