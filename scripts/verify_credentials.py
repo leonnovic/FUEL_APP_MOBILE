@@ -1,11 +1,9 @@
 import asyncio
 import os
 import httpx
-import hmac
-import hashlib
-from datetime import datetime
 
 async def verify_stripe(api_key):
+    # Log only the prefix to avoid leaking sensitive data
     print(f"Verifying Stripe with key prefix: {api_key[:4]}...")
     async with httpx.AsyncClient() as client:
         try:
@@ -17,10 +15,10 @@ async def verify_stripe(api_key):
                 print("✅ Stripe API Key is VALID")
                 return True
             else:
-                print(f"❌ Stripe verification FAILED with status {resp.status_code}")
+                print("❌ Stripe verification FAILED")
                 return False
-        except Exception as e:
-            print(f"❌ Stripe verification ERROR: {e}")
+        except Exception:
+            print("❌ Stripe verification ERROR")
             return False
 
 async def verify_mpesa(consumer_key, consumer_secret):
@@ -37,10 +35,10 @@ async def verify_mpesa(consumer_key, consumer_secret):
                 print("✅ M-PESA credentials are VALID (Sandbox)")
                 return True
             else:
-                print(f"❌ M-PESA verification FAILED with status {resp.status_code}")
+                print("❌ M-PESA verification FAILED")
                 return False
-        except Exception as e:
-            print(f"❌ M-PESA verification ERROR: {e}")
+        except Exception:
+            print("❌ M-PESA verification ERROR")
             return False
 
 async def main():

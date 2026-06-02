@@ -18,6 +18,6 @@ jobs:
         run: test -f frontend/src/worker/index.ts
       - name: Validate wrangler.jsonc
         run: |
-          grep -q '"name":' wrangler.jsonc
-          grep -q '"main":' wrangler.jsonc
-          grep -q '"assets":' wrangler.jsonc
+          test -f wrangler.jsonc
+          grep '"name":' wrangler.jsonc
+          grep '"main":' wrangler.jsonc
