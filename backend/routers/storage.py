@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import db, get_current_user, log, new_id, now_iso
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -125,10 +126,10 @@ async def presign_upload(body: PresignUploadBody, user: dict = Depends(get_curre
         "created_at": now_iso(),
     })
 
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "storage.presign_upload",
-        "at": now_iso(), "meta": {"key": key, "category": body.category, "size": body.size},
-    })
+    await write_audit_log(
+        user["id"], "storage.presign_upload",
+        meta={"key": key, "category": body.category, "size": body.size},
+    )
 
     return {
         "ok": True,
@@ -220,14 +221,11 @@ async def storage_delete(key: str, user: dict = Depends(get_current_user)):
         log.error("S3 delete failed: %s", e)
         # Continue to drop the metadata row even if S3 delete failed — the
         # user can re-run the cleanup tool. We surface the error transparently.
-        await db.audit_log.insert_one({
-            "id": new_id(), "user_id": user["id"], "action": "storage.delete_failed",
-            "at": now_iso(), "meta": {"key": key, "error": str(e)},
-        })
+        await write_audit_log(
+            user["id"], "storage.delete_failed",
+            meta={"key": key, "error": str(e)},
+        )
         raise HTTPException(status_code=502, detail=f"S3 delete failed: {e}")
     await db.storage_files.delete_one({"key": key, "user_id": user["id"]})
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "storage.delete",
-        "at": now_iso(), "meta": {"key": key},
-    })
+    await write_audit_log(user["id"], "storage.delete", meta={"key": key})
     return {"ok": True}

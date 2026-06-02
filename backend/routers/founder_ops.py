@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import db, log, new_id, now_iso, require_founder
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -140,11 +141,10 @@ async def set_integrations(body: IntegrationKeys, _=Depends(require_founder)):
             os.environ[env_name] = str(val)
 
     # Audit
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.integrations_updated",
-        "at": now_iso(),
-        "meta": {"keys_set": [k for k in payload if k != "_updated_at"]},
-    })
+    await write_audit_log(
+        "founder", "founder.integrations_updated",
+        meta={"keys_set": [k for k in payload if k != "_updated_at"]},
+    )
     return {"ok": True, "applied": list(payload.keys())}
 
 
@@ -243,11 +243,10 @@ async def founder_delete_user(user_id: str, _=Depends(require_founder)):
             deleted_counts[col] = r.deleted_count
         except Exception as e:
             deleted_counts[col] = f"err:{e}"
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.user_deleted",
-        "at": now_iso(),
-        "meta": {"target_email": user.get("email"), "target_id": user_id, "deleted_counts": deleted_counts},
-    })
+    await write_audit_log(
+        "founder", "founder.user_deleted",
+        meta={"target_email": user.get("email"), "target_id": user_id, "deleted_counts": deleted_counts},
+    )
     return {"ok": True, "deleted": deleted_counts}
 
 
@@ -274,11 +273,10 @@ async def founder_extend_trial(user_id: str, body: dict, _=Depends(require_found
                   "subscription_status": "trial",
                   "updated_at": now_iso()}},
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.trial_extended",
-        "at": now_iso(),
-        "meta": {"target_user_id": user_id, "days": days, "new_end": new_end.isoformat()},
-    })
+    await write_audit_log(
+        "founder", "founder.trial_extended",
+        meta={"target_user_id": user_id, "days": days, "new_end": new_end.isoformat()},
+    )
     return {"ok": True, "trial_ends_at": new_end.isoformat()}
 
 
@@ -386,9 +384,8 @@ async def founder_grant_subscription(user_id: str, body: dict, _=Depends(require
                   "updated_at": now_iso()}},
         upsert=True,
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.subscription_granted",
-        "at": now_iso(),
-        "meta": {"target_user_id": user_id, "plan": plan, "days": days},
-    })
+    await write_audit_log(
+        "founder", "founder.subscription_granted",
+        meta={"target_user_id": user_id, "plan": plan, "days": days},
+    )
     return {"ok": True, "plan": plan, "period_end": period_end}

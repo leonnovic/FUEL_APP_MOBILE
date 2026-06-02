@@ -19,8 +19,8 @@ from core import (
     db,
     get_current_user,
     new_id,
-    now_iso,
 )
+from services.shared import build_user_doc, write_audit_log
 
 router = APIRouter()
 
@@ -81,11 +81,10 @@ async def _persist_invite(body: "InviteCreate", target_email: str, user: dict) -
         "created_at": now.isoformat(),
         "expires_at": (now + timedelta(days=14)).isoformat(),
     })
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "invite.created",
-        "at": now.isoformat(),
-        "meta": {"invited_email": body.email, "role": body.role, "invite_id": invite_id},
-    })
+    await write_audit_log(
+        user["id"], "invite.created",
+        meta={"invited_email": body.email, "role": body.role, "invite_id": invite_id},
+    )
     return invite_id, code
 
 
@@ -157,24 +156,16 @@ async def accept_invite(body: InviteAccept):
             detail="That email already has a FuelPro account. Please sign in instead.",
         )
 
-    user_doc = {
-        "id": new_id(),
-        "email": email, "name": body.name.strip(),
-        "password_hash": _hash_pw(body.password),
-        "role": inv["role"], "tier": "free",
-        "subscription_status": "trial",
-        "trial_started_at": now.isoformat(),
-        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
-        "created_at": now.isoformat(), "updated_at": now.isoformat(),
-        "invited_by": inv.get("invited_by_user_id"),
-    }
+    user_doc = build_user_doc(
+        email, body.name.strip(),
+        password_hash=_hash_pw(body.password),
+        role=inv["role"],
+        extra_fields={"invited_by": inv.get("invited_by_user_id")},
+    )
     await db.users.insert_one(user_doc)
     await db.invites.update_one({"code": body.code}, {"$set": {"status": "accepted", "accepted_at": now.isoformat()}})
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": inv.get("invited_by_user_id"),
-        "action": "invite.accepted",
-        "at": now.isoformat(),
-        "meta": {"new_user_email": email, "role": inv["role"]},
-    })
+    await write_audit_log(
+        inv.get("invited_by_user_id") or "unknown", "invite.accepted",
+        meta={"new_user_email": email, "role": inv["role"]},
+    )
     return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))

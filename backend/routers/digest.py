@@ -9,7 +9,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core import db, get_current_user, new_id, now_iso
+from core import db, get_current_user, now_iso
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -53,13 +54,12 @@ async def ai_reconcile(body: ReconcileBody, user: dict = Depends(get_current_use
             upsert=True,
         )
 
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "ai.reconcile_mpesa",
-        "at": now_iso(),
-        "meta": {"inflows": len(body.inflows), "sales": len(body.sales),
-                  "matched": len(result.get("matches", [])) if result.get("ok") else 0,
-                  "cached": False},
-    })
+    await write_audit_log(
+        user["id"], "ai.reconcile_mpesa",
+        meta={"inflows": len(body.inflows), "sales": len(body.sales),
+              "matched": len(result.get("matches", [])) if result.get("ok") else 0,
+              "cached": False},
+    )
     return result
 
 

@@ -25,6 +25,7 @@ from core import (
     normalize_phone,
     now_iso,
 )
+from services.shared import activate_subscription, create_payment_transaction
 
 router = APIRouter()
 
@@ -119,15 +120,10 @@ async def mpesa_stk_push(body: STKBody, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Phone must be a valid Kenyan number (2547XXXXXXXX)")
 
     account_ref = f"FUEL-{user['id'][:8]}"
-    tx_id = new_id()
-
-    await db.payment_transactions.insert_one({
-        "id": tx_id, "user_id": user["id"], "user_email": user["email"],
-        "plan": body.plan, "amount": amount, "currency": "kes",
-        "provider": "mpesa", "phone": phone, "account_ref": account_ref,
-        "status": "initiated", "payment_status": "pending",
-        "created_at": now_iso(), "updated_at": now_iso(),
-    })
+    tx_id = await create_payment_transaction(
+        user["id"], user["email"], body.plan, amount, "kes", "mpesa",
+        phone=phone, account_ref=account_ref,
+    )
 
     if not daraja.configured():
         log.warning("Daraja not configured — returning MOCK STK push response")
@@ -216,39 +212,12 @@ async def _activate_subscription_from_callback(tx: dict, parsed: dict, now: str)
     """Flip the user to `active` + write subscription + audit-log entry."""
     uid = tx.get("user_id")
     plan = tx.get("plan", "starter")
-    period_end = (datetime.now(timezone.utc) + timedelta(days=31)).isoformat()
-    log.info(
-        "fuelpro.mpesa.activated user_id=%s plan=%s receipt=%s amount=%s period_end=%s",
-        uid, plan, parsed.get("receipt"), parsed.get("amount"), period_end,
+    await activate_subscription(
+        uid, plan, "mpesa",
+        receipt=parsed["receipt"],
+        push_title="Payment received \U0001f389",
+        push_body=f"Your {plan.title()} plan is now active. Receipt: {parsed.get('receipt', 'N/A')}",
     )
-    await db.users.update_one(
-        {"id": uid},
-        {"$set": {"tier": plan, "subscription_status": "active",
-                  "subscription_period_end": period_end, "updated_at": now}},
-    )
-    await db.subscriptions.update_one(
-        {"user_id": uid},
-        {"$set": {"user_id": uid, "tier": plan, "status": "active",
-                  "provider": "mpesa", "mpesa_receipt": parsed["receipt"],
-                  "period_end": period_end, "updated_at": now}},
-        upsert=True,
-    )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": uid, "action": "subscription.activated",
-        "at": now, "meta": {"plan": plan, "provider": "mpesa", "receipt": parsed["receipt"]},
-    })
-    # Push notification (best-effort)
-    try:
-        from routers.push import push_to_user
-        await push_to_user(uid, {
-            "title": "Payment received 🎉",
-            "body": f"Your {plan.title()} plan is now active. Receipt: {parsed.get('receipt', 'N/A')}",
-            "url": "/#/?tab=dashboard",
-            "tag": f"mpesa-paid-{parsed.get('receipt', uid)}",
-            "icon": "/logo-small.png",
-        })
-    except Exception as _e:  # noqa: BLE001
-        log.debug("mpesa push skipped: %s", _e)
 
 
 async def mpesa_stk_callback_handler(request: Request):
@@ -313,20 +282,20 @@ async def mpesa_stk_callback_handler(request: Request):
             await _activate_subscription_from_callback(tx, parsed, now)
 
     # Audit trail for every callback
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "action": "mpesa.stk_callback",
-        "at": now_iso(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "")[:200],
-        "meta": {
+    from services.shared import get_request_meta, write_audit_log
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        tx.get("user_id", "unknown") if tx else "unknown",
+        "mpesa.stk_callback",
+        meta={
             "checkout_request_id": parsed.get("checkout_request_id"),
             "status": parsed.get("status_str"),
             "receipt": parsed.get("receipt"),
             "result_code": parsed.get("result_code"),
             "signature_verified": signature_verified,
         },
-    })
+        **req_meta,
+    )
 
     return {"ResultCode": 0, "ResultDesc": "Callback received"}
 

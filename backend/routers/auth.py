@@ -8,7 +8,6 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, validator
 
@@ -34,6 +33,13 @@ from core import (
     now_iso,
     revoke_token,
     _decode_app_token,
+)
+from services.shared import (
+    build_user_doc,
+    get_client_ip,
+    get_request_meta,
+    upsert_oauth_user,
+    write_audit_log,
 )
 
 router = APIRouter()
@@ -84,16 +90,12 @@ async def register(body: UserCreate, request: Request):
         "updated_at": now.isoformat(),
     }
     await db.users.insert_one(user)
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": user["id"],
-        "action": "user.register",
-        "at": now.isoformat(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "station_id": request.headers.get("x-station-id"),
-        "meta": {"email": email, "auth_method": "email"},
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        user["id"], "user.register",
+        meta={"email": email, "auth_method": "email"},
+        **req_meta,
+    )
     out = await _user_doc_to_out(user)
     return TokenResponse(token=_make_token(user["id"]), user=out)
 
@@ -104,27 +106,20 @@ async def login(body: UserLogin, request: Request):
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not _verify_pw(body.password, user.get("password_hash", "")):
         # Audit failed login attempt (for breach detection)
-        await db.audit_log.insert_one({
-            "id": new_id(),
-            "user_id": "anonymous",
-            "action": "auth.login_failed",
-            "at": now_iso(),
-            "ip_address": request.client.host if request.client else "unknown",
-            "user_agent": request.headers.get("user-agent", "unknown"),
-            "meta": {"email": email, "reason": "invalid_credentials"},
-        })
+        req_meta = get_request_meta(request)
+        await write_audit_log(
+            "anonymous", "auth.login_failed",
+            meta={"email": email, "reason": "invalid_credentials"},
+            ip_address=req_meta["ip_address"], user_agent=req_meta["user_agent"],
+        )
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": user["id"],
-        "action": "auth.login",
-        "at": now_iso(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "station_id": request.headers.get("x-station-id"),
-        "meta": {"email": email, "auth_method": "email"},
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        user["id"], "auth.login",
+        meta={"email": email, "auth_method": "email"},
+        **req_meta,
+    )
     out = await _user_doc_to_out(user)
     return TokenResponse(token=_make_token(user["id"]), user=out)
 
@@ -152,15 +147,8 @@ async def logout(
         except Exception as e:
             log.warning("Logout token revocation failed: %s", e)
 
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": user["id"],
-        "action": "auth.logout",
-        "at": now_iso(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "meta": {},
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(user["id"], "auth.logout", **req_meta)
     log.info("User logged out + token revoked: user_id=%s", user["id"])
     return {"ok": True, "message": "Logged out successfully"}
 
@@ -294,10 +282,7 @@ async def password_reset_confirm(body: PasswordResetConfirm):
     )
     await db.password_resets.update_one({"email": email}, {"$set": {"used": True}})
     user_doc = await db.users.find_one({"email": email}, {"_id": 0})
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user_doc["id"], "action": "auth.password_reset",
-        "at": now_iso(), "meta": {},
-    })
+    await write_audit_log(user_doc["id"], "auth.password_reset")
     return TokenResponse(token=_make_token(user_doc["id"]), user=await _user_doc_to_out(user_doc))
 
 
@@ -311,32 +296,21 @@ async def auth_quick_start(request: Request):
     This is the path the Founder explicitly requested over the
     `auth.emergentagent.com` redirect for instant try-out flows.
     """
-    now = datetime.now(timezone.utc)
     uid = new_id()
     # Friendly synthetic email + name so audit_log entries are still readable.
     email = f"guest_{uid[:8]}@guest.fuelpro.app"
     name = f"Guest {uid[:6].upper()}"
-    user_doc = {
-        "id": uid,
-        "email": email,
-        "name": name,
-        "password_hash": "",
-        "role": "owner",
-        "tier": "free",
-        "subscription_status": "trial",
-        "trial_started_at": now.isoformat(),
-        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
-        "auth_methods": ["quick_start"],
-        "is_guest": True,
-        "created_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-    }
+    user_doc = build_user_doc(
+        email, name,
+        auth_methods=["quick_start"],
+        extra_fields={"is_guest": True},
+    )
+    uid = user_doc["id"]
     await db.users.insert_one(user_doc)
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": uid, "action": "user.quick_start",
-        "at": now.isoformat(),
-        "meta": {"ip": request.client.host if request.client else None},
-    })
+    await write_audit_log(
+        uid, "user.quick_start",
+        meta={"ip": get_client_ip(request)},
+    )
     log.info("Quick-start guest user created: %s", email)
     return TokenResponse(token=_make_token(uid), user=await _user_doc_to_out(user_doc))
 
@@ -370,10 +344,7 @@ async def auth_claim_guest(
             "updated_at": now.isoformat(),
         }},
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "user.claim_guest",
-        "at": now.isoformat(), "meta": {"email": email},
-    })
+    await write_audit_log(user["id"], "user.claim_guest", meta={"email": email})
     refreshed = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return TokenResponse(token=_make_token(user["id"]), user=await _user_doc_to_out(refreshed))
 
@@ -423,41 +394,13 @@ async def _upsert_google_user(email: str, profile: dict) -> dict:
     """Look up an existing user by email and merge the Google profile in, or
     create a fresh user with a 14-day trial. Returns user document.
     """
-    now = datetime.now(timezone.utc)
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        # Update OAuth metadata only
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {
-                "google_sub": profile["sub"],
-                "google_picture": profile.get("picture"),
-                "auth_methods": list(set((existing.get("auth_methods") or []) + ["google"])),
-                "last_oauth_at": now.isoformat(),
-                "updated_at": now.isoformat(),
-            }},
-        )
-        return await db.users.find_one({"email": email}, {"_id": 0})
-
-    user_doc = {
-        "id": new_id(), "email": email,
-        "name": profile.get("name") or email.split("@")[0],
-        "password_hash": "",  # OAuth-only user
-        "role": "owner", "tier": "free",
-        "subscription_status": "trial",
-        "trial_started_at": now.isoformat(),
-        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
-        "google_sub": profile["sub"],
-        "google_picture": profile.get("picture"),
-        "auth_methods": ["google"],
-        "created_at": now.isoformat(), "updated_at": now.isoformat(),
-    }
-    await db.users.insert_one(user_doc)
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user_doc["id"], "action": "user.register",
-        "at": now.isoformat(), "meta": {"provider": "google", "email": email},
-    })
-    return user_doc
+    return await upsert_oauth_user(
+        email,
+        profile.get("name") or "",
+        "google",
+        picture=profile.get("picture"),
+        extra_fields={"google_sub": profile["sub"]},
+    )
 
 
 @router.post("/auth/google", response_model=TokenResponse)
@@ -482,21 +425,12 @@ async def google_auth_exchange(body: GoogleAuthBody, request: Request):
     
     user_doc = await _upsert_google_user(email, profile)
     
-    # SOC-2 audit log: IP, user-agent, action, timestamp
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": user_doc["id"],
-        "action": "auth.google_signin",
-        "at": now_iso(),
-        "ip_address": request.client.host if request.client else None,
-        "user_agent": request.headers.get("user-agent"),
-        "station_id": request.headers.get("x-station-id"),
-        "meta": {
-            "platform": body.platform,
-            "google_sub": profile["sub"],
-            "provider": "google_direct",
-        },
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        user_doc["id"], "auth.google_signin",
+        meta={"platform": body.platform, "google_sub": profile["sub"], "provider": "google_direct"},
+        **req_meta,
+    )
     
     log.info("User signed in via Google: email=%s platform=%s", email, body.platform)
     token = _make_token(user_doc["id"], extra_claims={"auth_provider": "google"})

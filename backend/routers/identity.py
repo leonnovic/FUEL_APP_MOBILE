@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from core import (
@@ -26,6 +26,7 @@ from core import (
     now_iso,
     require_founder,
 )
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -98,10 +99,10 @@ async def link_anonymous(body: LinkBody, user: dict = Depends(get_current_user))
         "id": new_id(), "anonymous_id": anon_id, "user_id": user["id"],
         "merged_at": merged_at, "counts": counts,
     })
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "identity.link",
-        "at": merged_at, "meta": {"anonymous_id": anon_id, "counts": counts},
-    })
+    await write_audit_log(
+        user["id"], "identity.link",
+        meta={"anonymous_id": anon_id, "counts": counts},
+    )
     log.info("Identity link: anon=%s → user=%s counts=%s", anon_id, user["id"], counts)
     return {"ok": True, "merged_at": merged_at, "counts": counts}
 

@@ -20,13 +20,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import (
-    ALLOWED_COLLECTIONS,
     db,
     get_current_user,
     new_id,
     normalize_phone,
     now_iso,
 )
+from services.shared import validate_collection, write_audit_log
 
 router = APIRouter()
 
@@ -149,10 +149,10 @@ async def loyalty_redeem(body: LoyaltyStamp, user: dict = Depends(get_current_us
          "$inc": {"lifetime_redemptions": 1},
          "$set": {"updated_at": now_iso()}},
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "loyalty.redeem",
-        "at": now_iso(), "meta": {"phone": phone, "reward": cfg.reward_description},
-    })
+    await write_audit_log(
+        user["id"], "loyalty.redeem",
+        meta={"phone": phone, "reward": cfg.reward_description},
+    )
     return {"ok": True, "redemption": redemption,
             "stamps_available": available - cfg.stamps_required}
 
@@ -196,8 +196,7 @@ class BulkImportBody(BaseModel):
 
 @router.post("/bulk-import/{collection}")
 async def bulk_import(collection: str, body: BulkImportBody, user: dict = Depends(get_current_user)):
-    if collection not in ALLOWED_COLLECTIONS:
-        raise HTTPException(status_code=400, detail=f"Unknown collection: {collection}")
+    validate_collection(collection)
 
     coll = db[f"sync_{collection}"]
     if body.mode == "replace":
@@ -212,11 +211,10 @@ async def bulk_import(collection: str, body: BulkImportBody, user: dict = Depend
                      "_imported_at": now_iso()})
     if docs:
         await coll.insert_many(docs)
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "bulk_import",
-        "at": now_iso(),
-        "meta": {"collection": collection, "count": len(docs), "mode": body.mode},
-    })
+    await write_audit_log(
+        user["id"], "bulk_import",
+        meta={"collection": collection, "count": len(docs), "mode": body.mode},
+    )
     return {"ok": True, "imported": len(docs), "collection": collection, "mode": body.mode}
 
 
@@ -245,10 +243,7 @@ async def price_alerts_set(body: PriceAlertPrefs, user: dict = Depends(get_curre
         {"$set": {**body.model_dump(), "user_id": user["id"], "updated_at": now_iso()}},
         upsert=True,
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user["id"], "action": "price_alerts.updated",
-        "at": now_iso(), "meta": body.model_dump(),
-    })
+    await write_audit_log(user["id"], "price_alerts.updated", meta=body.model_dump())
     return {"ok": True, "prefs": body.model_dump()}
 
 
@@ -300,11 +295,10 @@ async def price_alerts_check(user: dict = Depends(get_current_user)):
     )
 
     if alerts:
-        await db.audit_log.insert_one({
-            "id": new_id(), "user_id": user["id"], "action": "price_alert.triggered",
-            "at": now_iso(),
-            "meta": {"alerts": alerts, "count": len(alerts)},
-        })
+        await write_audit_log(
+            user["id"], "price_alert.triggered",
+            meta={"alerts": alerts, "count": len(alerts)},
+        )
 
     return {"ok": True, "alerts": alerts,
             "checked_at": datetime.now(timezone.utc).isoformat(),

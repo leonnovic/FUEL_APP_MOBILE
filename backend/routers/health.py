@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from core import db, log, new_id, now_iso, require_founder
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -169,11 +170,10 @@ async def run_health_check() -> dict[str, Any]:
             changes.append({"service": name, "from": prev, "to": cur, "info": info})
 
     if changes:
-        await db.audit_log.insert_one({
-            "id": new_id(), "user_id": "founder", "action": "founder.health_changed",
-            "at": now_iso(),
-            "meta": {"changes": changes, "summary": summary},
-        })
+        await write_audit_log(
+            "founder", "founder.health_changed",
+            meta={"changes": changes, "summary": summary},
+        )
         log.info("Health watchdog: %s changes — %s", len(changes),
                  [f"{c['service']}:{c['from']}→{c['to']}" for c in changes])
 

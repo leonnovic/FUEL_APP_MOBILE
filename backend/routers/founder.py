@@ -20,10 +20,10 @@ from core import (
     db,
     get_current_user,
     log,
-    new_id,
     now_iso,
     require_founder,
 )
+from services.shared import write_audit_log
 
 router = APIRouter()
 
@@ -84,10 +84,7 @@ async def founder_login(body: FounderLoginBody, request: Request):
     exp = datetime.now(timezone.utc) + timedelta(hours=4)
     token = jwt.encode({"sub": "founder", "exp": exp, "scope": "founder"},
                        JWT_SECRET, algorithm=JWT_ALG)
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.login",
-        "at": now_iso(), "meta": {"ip": ip},
-    })
+    await write_audit_log("founder", "founder.login", meta={"ip": ip})
     return {
         "ok": True, "token": token,
         "must_change_password": not founder.get("password_set_by_user", False),
@@ -104,10 +101,7 @@ async def founder_change_password(body: FounderChangePasswordBody, _=Depends(req
         {"$set": {"password_hash": _hash_pw(body.new_password),
                   "password_set_by_user": True, "updated_at": now_iso()}},
     )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": "founder", "action": "founder.password_changed",
-        "at": now_iso(), "meta": {},
-    })
+    await write_audit_log("founder", "founder.password_changed")
     return {"ok": True}
 
 
@@ -145,13 +139,10 @@ async def update_user_role(user_id: str, body: RoleChangeBody,
         {"id": user_id},
         {"$set": {"role": body.role, "updated_at": now_iso()}},
     )
-    await db.audit_log.insert_one({
-        "id": new_id(),
-        "user_id": caller["id"],
-        "action": "user.role_changed",
-        "at": now_iso(),
-        "meta": {"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
-    })
+    await write_audit_log(
+        caller["id"], "user.role_changed",
+        meta={"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
+    )
     return {"ok": True, "user_id": user_id, "role": body.role}
 
 

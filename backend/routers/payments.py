@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import os
@@ -22,9 +21,9 @@ from core import (
     get_current_user,
     get_stripe,
     log,
-    new_id,
     now_iso,
 )
+from services.shared import activate_subscription, create_payment_transaction
 
 router = APIRouter()
 
@@ -97,22 +96,10 @@ async def stripe_checkout(
     )
     session: CheckoutSessionResponse = await sc.create_checkout_session(req)
 
-    await db.payment_transactions.insert_one({
-        "id": new_id(),
-        "session_id": session.session_id,
-        "user_id": user["id"],
-        "user_email": user["email"],
-        "plan": body.plan,
-        "billing_cycle": body.billing_cycle,
-        "amount": amount,
-        "currency": "usd",
-        "provider": "stripe",
-        "status": "initiated",
-        "payment_status": "pending",
-        "metadata": metadata,
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-    })
+    await create_payment_transaction(
+        user["id"], user["email"], body.plan, amount, "usd", "stripe",
+        session_id=session.session_id, billing_cycle=body.billing_cycle, metadata=metadata,
+    )
     return {"url": session.url, "session_id": session.session_id}
 
 
@@ -151,45 +138,12 @@ async def _activate_subscription_from_stripe(tx: dict, session_id: str, from_liv
         log.warning("fuelpro.stripe.activate.skipped session_id=%s reason=no_user_id", session_id)
         return
     billing_cycle = tx.get("billing_cycle", "monthly")
-    period_days = 365 if billing_cycle == "yearly" else 31
-    period_end = (datetime.now(timezone.utc) + timedelta(days=period_days)).isoformat()
-    now = now_iso()
-    log.info(
-        "fuelpro.stripe.activated session_id=%s user_id=%s plan=%s cycle=%s source=%s period_end=%s",
-        session_id, user_id, plan, billing_cycle,
-        "live" if from_live else "redirect_trust", period_end,
+    await activate_subscription(
+        user_id, plan, "stripe",
+        billing_cycle=billing_cycle,
+        session_id=session_id,
+        source="status_lookup" if from_live else "redirect_trust",
     )
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"tier": plan, "subscription_status": "active",
-                  "subscription_period_end": period_end, "updated_at": now}},
-    )
-    await db.subscriptions.update_one(
-        {"user_id": user_id},
-        {"$set": {"user_id": user_id, "tier": plan, "status": "active",
-                  "provider": "stripe", "session_id": session_id,
-                  "billing_cycle": billing_cycle, "period_end": period_end,
-                  "updated_at": now}},
-        upsert=True,
-    )
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user_id, "action": "subscription.activated",
-        "at": now,
-        "meta": {"plan": plan, "provider": "stripe", "session_id": session_id,
-                 "source": "status_lookup" if from_live else "redirect_trust"},
-    })
-    # Push notification (best-effort)
-    try:
-        from routers.push import push_to_user
-        await push_to_user(user_id, {
-            "title": "Subscription activated 🎉",
-            "body": f"Your FuelPro {plan.title()} plan is now active.",
-            "url": "/#/?tab=dashboard",
-            "tag": f"stripe-paid-{session_id}",
-            "icon": "/logo-small.png",
-        })
-    except Exception as _e:  # noqa: BLE001
-        log.debug("stripe push skipped: %s", _e)
 
 
 @router.get("/payments/stripe/status/{session_id}")

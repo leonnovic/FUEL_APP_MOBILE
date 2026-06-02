@@ -8,7 +8,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from core import ALLOWED_COLLECTIONS, db, get_current_user, log, new_id, now_iso
+from core import ALLOWED_COLLECTIONS, db, get_current_user, log, now_iso
+from services.shared import get_request_meta, write_audit_log
 
 router = APIRouter(prefix="/location", tags=["location"])
 
@@ -536,12 +537,12 @@ async def gdpr_data_export(request: Request, user: dict = Depends(get_current_us
         except Exception:
             pass
 
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": uid, "action": "gdpr.data_export", "at": now_iso(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "meta": {"record_count": sum(len(v) for v in export["data"].values() if isinstance(v, list))},
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        uid, "gdpr.data_export",
+        meta={"record_count": sum(len(v) for v in export["data"].values() if isinstance(v, list))},
+        **req_meta,
+    )
     log.info("GDPR export: user_id=%s", uid)
     return {"ok": True, "export": export}
 
@@ -578,10 +579,10 @@ async def gdpr_data_delete(request: Request, user: dict = Depends(get_current_us
         except Exception:
             pass
 
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": uid, "action": "gdpr.data_deleted", "at": now_iso(),
-        "ip_address": request.client.host if request.client else "unknown",
-        "user_agent": request.headers.get("user-agent", "unknown"),
-        "meta": {"permanent": True},
-    })
+    req_meta = get_request_meta(request)
+    await write_audit_log(
+        uid, "gdpr.data_deleted",
+        meta={"permanent": True},
+        **req_meta,
+    )
     return {"ok": True, "message": "All personal data has been deleted. This action is irreversible."}

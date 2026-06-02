@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import httpx
@@ -29,11 +28,9 @@ from core import (
     TokenResponse,
     _make_token,
     _user_doc_to_out,
-    db,
     log,
-    new_id,
-    now_iso,
 )
+from services.shared import upsert_oauth_user
 
 router = APIRouter()
 
@@ -139,45 +136,7 @@ async def _verify_jwt(token: str, jwks_url: str, audience: str, issuer: str) -> 
 
 async def _upsert_oauth_user(email: str, name: str, provider: str,
                               picture: Optional[str] = None) -> dict[str, Any]:
-    email = (email or "").lower().strip()
-    if not email:
-        raise HTTPException(status_code=400, detail="OAuth profile missing email")
-    now = datetime.now(timezone.utc)
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {
-                "auth_methods": list(set((existing.get("auth_methods") or []) + [provider])),
-                **({f"{provider}_picture": picture} if picture else {}),
-                f"last_{provider}_at": now.isoformat(),
-                "updated_at": now.isoformat(),
-            }},
-        )
-        return await db.users.find_one({"email": email}, {"_id": 0})
-
-    user_doc = {
-        "id": new_id(),
-        "email": email,
-        "name": name or email.split("@")[0],
-        "password_hash": "",
-        "role": "owner",
-        "tier": "free",
-        "subscription_status": "trial",
-        "trial_started_at": now.isoformat(),
-        "trial_ends_at": (now + timedelta(days=14)).isoformat(),
-        "auth_methods": [provider],
-        "created_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-    }
-    if picture:
-        user_doc[f"{provider}_picture"] = picture
-    await db.users.insert_one(user_doc)
-    await db.audit_log.insert_one({
-        "id": new_id(), "user_id": user_doc["id"], "action": "user.register",
-        "at": now.isoformat(), "meta": {"provider": provider, "email": email},
-    })
-    return user_doc
+    return await upsert_oauth_user(email, name, provider, picture=picture)
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +165,7 @@ async def apple_signin(body: AppleAuthBody):
         # Apple supports "hide my email" → email_hidden = true; the relay
         # address is still returned in `email`. If empty, fail loudly.
         raise HTTPException(status_code=400, detail="Apple token did not include an email")
-    user = await _upsert_oauth_user(email, body.name or "", "apple")
+    user = await upsert_oauth_user(email, body.name or "", "apple")
     log.info("Apple sign-in: %s", email)
     return TokenResponse(token=_make_token(user["id"]), user=await _user_doc_to_out(user))
 
@@ -239,7 +198,7 @@ async def microsoft_signin(body: MicrosoftAuthBody):
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Microsoft token did not include an email")
     name = claims.get("name") or ""
-    user = await _upsert_oauth_user(email, name, "microsoft")
+    user = await upsert_oauth_user(email, name, "microsoft")
     log.info("Microsoft sign-in: %s (issuer ok: %s)", email, claims.get("iss"))
     return TokenResponse(token=_make_token(user["id"]), user=await _user_doc_to_out(user))
 

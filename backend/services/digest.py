@@ -158,7 +158,6 @@ def render_digest_html(d: dict[str, Any]) -> str:
 
 
 async def send_digest_to_user(db, user: dict, *, override_date: str | None = None) -> dict[str, Any]:
-    import uuid as _uuid
     from services.notifications import send_email
     d = await build_digest_for_user(db, user, override_date=override_date)
 
@@ -197,12 +196,10 @@ async def send_digest_to_user(db, user: dict, *, override_date: str | None = Non
     except Exception as _push_err:  # noqa: BLE001
         log.debug("digest push skipped: %s", _push_err)
     # Audit trail (parity with ai.reconcile_mpesa + auth.password_reset)
-    await db.audit_log.insert_one({
-        "id": str(_uuid.uuid4()),
-        "user_id": user["id"],
-        "action": "digest.send",
-        "at": now_iso,
-        "meta": {
+    from services.shared import write_audit_log
+    await write_audit_log(
+        user["id"], "digest.send",
+        meta={
             "date": d["date"],
             "delivery_ok": delivery.get("ok", False),
             "delivery_skipped": delivery.get("skipped"),
@@ -210,7 +207,7 @@ async def send_digest_to_user(db, user: dict, *, override_date: str | None = Non
             "sales_count": d.get("sales_count", 0),
             "inflows_count": d.get("inflows_count", 0),
         },
-    })
+    )
     return {"digest": d, "delivery": delivery}
 
 

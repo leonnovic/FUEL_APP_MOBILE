@@ -7,14 +7,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from core import (
-    ALLOWED_COLLECTIONS,
     db,
     get_current_user,
     get_current_user_optional,
-    new_id,
     now_iso,
     scoped_user_id,
 )
+from services.shared import validate_collection, write_audit_log
 
 router = APIRouter()
 
@@ -56,16 +55,14 @@ async def save_user_data(
 
 @router.get("/sync/{collection}")
 async def sync_get(collection: str, user: dict = Depends(get_current_user)):
-    if collection not in ALLOWED_COLLECTIONS:
-        raise HTTPException(status_code=400, detail="Unknown collection")
+    validate_collection(collection)
     rows = await db[f"sync_{collection}"].find({"user_id": user["id"]}, {"_id": 0}).to_list(5000)
     return {"items": rows, "ok": True, "collection": collection}
 
 
 @router.post("/sync/{collection}")
 async def sync_put(collection: str, request: Request, user: dict = Depends(get_current_user)):
-    if collection not in ALLOWED_COLLECTIONS:
-        raise HTTPException(status_code=400, detail="Unknown collection")
+    validate_collection(collection)
     body = await request.json()
     items = body.get("items") if isinstance(body, dict) else None
     if not isinstance(items, list):
@@ -105,12 +102,9 @@ async def audit_log_list(user: dict = Depends(get_current_user), limit: int = 20
 @router.post("/audit-log")
 async def audit_log_add(request: Request, user: dict = Depends(get_current_user)):
     body = await request.json()
-    doc = {
-        "id": new_id(),
-        "user_id": user["id"],
-        "action": body.get("action", "unknown"),
-        "at": now_iso(),
-        "meta": body.get("meta", {}),
-    }
-    await db.audit_log.insert_one(doc)
-    return {"ok": True, "id": doc["id"]}
+    audit_id = await write_audit_log(
+        user["id"],
+        body.get("action", "unknown"),
+        meta=body.get("meta", {}),
+    )
+    return {"ok": True, "id": audit_id}
