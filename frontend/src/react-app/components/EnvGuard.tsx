@@ -31,30 +31,30 @@ function detectIssues(): EnvIssue[] {
 
   // 1. Backend URL — falls back to window.location.origin, but on Vercel static the
   //    backend is a separate server so /api/* calls will 404.
-  const backendUrl = getEnv('REACT_APP_BACKEND_URL') || getEnv('VITE_BACKEND_URL');
+  const backendUrl = getEnv('VITE_REACT_APP_BACKEND_URL');
   if (!backendUrl) {
     issues.push({
       id: 'backend-url',
       severity: isProd ? 'critical' : 'warning',
-      variable: 'REACT_APP_BACKEND_URL',
+      variable: 'VITE_REACT_APP_BACKEND_URL',
       title: 'Backend API URL not set',
       description: `API calls fall back to ${typeof window !== 'undefined' ? window.location.origin : 'window.location.origin'}. On a static host (Vercel, Render, Cloudflare Pages) your backend is a separate server, so auth, payments, and sync will 404.`,
-      fix: 'Add REACT_APP_BACKEND_URL=https://your-backend.example.com to your deployment environment variables.',
+      fix: 'Add VITE_REACT_APP_BACKEND_URL=https://your-backend.example.com to your deployment environment variables.',
       impact: 'Login, M-PESA payments, Stripe checkout, and cloud sync',
     });
   }
 
   // 2. Google OAuth client ID — has a hardcoded fallback but it's a demo ID
   //    that may not be authorized for the deployed origin.
-  const googleId = getEnv('VITE_GOOGLE_CLIENT_ID');
+  const googleId = getEnv('VITE_GOOGLE_CLIENT_ID_WEB');
   if (!googleId) {
     issues.push({
       id: 'google-client-id',
       severity: 'warning',
-      variable: 'VITE_GOOGLE_CLIENT_ID',
+      variable: 'VITE_GOOGLE_CLIENT_ID_WEB',
       title: 'Google OAuth client ID not set',
       description: 'Google Sign-In is using a built-in fallback client ID that is only authorized for localhost. Sign-in attempts from your deployed domain will be blocked by Google with an "origin not allowed" error.',
-      fix: 'Create an OAuth 2.0 Web Client ID at console.cloud.google.com and add VITE_GOOGLE_CLIENT_ID=<your-id>.apps.googleusercontent.com to your environment.',
+      fix: 'Create an OAuth 2.0 Web Client ID at console.cloud.google.com and add VITE_GOOGLE_CLIENT_ID_WEB=<your-id>.apps.googleusercontent.com to your environment.',
       impact: 'Google Sign-In button',
     });
   }

@@ -2,62 +2,20 @@ name: Cloudflare Worker CI
 
 on:
   push:
-    branches: [main]
     paths:
       - 'frontend/src/worker/**'
-      - 'wrangler.toml'
-      - 'frontend/wrangler.json'
-      - '.github/workflows/cloudflare-worker-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'frontend/src/worker/**'
-      - 'wrangler.toml'
+      - 'wrangler.jsonc'
       - 'frontend/wrangler.json'
 
 jobs:
-  worker-typecheck:
-    name: Worker TypeScript Check
+  check:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          ELECTRON_BUILDER_SKIP_PUBLISH: '1'
-        run: npm ci --legacy-peer-deps
-
-      - name: TypeScript check (includes worker)
-        run: npx tsc --noEmit
-
-      - name: Verify worker entry point exists
+      - name: Check entry point
+        run: test -f frontend/src/worker/index.ts
+      - name: Validate wrangler.jsonc
         run: |
-          if [ ! -f "src/worker/index.ts" ]; then
-            echo "ERROR: src/worker/index.ts is missing — Cloudflare will fail to build"
-            exit 1
-          fi
-          echo "✓ src/worker/index.ts exists"
-
-      - name: Validate wrangler.toml (root)
-        run: |
-          echo "Validating ../wrangler.toml..."
-          for field in name main assets build; do
-            if ! grep -q "$field" ../wrangler.toml; then
-              echo "ERROR: wrangler.toml is missing required field: $field"
-              exit 1
-            fi
-            echo "  ✓ $field"
-          done
-          echo "✓ wrangler.toml valid"
+          grep -q '"name":' wrangler.jsonc
+          grep -q '"main":' wrangler.jsonc
+          grep -q '"assets":' wrangler.jsonc

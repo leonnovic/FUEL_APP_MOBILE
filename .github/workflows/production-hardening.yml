@@ -1,0 +1,22 @@
+name: Production Hardening Audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for direct Google OAuth
+        run: grep -q "_verify_google_token_direct" backend/routers/auth.py
+      - name: Check for JWT revocation
+        run: grep -q "is_token_revoked" backend/core.py
+      - name: Check for password pepper
+        run: grep -q "PASSWORD_PEPPER" backend/core.py
+      - name: Check for production-safe CORS
+        run: grep -q "IS_PRODUCTION" backend/server.py
+      - name: Check for MPesa signature verification
+        run: grep -q "hmac.compare_digest" backend/routers/mpesa.py

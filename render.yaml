@@ -2,7 +2,7 @@ services:
   - type: web
     name: fuel-app-mobile
     env: static
-    buildCommand: cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install && npm run build
+    buildCommand: cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --legacy-peer-deps && npm run build
     staticPublishPath: ./frontend/dist
     pullRequestPreviewsEnabled: false
     routes:

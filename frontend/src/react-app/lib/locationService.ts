@@ -42,7 +42,7 @@ const CACHE_DURATION_MS = 30 * 60 * 1000;
 
 function apiUrl(path: string): string {
   const env = (import.meta as unknown as { env?: Record<string, string> }).env || {};
-  const base = (env.VITE_BACKEND_URL || env.VITE_API_URL || "").replace(/\/$/, "");
+  const base = (env.VITE_REACT_APP_BACKEND_URL || env.VITE_REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
   return `${base}${path}`;
 }
 

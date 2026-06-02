@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'tests/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx motor passlib[bcrypt] python-jose[cryptography] python-dotenv google-auth google-auth-oauthlib starlette pydantic[email] pywebpush py-vapid http_ece pytz
+      - name: Run tests
+        env:
+          MONGO_URL: mongodb://localhost:27017
+          DB_NAME: fuelpro_test
+          JWT_SECRET: testing-secret-at-least-32-chars-long
+          FOUNDER_DEFAULT_PASSWORD: testing-password
+          APP_ENV: development
+        run: |
+          pytest tests/ -v

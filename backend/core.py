@@ -11,6 +11,7 @@ import hashlib
 import logging
 import os
 import uuid
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -28,18 +29,22 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 # ---------------------------------------------------------------------------
-# Configuration (env-driven)
+# Configuration (env-driven) with VALIDATION
 # ---------------------------------------------------------------------------
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
-JWT_SECRET = os.environ["JWT_SECRET"]
+MONGO_URL = os.environ.get("MONGO_URL", "")
+if not MONGO_URL:
+    raise RuntimeError("FATAL: MONGO_URL environment variable is required")
+
+DB_NAME = os.environ.get("DB_NAME", "fuelpro")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET or len(JWT_SECRET) < 32:
+    if os.environ.get("APP_ENV") == "production":
+        raise RuntimeError("FATAL: JWT_SECRET must be at least 32 characters long in production")
+
 JWT_ALG = os.environ.get("JWT_ALG", "HS256")
 JWT_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "720"))
 PASSWORD_PEPPER = os.environ.get("PASSWORD_PEPPER", "")  # CRITICAL: Set in prod
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
-# When the Emergent Stripe proxy can't retrieve a session_id, we fall back to
-# trusting the success-URL redirect. Set this env to "0" to disable that
-# workaround the moment the proxy bug is fixed (no redeploy needed).
 STRIPE_TRUST_REDIRECT = os.environ.get("STRIPE_TRUST_REDIRECT", "1") != "0"
 PUBLIC_BACKEND_URL = os.environ.get("PUBLIC_BACKEND_URL", "")
 APP_ENV = os.environ.get("APP_ENV", "production").lower()
@@ -55,7 +60,7 @@ FOUNDER_DEFAULT_PASSWORD = os.environ.get("FOUNDER_DEFAULT_PASSWORD", "publican1
 FOUNDER_EMAIL = os.environ.get("FOUNDER_EMAIL", "founder@fuelpro.app")
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "https://fuel-app-mobile.vercel.app").split(",")
 
-# Server-authoritative subscription tiers — frontend MUST NOT send prices.
+# Server-authoritative subscription tiers
 PLANS: dict[str, dict[str, Any]] = {
     "free": {
         "key": "free", "name": "Free",
@@ -89,21 +94,117 @@ ALLOWED_COLLECTIONS = {
     "deliveries", "expenses", "suppliers", "audit", "documents",
 }
 
+# Sync collection schemas for validation
+SYNC_SCHEMAS: dict[str, dict[str, Any]] = {
+    "stations": {
+        "required": ["name"],
+        "max_items": 1000,
+        "fields": {"name": str, "location": str, "manager": str}
+    },
+    "sales": {
+        "required": ["amount", "date"],
+        "max_items": 50000,
+        "fields": {"amount": (int, float), "date": str, "fuel_type": str, "attendant": str}
+    },
+    "inventory": {
+        "required": ["fuel_type", "quantity_liters"],
+        "max_items": 10000,
+        "fields": {"fuel_type": str, "quantity_liters": (int, float), "reorder_level": (int, float)}
+    },
+    "employees": {
+        "required": ["name"],
+        "max_items": 5000,
+        "fields": {"name": str, "role": str, "phone": str, "salary": (int, float)}
+    },
+    "invoices": {
+        "required": ["amount", "supplier"],
+        "max_items": 20000,
+        "fields": {"amount": (int, float), "supplier": str, "date": str, "status": str}
+    },
+    "deliveries": {
+        "required": ["fuel_type", "quantity_liters"],
+        "max_items": 20000,
+        "fields": {"fuel_type": str, "quantity_liters": (int, float), "date": str, "supplier": str}
+    },
+    "expenses": {
+        "required": ["amount", "category"],
+        "max_items": 50000,
+        "fields": {"amount": (int, float), "category": str, "date": str, "description": str}
+    },
+    "suppliers": {
+        "required": ["name"],
+        "max_items": 1000,
+        "fields": {"name": str, "phone": str, "email": str, "address": str}
+    },
+    "audit": {
+        "required": ["action"],
+        "max_items": 100000,
+        "fields": {"action": str, "at": str, "meta": dict}
+    },
+    "documents": {
+        "required": ["filename"],
+        "max_items": 10000,
+        "fields": {"filename": str, "category": str, "size": int, "url": str}
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Logger, DB, security primitives
 # ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("fuelpro")
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+_client: Optional[AsyncIOMotorClient] = None
+_db = None
+
+async def get_db():
+    """Get database connection with lazy initialization and retry."""
+    global _client, _db
+    if _db is not None:
+        return _db
+
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            _client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+            await _client.admin.command("ping")
+            _db = _client[DB_NAME]
+            log.info("MongoDB connected successfully")
+            return _db
+        except Exception as e:
+            log.warning("MongoDB connection attempt %d/%d failed: %s", attempt + 1, max_retries, e)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise RuntimeError(f"Failed to connect to MongoDB after {max_retries} attempts: {e}")
+
+async def close_db():
+    """Close database connection."""
+    global _client, _db
+    if _client:
+        _client.close()
+        _client = None
+        _db = None
+        log.info("MongoDB connection closed")
+
+class DatabaseProxy:
+    def __getattr__(self, name):
+        if _db is None:
+            raise RuntimeError("Database not initialized. Call 'await get_db()' first.")
+        return getattr(_db, name)
+
+    def __getitem__(self, name):
+        if _db is None:
+            raise RuntimeError("Database not initialized. Call 'await get_db()' first.")
+        return _db[name]
+
+db = DatabaseProxy()
+
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 bearer = HTTPBearer(auto_error=False)
 
-# Lazily-constructed Stripe client (single instance — re-creating per request
-# breaks get_checkout_status because of the proxy account binding).
 _stripe_singleton: Optional[StripeCheckout] = None
-
+_stripe_lock = asyncio.Lock()
 
 def _public_base(request: Request) -> str:
     if PUBLIC_BACKEND_URL:
@@ -111,16 +212,15 @@ def _public_base(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-def get_stripe(request: Request) -> StripeCheckout:
+async def get_stripe(request: Request) -> StripeCheckout:
     global _stripe_singleton
-    # Re-build the client when STRIPE_API_KEY changes at runtime (founder paste)
-    current_key = os.environ.get("STRIPE_API_KEY", "")
-    if _stripe_singleton is None or getattr(_stripe_singleton, "_api_key_snapshot", None) != current_key:
-        webhook_url = f"{_public_base(request)}/api/webhook/stripe"
-        _stripe_singleton = StripeCheckout(api_key=current_key, webhook_url=webhook_url)
-        # Track the key we built with so we can rebuild on rotation
-        _stripe_singleton._api_key_snapshot = current_key  # type: ignore[attr-defined]
-    return _stripe_singleton
+    async with _stripe_lock:
+        current_key = os.environ.get("STRIPE_API_KEY", "")
+        if _stripe_singleton is None or getattr(_stripe_singleton, "_api_key_snapshot", None) != current_key:
+            webhook_url = f"{_public_base(request)}/api/webhook/stripe"
+            _stripe_singleton = StripeCheckout(api_key=current_key, webhook_url=webhook_url)
+            _stripe_singleton._api_key_snapshot = current_key  # type: ignore[attr-defined]
+        return _stripe_singleton
 
 
 # ---------------------------------------------------------------------------
@@ -169,21 +269,46 @@ def _verify_pw(pw: str, hashed: str) -> bool:
     """Verify password with pepper support."""
     try:
         if PASSWORD_PEPPER:
-            pw = f"{pw}{PASSWORD_PEPPER}"
+            # Try with pepper first
+            if pwd_ctx.verify(f"{pw}{PASSWORD_PEPPER}", hashed):
+                return True
+            # Fallback for legacy non-peppered hashes
+            return pwd_ctx.verify(pw, hashed)
         return pwd_ctx.verify(pw, hashed)
     except Exception:
         return False
 
 
-def _make_token(user_id: str) -> str:
+def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
     """Create JWT with jti claim for revocation support."""
-    jti = str(uuid.uuid4())  # Unique token ID for revocation
+    jti = str(uuid.uuid4())
     exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
-    return jwt.encode(
-        {"sub": user_id, "exp": exp, "jti": jti, "iat": datetime.now(timezone.utc)},
-        JWT_SECRET,
-        algorithm=JWT_ALG
-    )
+    payload = {
+        "sub": user_id,
+        "exp": exp,
+        "jti": jti,
+        "iat": datetime.now(timezone.utc),
+        "iss": "fuelpro-backend",
+        "aud": "fuelpro-client",
+        **(extra_claims or {}),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+
+async def is_token_revoked(jti: str) -> bool:
+    """Check if token ID has been revoked."""
+    database = await get_db()
+    return await database.token_revocations.find_one({"jti": jti}) is not None
+
+
+async def revoke_token(jti: str, expires_at: str):
+    """Add token to revocation list."""
+    database = await get_db()
+    await database.token_revocations.insert_one({
+        "jti": jti,
+        "revoked_at": now_iso(),
+        "expires_at": expires_at,
+    })
 
 
 def _strip_oid(d: dict) -> dict:
@@ -220,13 +345,11 @@ async def get_current_user(
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
-    # Check revocation list (logout)
-    if jti:
-        revoked = await db.token_revocations.find_one({"jti": jti})
-        if revoked:
-            raise HTTPException(status_code=401, detail="Token has been revoked (logout)")
+    if jti and await is_token_revoked(jti):
+        raise HTTPException(status_code=401, detail="Token has been revoked (logout)")
     
-    user = await db.users.find_one({"id": uid}, {"_id": 0})
+    database = await get_db()
+    user = await database.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
@@ -244,13 +367,11 @@ async def get_current_user_optional(
         if not uid:
             return None
         
-        # Check revocation
-        if jti:
-            revoked = await db.token_revocations.find_one({"jti": jti})
-            if revoked:
-                return None
+        if jti and await is_token_revoked(jti):
+            return None
         
-        return await db.users.find_one({"id": uid}, {"_id": 0})
+        database = await get_db()
+        return await database.users.find_one({"id": uid}, {"_id": 0})
     except JWTError:
         return None
 
@@ -303,9 +424,36 @@ def verify_mpesa_webhook(body: str, signature: str) -> bool:
     """Verify M-PESA webhook signature using HMAC."""
     if not MPESA_WEBHOOK_SECRET:
         log.warning("MPESA_WEBHOOK_SECRET not configured; skipping signature verification")
-        return IS_PRODUCTION is False  # Only allow in non-prod
+        return IS_PRODUCTION is False
     
     expected_sig = hashlib.sha256(
         f"{body}{MPESA_WEBHOOK_SECRET}".encode()
     ).hexdigest()
     return signature == expected_sig
+
+# XSS sanitization helper
+def sanitize_html(text: str) -> str:
+    """Basic HTML sanitization to prevent XSS in sync data."""
+    import html
+    return html.escape(text)
+
+def validate_sync_item(collection: str, item: dict) -> tuple[bool, str]:
+    """Validate a sync item against the collection schema."""
+    schema = SYNC_SCHEMAS.get(collection)
+    if not schema:
+        return False, f"Unknown collection: {collection}"
+
+    for field in schema["required"]:
+        if field not in item or item[field] is None:
+            return False, f"Missing required field: {field}"
+
+    for field, expected_type in schema["fields"].items():
+        if field in item and item[field] is not None:
+            if not isinstance(item[field], expected_type):
+                return False, f"Field {field} must be of type {expected_type}"
+
+    for key, value in item.items():
+        if isinstance(value, str):
+            item[key] = sanitize_html(value)
+
+    return True, ""

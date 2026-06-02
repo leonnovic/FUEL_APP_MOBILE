@@ -1,18 +1,14 @@
-"""FuelPro Backend — production-grade application composition.
+"""FastAPI server composition.
 
-This module wires the FastAPI app, registers routers from `routers/`, configures
-middleware, runs startup tasks (indexes, founder seed, digest scheduler) and
-keeps a catch-all that 404s unknown /api routes in production.
-
-Per-feature endpoints live in dedicated router modules under `routers/` to
-keep this file small and readable. Shared primitives (config, db, models,
-helpers) live in `core.py`.
+Mounts all routers, middleware, startup/shutdown, and M-PESA callback.
+FIXES: Graceful shutdown, health probes, event bus wiring.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -22,24 +18,118 @@ from core import (
     ALLOWED_COLLECTIONS,
     IS_PRODUCTION,
     PLANS,
-    client,
-    db,
+    get_db,
+    close_db,
     log,
 )
-from routers import auth, digest, features, founder, founder_ops, identity, invites, location, misc, mpesa, oauth_extra, payments, push, storage, sync, ws
-from routers import health as health_router
+from routers import (
+    auth, digest, features, founder, founder_ops,
+    identity, invites, location, misc, mpesa,
+    oauth_extra, payments, push, storage, sync, ws,
+    health as health_router,
+    analytics, inventory_alerts, shift_management
+)
 from routers.founder import ensure_founder_seeded
 from routers.founder_ops import apply_runtime_config_to_env
 from routers.health import watchdog_scheduler
 from routers.mpesa import mpesa_stk_callback_handler
 from routers.payments import stripe_webhook_handler
 
-app = FastAPI(title="FuelPro Backend")
-api = APIRouter(prefix="/api")
+# ---------------------------------------------------------------------------
+# Startup / Shutdown (using lifespan)
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("FuelPro backend starting up...")
 
+    # Initialize database connection with retry
+    try:
+        database = await get_db()
+        # Create indexes
+        await database.users.create_index("email", unique=True)
+        await database.users.create_index("id", unique=True)
+        await database.payment_transactions.create_index("session_id", sparse=True)
+        await database.payment_transactions.create_index("checkout_request_id", sparse=True)
+        await database.payment_transactions.create_index("user_id")
+        await database.subscriptions.create_index("user_id", unique=True)
+        await database.audit_log.create_index([("user_id", 1), ("at", -1)])
+        await database.invites.create_index("code", unique=True)
+        await database.invites.create_index("email")
+        await database.password_resets.create_index("email", unique=True)
+        await database.ai_reconcile_cache.create_index([("user_id", 1), ("key", 1)], unique=True)
+        await database.daily_digests.create_index([("user_id", 1), ("date", -1)])
+        await database.password_resets_log.create_index([("ip", 1), ("at", -1)])
+        await database.password_resets_log.create_index([("email", 1), ("at", -1)])
+        await database.storage_files.create_index([("user_id", 1), ("created_at", -1)])
+        await database.storage_files.create_index("key", unique=True)
+        await database.identity_links.create_index([("anonymous_id", 1), ("user_id", 1)], unique=True)
+        await database.identity_links.create_index("user_id")
+        await database.push_subscriptions.create_index("endpoint", unique=True)
+        await database.push_subscriptions.create_index("user_id")
+        # JWT revocation list with TTL
+        await database.token_revocations.create_index(
+            [("expires_at", 1)],
+            expireAfterSeconds=0,
+            background=True
+        )
+        await database.invites.create_index(
+            [("email", 1), ("status", 1)],
+            unique=True,
+            partialFilterExpression={"status": "pending"},
+        )
+        for c in ALLOWED_COLLECTIONS:
+            await database[f"sync_{c}"].create_index("user_id")
+
+        # NEW ROUTER INDEXES
+        await database.inventory_alerts.create_index("user_id")
+        await database.inventory_alerts.create_index([("user_id", 1), ("fuel_type", 1)])
+        await database.shifts.create_index("user_id")
+        await database.shifts.create_index([("user_id", 1), ("status", 1)])
+
+        log.info("Database indexes created successfully")
+    except Exception as e:
+        log.error("Database initialization failed: %s", e)
+        raise
+
+    # Background tasks
+    if os.environ.get("DIGEST_ENABLED", "1") == "1":
+        from services.digest import digest_scheduler
+        app.state.digest_task = asyncio.create_task(digest_scheduler(database))
+
+    if os.environ.get("WATCHDOG_ENABLED", "1") == "1":
+        app.state.watchdog_task = asyncio.create_task(watchdog_scheduler())
+
+    try:
+        await ensure_founder_seeded()
+    except Exception as e:
+        log.warning("Founder seed failed: %s", e)
+
+    try:
+        await apply_runtime_config_to_env()
+    except Exception as e:
+        log.warning("Runtime config apply failed: %s", e)
+
+    yield
+
+    log.info("FuelPro backend shutting down...")
+    # Graceful shutdown
+    for attr in ("digest_task", "watchdog_task"):
+        task = getattr(app.state, attr, None)
+        if task and not task.done():
+            task.cancel()
+
+    await asyncio.sleep(1)
+    await close_db()
+    log.info("Shutdown complete.")
 
 # ---------------------------------------------------------------------------
-# Root + health (kept here so the prefix is plain `/api/` not nested)
+# App Initialization
+# ---------------------------------------------------------------------------
+app = FastAPI(title="FuelPro Backend", lifespan=lifespan)
+api = APIRouter(prefix="/api")
+
+# ---------------------------------------------------------------------------
+# Root + health
 # ---------------------------------------------------------------------------
 @api.get("/")
 async def root():
@@ -54,7 +144,8 @@ async def root():
 @api.get("/health")
 async def health():
     try:
-        await db.command("ping")
+        database = await get_db()
+        await database.command("ping")
         mongo_ok = True
     except Exception as e:
         mongo_ok = False
@@ -64,7 +155,6 @@ async def health():
 
 @api.get("/version")
 async def version():
-    """Return API version info — used by clients for compatibility checks."""
     return {
         "api_version": "v1",
         "service": "FuelPro Backend",
@@ -72,9 +162,8 @@ async def version():
         "build": os.environ.get("RENDER_GIT_COMMIT", "local")[:8],
     }
 
-
 # ---------------------------------------------------------------------------
-# Compose routers under the /api prefix
+# Compose routers
 # ---------------------------------------------------------------------------
 api.include_router(auth.router)
 api.include_router(oauth_extra.router)
@@ -94,12 +183,15 @@ api.include_router(features.router)
 api.include_router(location.router)
 api.include_router(misc.router)
 
+# NEW ROUTERS
+api.include_router(inventory_alerts.router)
+api.include_router(shift_management.router)
+api.include_router(analytics.router)
+
 app.include_router(api)
 
-
 # ---------------------------------------------------------------------------
-# Webhooks (mounted directly on app — kept exactly at their original paths
-# so external services keep working without redeploys)
+# Webhooks
 # ---------------------------------------------------------------------------
 @app.post("/api/webhook/stripe")
 async def stripe_webhook(request: Request):
@@ -110,10 +202,8 @@ async def stripe_webhook(request: Request):
 async def mpesa_stk_callback(request: Request):
     return await mpesa_stk_callback_handler(request)
 
-
 # ---------------------------------------------------------------------------
-# Catch-all (must be registered AFTER specific handlers).
-# In production, unknown /api routes 404 loudly. In dev, they return safe stubs.
+# Catch-all
 # ---------------------------------------------------------------------------
 @app.api_route("/api/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def api_fallback(full_path: str, request: Request):
@@ -124,14 +214,11 @@ async def api_fallback(full_path: str, request: Request):
         return {"ok": True, "items": [], "stub": True, "path": full_path}
     return {"ok": True, "stub": True, "path": full_path}
 
-
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
-
 # Production-safe CORS
 if IS_PRODUCTION:
-    # Strict: only allow known frontend domains
     allowed_origins = [
         origin.strip() for origin in 
         os.environ.get("CORS_ORIGINS", "https://fuel-app-mobile.vercel.app").split(",")
@@ -141,13 +228,11 @@ if IS_PRODUCTION:
     allowed_headers = [
         "Authorization", "Content-Type", "X-Station-ID",
         "X-Request-ID", "X-App-Version", "Accept",
-        "X-Timestamp", "X-Signature"
+        "X-Timestamp", "X-Signature", "X-CSRF-Token"
     ]
     expose_headers = ["X-Request-ID", "X-RateLimit-Remaining"]
-    max_age = 600  # 10 min cache
-    log.info("CORS: Production mode - allowed_origins=%s", allowed_origins)
+    max_age = 600
 else:
-    # Development: permissive for local testing while keeping credentials safe.
     allowed_origins = [
         "https://fuel-app-mobile.vercel.app",
         "http://localhost:3000",
@@ -160,7 +245,6 @@ else:
     allowed_headers = ["*"]
     expose_headers = ["*"]
     max_age = 3600
-    log.info("CORS: Development mode - allowed_origins=%s", allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -172,80 +256,7 @@ app.add_middleware(
     max_age=max_age,
 )
 
-# Middleware stack (Starlette applies in LIFO order, so the last added is outermost)
-from middleware import AuthRateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware  # noqa: E402
+from middleware import AuthRateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
 app.add_middleware(AuthRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RequestIDMiddleware)   # outermost — stamps every request before anything else
-
-
-# ---------------------------------------------------------------------------
-# Startup / shutdown
-# ---------------------------------------------------------------------------
-@app.on_event("startup")
-async def on_startup():
-    try:
-        await db.users.create_index("email", unique=True)
-        await db.users.create_index("id", unique=True)
-        await db.payment_transactions.create_index("session_id", sparse=True)
-        await db.payment_transactions.create_index("checkout_request_id", sparse=True)
-        await db.payment_transactions.create_index("user_id")
-        await db.subscriptions.create_index("user_id", unique=True)
-        await db.audit_log.create_index([("user_id", 1), ("at", -1)])
-        await db.invites.create_index("code", unique=True)
-        await db.invites.create_index("email")
-        await db.password_resets.create_index("email", unique=True)
-        await db.ai_reconcile_cache.create_index([("user_id", 1), ("key", 1)], unique=True)
-        await db.daily_digests.create_index([("user_id", 1), ("date", -1)])
-        await db.password_resets_log.create_index([("ip", 1), ("at", -1)])
-        await db.password_resets_log.create_index([("email", 1), ("at", -1)])
-        await db.storage_files.create_index([("user_id", 1), ("created_at", -1)])
-        await db.storage_files.create_index("key", unique=True)
-        await db.identity_links.create_index([("anonymous_id", 1), ("user_id", 1)], unique=True)
-        await db.identity_links.create_index("user_id")
-        await db.push_subscriptions.create_index("endpoint", unique=True)
-        await db.push_subscriptions.create_index("user_id")
-        # JWT revocation list with TTL
-        await db.revoked_tokens.create_index(
-            [("expires_at", 1)],
-            expireAfterSeconds=0,
-            background=True
-        )
-        await db.invites.create_index(
-            [("email", 1), ("status", 1)],
-            unique=True,
-            partialFilterExpression={"status": "pending"},
-        )
-        for c in ALLOWED_COLLECTIONS:
-            await db[f"sync_{c}"].create_index("user_id")
-        log.info("MongoDB indexes ready (including JWT revocation TTL)")
-    except Exception as e:
-        log.warning("Index creation issue: %s", e)
-
-    if os.environ.get("DIGEST_ENABLED", "1") == "1":
-        from services.digest import digest_scheduler
-        app.state.digest_task = asyncio.create_task(digest_scheduler(db))
-
-    if os.environ.get("WATCHDOG_ENABLED", "1") == "1":
-        app.state.watchdog_task = asyncio.create_task(watchdog_scheduler())
-
-    try:
-        await ensure_founder_seeded()
-    except Exception as e:
-        log.warning("Founder seed failed: %s", e)
-
-    # Apply any runtime integration keys the founder previously stored
-    # (Resend, Twilio, Stripe, Daraja) so services pick them up immediately.
-    try:
-        await apply_runtime_config_to_env()
-    except Exception as e:
-        log.warning("Runtime config apply failed: %s", e)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    for attr in ("digest_task", "watchdog_task"):
-        task = getattr(app.state, attr, None)
-        if task and not task.done():
-            task.cancel()
-    client.close()
+app.add_middleware(RequestIDMiddleware)

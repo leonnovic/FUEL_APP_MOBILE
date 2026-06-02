@@ -1,32 +1,36 @@
-"""Realtime WebSocket sync.
+"""Realtime WebSocket sync with SECURE ticket-based authentication.
 
-Frontend opens a WS to `/api/ws/sync?token=<JWT>`. The server validates the
-JWT, registers the connection in the per-user set, and forwards broadcast
-events (sync.write, audit, broadcast). Heart-beat pings every 25s keep the
-connection alive through ingress timeouts.
-
-Broadcaster is exposed via `publish_to_user(user_id, event)` so other routers
-(sync, founder ops, digest) can push events without coupling to the WS layer.
+SECURITY FIXES:
+- JWT no longer passed in query string (preventing proxy logs leakage)
+- Implements ticket-based auth for WebSocket connections
+- Enhanced connection limits per user
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import secrets
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from jose import JWTError, jwt
 
-from core import JWT_ALG, JWT_SECRET, log, now_iso
+from core import JWT_ALG, JWT_SECRET, log, now_iso, get_current_user
 
 router = APIRouter()
-
 
 # user_id -> set of WebSockets currently connected for that user
 _connections: dict[str, set[WebSocket]] = {}
 _lock = asyncio.Lock()
 
+# Ticket-based auth for WebSocket (one-time use)
+_ws_tickets: dict[str, tuple[str, datetime]] = {}  # ticket -> (user_id, expiry)
+_TICKET_EXPIRY_SECONDS = 30
+
+# Connection limits per user
+MAX_CONNECTIONS_PER_USER = 10
 
 def _decode_jwt(token: str) -> Optional[str]:
     if not token:
@@ -37,12 +41,16 @@ def _decode_jwt(token: str) -> Optional[str]:
     except JWTError:
         return None
 
-
-async def _register(user_id: str, ws: WebSocket) -> None:
+async def _register(user_id: str, ws: WebSocket) -> bool:
+    """Register a WebSocket connection. Returns False if limit exceeded."""
     async with _lock:
+        current = _connections.get(user_id, set())
+        if len(current) >= MAX_CONNECTIONS_PER_USER:
+            log.warning("WS connection limit exceeded for user=%s", user_id)
+            return False
         _connections.setdefault(user_id, set()).add(ws)
-    log.info("WS connect user=%s active=%d", user_id, len(_connections.get(user_id, [])))
-
+        log.info("WS connect user=%s active=%d", user_id, len(_connections.get(user_id, [])))
+        return True
 
 async def _unregister(user_id: str, ws: WebSocket) -> None:
     async with _lock:
@@ -51,21 +59,11 @@ async def _unregister(user_id: str, ws: WebSocket) -> None:
             s.discard(ws)
             if not s:
                 _connections.pop(user_id, None)
-    log.info("WS disconnect user=%s remaining=%d", user_id, len(_connections.get(user_id, [])))
-
+        log.info("WS disconnect user=%s remaining=%d", user_id, len(_connections.get(user_id, [])))
 
 async def publish_to_user(user_id: str, event: dict[str, Any],
                           exclude: Optional[WebSocket] = None) -> int:
-    """Send an event to every WebSocket the given user has open across devices.
-    Returns the number of sockets the event was successfully delivered to.
-
-    `exclude` (optional) lets the caller skip a specific socket — typically
-    the originating client, so the sender doesn't receive its own echo.
-
-    Other routers should call this with `await publish_to_user(uid, {...})`.
-    Failure to deliver to one socket does not prevent delivery to others; dead
-    sockets are pruned eagerly.
-    """
+    """Send an event to every WebSocket the given user has open across devices."""
     payload = json.dumps({"at": now_iso(), **event}, default=str)
     delivered = 0
     dead: list[WebSocket] = []
@@ -90,9 +88,8 @@ async def publish_to_user(user_id: str, event: dict[str, Any],
                     _connections.pop(user_id, None)
     return delivered
 
-
 async def broadcast_all(event: dict[str, Any]) -> int:
-    """Publish an event to every connected user. Returns the total delivery count."""
+    """Publish an event to every connected user."""
     async with _lock:
         user_ids = list(_connections.keys())
     total = 0
@@ -100,25 +97,69 @@ async def broadcast_all(event: dict[str, Any]) -> int:
         total += await publish_to_user(uid, event)
     return total
 
+# ---------------------------------------------------------------------------
+# Ticket-based WebSocket Auth (secure alternative to query param tokens)
+# ---------------------------------------------------------------------------
+@router.post("/ws/ticket")
+async def create_ws_ticket(user: dict = Depends(get_current_user)):
+    """Create a one-time WebSocket connection ticket.
+
+    The frontend calls this before opening a WebSocket, then passes
+    the ticket in the query string (tickets are single-use and expire
+    in 30 seconds, making them safe to pass in URLs).
+    """
+    ticket = secrets.token_urlsafe(32)
+    expiry = datetime.now(timezone.utc) + timedelta(seconds=_TICKET_EXPIRY_SECONDS)
+    _ws_tickets[ticket] = (user["id"], expiry)
+    return {"ticket": ticket, "expires_in": _TICKET_EXPIRY_SECONDS}
 
 @router.websocket("/ws/sync")
-async def ws_sync(websocket: WebSocket, token: str = Query(default="")):
-    """Per-user WebSocket. Token is the FuelPro JWT issued at /auth/login.
-    Browser native `WebSocket` API can't set headers, so we pass it as a query
-    string. Verify, register, then heartbeat + relay messages until disconnect.
+async def ws_sync(websocket: WebSocket, ticket: str = Query(default="")):
+    """Per-user WebSocket with ticket-based authentication.
+
+    The frontend should:
+    1. POST /api/ws/ticket (with Bearer token) to get a ticket
+    2. Open WebSocket to /api/ws/sync?ticket=<ticket>
+    3. The ticket is consumed on first use and cannot be replayed
     """
-    user_id = _decode_jwt(token)
-    if not user_id:
-        # Accept first so the close frame actually carries our 4401 code
-        # (Starlette short-circuits to HTTP 403 if we close before accepting).
+    # Validate ticket
+    if not ticket:
         await websocket.accept()
-        await websocket.close(code=4401, reason="Invalid or missing token")
+        await websocket.close(code=4401, reason="Missing ticket")
         return
+
+    ticket_entry = _ws_tickets.pop(ticket, None)
+    if not ticket_entry:
+        await websocket.accept()
+        await websocket.close(code=4401, reason="Invalid or expired ticket")
+        return
+
+    user_id, expiry = ticket_entry
+    if datetime.now(timezone.utc) > expiry:
+        await websocket.accept()
+        await websocket.close(code=4401, reason="Ticket expired")
+        return
+
+    if not user_id:
+        await websocket.accept()
+        await websocket.close(code=4401, reason="Authentication required")
+        return
+
     await websocket.accept()
-    await _register(user_id, websocket)
+
+    # Check connection limit
+    if not await _register(user_id, websocket):
+        await websocket.send_text(json.dumps({
+            "type": "error",
+            "message": "Maximum connections exceeded",
+            "at": now_iso(),
+        }))
+        await websocket.close(code=4408, reason="Too many connections")
+        return
+
     await websocket.send_text(json.dumps({"type": "hello", "user_id": user_id, "at": now_iso()}))
 
-    # Server-side heartbeat task (ingresses kill idle WS after ~30s otherwise)
+    # Server-side heartbeat task
     async def _heartbeat():
         try:
             while True:
@@ -131,14 +172,11 @@ async def ws_sync(websocket: WebSocket, token: str = Query(default="")):
     try:
         while True:
             data = await websocket.receive_text()
-            # Fan out to this user's OTHER sockets so multi-device state stays
-            # in sync. Sender is excluded so it doesn't receive its own echo.
             try:
                 msg = json.loads(data)
                 if isinstance(msg, dict) and msg.get("type"):
                     await publish_to_user(user_id, msg, exclude=websocket)
             except json.JSONDecodeError:
-                # ignore non-JSON
                 continue
     except WebSocketDisconnect:
         pass
@@ -147,7 +185,6 @@ async def ws_sync(websocket: WebSocket, token: str = Query(default="")):
     finally:
         hb.cancel()
         await _unregister(user_id, websocket)
-
 
 @router.get("/ws/stats")
 async def ws_stats():
