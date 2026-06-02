@@ -8,7 +8,7 @@
  */
 
 const RAW_BASE =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL ||
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_REACT_APP_BACKEND_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '');
 export const API_BASE = RAW_BASE.replace(/\/$/, '');
 
