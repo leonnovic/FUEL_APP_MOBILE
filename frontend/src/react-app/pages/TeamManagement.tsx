@@ -352,19 +352,26 @@ export default function TeamManagement() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <select
-                          value={u.role}
-                          disabled={savingUserId === u.id}
-                          onChange={(e) => changeUserRole(u.id, e.target.value as TeamUser['role'])}
-                          className="px-2.5 py-1.5 bg-black/40 border border-white/[0.08] rounded-lg text-xs font-semibold focus:outline-none focus:border-amber-500 disabled:opacity-50"
-                          data-testid={`team-role-select-${u.id}`}
-                        >
-                          <option value="owner">Owner</option>
-                          <option value="manager">Manager</option>
-                          <option value="staff">Staff</option>
-                          <option value="auditor">Auditor</option>
-                        </select>
-                        {savingUserId === u.id && <Loader2 size={14} className="animate-spin text-amber-400" />}
+                        {u.role === 'owner' ? (
+                          <span className="px-2.5 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-lg text-xs font-bold text-purple-400">
+                            Owner
+                          </span>
+                        ) : (
+                          <>
+                            <select
+                              value={u.role}
+                              disabled={savingUserId === u.id}
+                              onChange={(e) => changeUserRole(u.id, e.target.value as TeamUser['role'])}
+                              className="px-2.5 py-1.5 bg-black/40 border border-white/[0.08] rounded-lg text-xs font-semibold focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                              data-testid={`team-role-select-${u.id}`}
+                            >
+                              <option value="manager">Manager</option>
+                              <option value="staff">Staff</option>
+                              <option value="auditor">Auditor</option>
+                            </select>
+                            {savingUserId === u.id && <Loader2 size={14} className="animate-spin text-amber-400" />}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -374,7 +381,7 @@ export default function TeamManagement() {
           )}
 
           <div className="p-3 text-[11px] text-gray-500 border-t border-white/[0.06]">
-            Only owners can change roles. Manager → Staff → Auditor are progressively read-only.
+            Owners can assign manager/staff/auditor roles. Only the founder (dev backend) can promote to owner.
           </div>
         </div>
       </div>

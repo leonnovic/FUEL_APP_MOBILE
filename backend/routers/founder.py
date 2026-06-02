@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from core import (
     ALLOWED_ROLES,
+    ASSIGNABLE_ROLES,
     FOUNDER_DEFAULT_PASSWORD,
     FOUNDER_EMAIL,
     JWT_ALG,
@@ -117,12 +118,38 @@ async def founder_list_users(_=Depends(require_founder)):
     return {"users": rows, "ok": True, "total": len(rows)}
 
 
+@router.patch("/founder/users/{user_id}/role")
+async def founder_set_role(user_id: str, body: RoleChangeBody,
+                           _=Depends(require_founder)):
+    """Founder-only: assign ANY role, including owner."""
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    old_role = target.get("role")
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": body.role, "updated_at": now_iso()}},
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": "founder", "action": "founder.role_changed",
+        "at": now_iso(),
+        "meta": {"target_user_id": user_id, "old_role": old_role, "new_role": body.role},
+    })
+    return {"ok": True, "user_id": user_id, "role": body.role}
+
+
 @router.patch("/users/{user_id}/role")
 async def update_user_role(user_id: str, body: RoleChangeBody,
                             caller: dict = Depends(get_current_user)):
-    """Owner can change a user's role (replaces invite-based downgrade)."""
-    if body.role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    """Owner can assign subordinate roles (manager/staff/auditor).
+    Only the founder can promote a user to owner."""
+    if body.role not in ASSIGNABLE_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Owners can assign: {sorted(ASSIGNABLE_ROLES)}. Only founder can promote to owner.",
+        )
     if caller.get("role") not in {"owner"}:
         raise HTTPException(status_code=403, detail="Only owners can change roles")
 

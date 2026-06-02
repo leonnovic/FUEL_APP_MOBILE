@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from core import (
-    ALLOWED_ROLES,
+    ASSIGNABLE_ROLES,
     PUBLIC_BACKEND_URL,
     TokenResponse,
     _hash_pw,
@@ -40,8 +40,8 @@ class InviteAccept(BaseModel):
 def _check_inviter_permissions(user: dict, role: str) -> None:
     if user.get("role") not in {"owner", "manager"}:
         raise HTTPException(status_code=403, detail="Only owners/managers can invite teammates")
-    if role not in ALLOWED_ROLES:
-        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    if role not in ASSIGNABLE_ROLES:
+        raise HTTPException(status_code=400, detail=f"Invite role must be one of {sorted(ASSIGNABLE_ROLES)}")
 
 
 async def _check_invite_collisions(target_email: str) -> None:

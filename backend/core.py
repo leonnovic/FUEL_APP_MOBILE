@@ -84,6 +84,9 @@ PLANS: dict[str, dict[str, Any]] = {
 }
 
 ALLOWED_ROLES = {"owner", "manager", "staff", "auditor"}
+# Roles that an owner can assign via role-change or invite.
+# "owner" is granted only at registration; founder can promote to owner.
+ASSIGNABLE_ROLES = {"manager", "staff", "auditor"}
 ALLOWED_COLLECTIONS = {
     "stations", "sales", "inventory", "employees", "invoices",
     "deliveries", "expenses", "suppliers", "audit", "documents",
