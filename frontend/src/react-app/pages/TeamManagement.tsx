@@ -82,11 +82,11 @@ export default function TeamManagement() {
       setIsFounder(isFounderMode);
 
       // Fetch invites and team users in parallel
-      const invitesUrl = isFounderMode ? `${API_BASE}/api/founder/audit` : `${API_BASE}/api/invites`; // invites don't have a direct founder list yet, using audit as fallback or just empty for now
+      const invitesUrl = isFounderMode ? `${API_BASE}/api/founder/invites` : `${API_BASE}/api/invites`;
       const usersUrl = isFounderMode ? `${API_BASE}/api/founder/users` : `${API_BASE}/api/users`;
 
       const [invitesRes, usersRes] = await Promise.all([
-        isFounderMode ? Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) }) : fetch(invitesUrl, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(invitesUrl, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(usersUrl, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (!invitesRes.ok) throw new Error(`Invites failed: ${invitesRes.status}`);

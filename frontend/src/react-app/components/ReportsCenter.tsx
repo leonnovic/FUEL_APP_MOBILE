@@ -5,7 +5,7 @@ import { formatNumber } from '@/react-app/utils/formatUtils';
 import ExportDropdown from '@/react-app/components/ExportDropdown';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from '@/react-app/lib/xlsxShim';
+import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
 type ReportType = 'overall' | 'profit-loss' | 'expenses' | 'vat-return' | 'daily-sales' | 'kra-summary';

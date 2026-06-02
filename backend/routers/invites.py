@@ -174,6 +174,13 @@ async def founder_create_invite(body: InviteCreate, _=Depends(require_founder)):
     }
 
 
+@router.get("/founder/invites")
+async def founder_list_invites(_=Depends(require_founder)):
+    """Founder can see ALL invites."""
+    rows = await db.invites.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return {"items": rows, "ok": True}
+
+
 @router.get("/invites")
 async def list_invites(user: dict = Depends(get_current_user)):
     rows = await db.invites.find({"invited_by_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
