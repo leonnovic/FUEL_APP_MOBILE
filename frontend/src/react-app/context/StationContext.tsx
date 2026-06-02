@@ -434,9 +434,20 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
   // Admin
   const loginAdmin = useCallback((username: string, password: string): boolean => {
+    if (username !== adminSettings.adminUsername) return false;
     const storedHash = adminSettings.adminPasswordHash;
-    const isValid = username === adminSettings.adminUsername &&
-      decrypt(storedHash, adminSettings.secretKey) === password;
+    // First-time setup: no password hash stored yet — accept any non-empty
+    // password and persist it so subsequent logins require the same password.
+    if (!storedHash) {
+      if (!password) return false;
+      const newHash = encrypt(password, adminSettings.secretKey);
+      setAdminSettings(prev => ({ ...prev, adminPasswordHash: newHash }));
+      setIsAdmin(true);
+      const session = { isAdmin: true, expiresAt: new Date(Date.now() + 8 * 3600000).toISOString() };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      return true;
+    }
+    const isValid = decrypt(storedHash, adminSettings.secretKey) === password;
     if (isValid) {
       setIsAdmin(true);
       const session = { isAdmin: true, expiresAt: new Date(Date.now() + 8 * 3600000).toISOString() };

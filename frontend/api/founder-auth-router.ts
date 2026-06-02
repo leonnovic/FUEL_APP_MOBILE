@@ -11,12 +11,12 @@ import { getDb } from "./queries/connection";
 import { desc } from "drizzle-orm";
 
 // ─── Credential Store ───
-// Auth is performed server-side — no default password in client code.
-const DEFAULT_CREDS = { username: "FOUNDER", password: "" };
-
+// Founder password is read from the server environment — never hardcoded.
 function getStoredCreds(): { username: string; password: string } {
-  // In production, credentials are validated by the backend via /api/founder/login.
-  return DEFAULT_CREDS;
+  return {
+    username: "FOUNDER",
+    password: process.env.FOUNDER_DEFAULT_PASSWORD || "",
+  };
 }
 
 export const founderAuthRouter = createRouter({
@@ -28,6 +28,9 @@ export const founderAuthRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const creds = getStoredCreds();
+      if (!creds.password) {
+        return { success: false, error: "Founder password not configured. Set FOUNDER_DEFAULT_PASSWORD.", token: null };
+      }
       if (input.username !== creds.username || input.password !== creds.password) {
         return { success: false, error: "Invalid credentials", token: null };
       }
