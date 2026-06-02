@@ -10,7 +10,6 @@
     ],
     "module": "ESNext",
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -32,10 +31,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": false,
-    "types": [
-      "node"
-    ]
+    "noUncheckedSideEffectImports": false
   },
   "include": [
     "src/react-app"
