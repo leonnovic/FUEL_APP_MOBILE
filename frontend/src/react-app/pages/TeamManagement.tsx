@@ -47,6 +47,7 @@ const ROLE_META: Record<Invite['role'], { label: string; desc: string; icon: typ
 
 export default function TeamManagement() {
   const navigate = useNavigate();
+  const [isFounder, setIsFounder] = useState(false);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,17 +59,35 @@ export default function TeamManagement() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [roleUpdateMsg, setRoleUpdateMsg] = useState<string | null>(null);
 
-  const getToken = () => localStorage.getItem('fuelpro_jwt');
+  const getToken = () => {
+    const sessionRaw = localStorage.getItem('fuelpro_founder_session');
+    if (sessionRaw) {
+      try {
+        const session = JSON.parse(sessionRaw);
+        if (session.active && session.token) return session.token;
+      } catch (e) { /* ignore */ }
+    }
+    return localStorage.getItem('fuelpro_jwt');
+  };
 
   const load = async () => {
     setLoading(true); setError(null);
     try {
       const token = getToken();
       if (!token) { setError('Please sign in.'); setLoading(false); return; }
+
+      // Check if we are in founder mode
+      const sessionRaw = localStorage.getItem('fuelpro_founder_session');
+      const isFounderMode = !!sessionRaw && JSON.parse(sessionRaw).active;
+      setIsFounder(isFounderMode);
+
       // Fetch invites and team users in parallel
+      const invitesUrl = isFounderMode ? `${API_BASE}/api/founder/audit` : `${API_BASE}/api/invites`; // invites don't have a direct founder list yet, using audit as fallback or just empty for now
+      const usersUrl = isFounderMode ? `${API_BASE}/api/founder/users` : `${API_BASE}/api/users`;
+
       const [invitesRes, usersRes] = await Promise.all([
-        fetch(`${API_BASE}/api/invites`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        isFounderMode ? Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) }) : fetch(invitesUrl, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(usersUrl, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (!invitesRes.ok) throw new Error(`Invites failed: ${invitesRes.status}`);
       const invitesData = await invitesRes.json();
@@ -89,7 +108,8 @@ export default function TeamManagement() {
     setSavingUserId(userId); setRoleUpdateMsg(null);
     try {
       const token = getToken();
-      const r = await fetch(`${API_BASE}/api/users/${userId}/role`, {
+      const url = isFounder ? `${API_BASE}/api/founder/users/${userId}/role_founder` : `${API_BASE}/api/users/${userId}/role`;
+      const r = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ role: newRole }),
@@ -116,7 +136,8 @@ export default function TeamManagement() {
     setSubmitting(true); setError(null);
     try {
       const token = getToken();
-      const r = await fetch(`${API_BASE}/api/invites`, {
+      const url = isFounder ? `${API_BASE}/api/founder/invites` : `${API_BASE}/api/invites`;
+      const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: email.trim().toLowerCase(), role }),
@@ -196,6 +217,7 @@ export default function TeamManagement() {
                 className="w-full px-3 py-2.5 bg-black/40 border border-white/[0.08] rounded-lg text-sm focus:outline-none focus:border-amber-500"
                 data-testid="team-invite-role"
               >
+                {isFounder && <option value="owner">Owner</option>}
                 <option value="manager">Manager</option>
                 <option value="staff">Staff</option>
                 <option value="auditor">Auditor</option>
@@ -354,12 +376,12 @@ export default function TeamManagement() {
                       <div className="flex items-center gap-2 shrink-0">
                         <select
                           value={u.role}
-                          disabled={savingUserId === u.id}
+                          disabled={savingUserId === u.id || (!isFounder && u.role === 'owner')}
                           onChange={(e) => changeUserRole(u.id, e.target.value as TeamUser['role'])}
                           className="px-2.5 py-1.5 bg-black/40 border border-white/[0.08] rounded-lg text-xs font-semibold focus:outline-none focus:border-amber-500 disabled:opacity-50"
                           data-testid={`team-role-select-${u.id}`}
                         >
-                          <option value="owner">Owner</option>
+                          {(isFounder || u.role === 'owner') && <option value="owner">Owner</option>}
                           <option value="manager">Manager</option>
                           <option value="staff">Staff</option>
                           <option value="auditor">Auditor</option>

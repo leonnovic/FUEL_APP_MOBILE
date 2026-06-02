@@ -43,6 +43,10 @@ def _check_inviter_permissions(user: dict, role: str) -> None:
     if role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
 
+    # Owners/Managers cannot invite new users as 'owner'
+    if role == "owner":
+        raise HTTPException(status_code=403, detail="Cannot invite users with the 'owner' role. Only a Founder can do this.")
+
 
 async def _check_invite_collisions(target_email: str) -> None:
     """Reject if target email already has an account or a live pending invite."""
@@ -114,6 +118,56 @@ async def create_invite(body: InviteCreate, user: dict = Depends(get_current_use
     await _check_invite_collisions(target_email)
     invite_id, code = await _persist_invite(body, target_email, user)
     email_result, accept_url = await _send_invite_email(body, code, user)
+    return {
+        "ok": True, "invite_id": invite_id, "code": code, "accept_url": accept_url,
+        "email_delivery": email_result,
+    }
+
+
+@router.post("/founder/invites")
+async def founder_create_invite(body: InviteCreate, _=Depends(require_founder)):
+    """Founder can invite users with any role, including Owner."""
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+    target_email = body.email.lower().strip()
+    await _check_invite_collisions(target_email)
+
+    # Manual persistence for founder (no user dict)
+    code = secrets.token_urlsafe(16)
+    invite_id = new_id()
+    now = datetime.now(timezone.utc)
+    await db.invites.insert_one({
+        "id": invite_id, "code": code,
+        "email": target_email,
+        "role": body.role,
+        "station_id": body.station_id,
+        "invited_by_user_id": "founder",
+        "invited_by_name": "FuelPro Founder",
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(days=14)).isoformat(),
+    })
+    await db.audit_log.insert_one({
+        "id": new_id(), "user_id": "founder", "action": "founder.invite.created",
+        "at": now.isoformat(),
+        "meta": {"invited_email": body.email, "role": body.role, "invite_id": invite_id},
+    })
+
+    from services.notifications import invite_email_html, send_email
+    public_url = (PUBLIC_BACKEND_URL or "").rstrip("/")
+    accept_url = f"{public_url}/#/join/{code}" if public_url else f"/#/join/{code}"
+    email_result = await send_email(
+        to=body.email,
+        subject=f"You're invited to FuelPro as {body.role}",
+        html=invite_email_html(
+            inviter="FuelPro Founder",
+            station=body.station_id or "FuelPro",
+            accept_url=accept_url,
+            role=body.role,
+        ),
+        text=f"FuelPro Founder invited you to FuelPro as {body.role}. Accept: {accept_url}",
+    )
+
     return {
         "ok": True, "invite_id": invite_id, "code": code, "accept_url": accept_url,
         "email_delivery": email_result,

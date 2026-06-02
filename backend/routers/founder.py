@@ -120,19 +120,50 @@ async def founder_list_users(_=Depends(require_founder)):
 @router.patch("/users/{user_id}/role")
 async def update_user_role(user_id: str, body: RoleChangeBody,
                             caller: dict = Depends(get_current_user)):
-    """Owner can change a user's role (replaces invite-based downgrade)."""
+    """Owner can change a user's role (except to/from owner)."""
     if body.role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
     if caller.get("role") not in {"owner"}:
         raise HTTPException(status_code=403, detail="Only owners can change roles")
 
+    # Owners cannot assign the 'owner' role to anyone
+    if body.role == "owner":
+        raise HTTPException(status_code=403, detail="Owners cannot assign the 'owner' role. Only a Founder can do this.")
+
     target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # ── Last-owner safety: don't allow the only remaining owner to demote
-    # themselves (or anyone else) into a non-owner role. The product would
-    # otherwise have zero owners, locking everyone out of role-management.
+    # Owners cannot demote other owners
+    if target.get("role") == "owner":
+        raise HTTPException(status_code=403, detail="Owners cannot change the role of another Owner. Only a Founder can do this.")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": body.role, "updated_at": now_iso()}},
+    )
+    await db.audit_log.insert_one({
+        "id": new_id(),
+        "user_id": caller["id"],
+        "action": "user.role_changed",
+        "at": now_iso(),
+        "meta": {"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
+    })
+    return {"ok": True, "user_id": user_id, "role": body.role}
+
+
+@router.patch("/founder/users/{user_id}/role_founder")
+async def founder_update_user_role(user_id: str, body: RoleChangeBody,
+                                   _=Depends(require_founder)):
+    """Founder can change any user's role to any valid role including owner."""
+    if body.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(ALLOWED_ROLES)}")
+
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Last-owner safety still applies for Founder if they are demoting an owner
     if target.get("role") == "owner" and body.role != "owner":
         owner_count = await db.users.count_documents({"role": "owner"})
         if owner_count <= 1:
@@ -147,8 +178,8 @@ async def update_user_role(user_id: str, body: RoleChangeBody,
     )
     await db.audit_log.insert_one({
         "id": new_id(),
-        "user_id": caller["id"],
-        "action": "user.role_changed",
+        "user_id": "founder",
+        "action": "founder.user_role_changed",
         "at": now_iso(),
         "meta": {"target_user_id": user_id, "old_role": target.get("role"), "new_role": body.role},
     })
