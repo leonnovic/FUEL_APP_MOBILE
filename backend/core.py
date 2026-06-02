@@ -169,21 +169,61 @@ def _verify_pw(pw: str, hashed: str) -> bool:
     """Verify password with pepper support."""
     try:
         if PASSWORD_PEPPER:
-            pw = f"{pw}{PASSWORD_PEPPER}"
+            # Try with pepper first
+            if pwd_ctx.verify(f"{pw}{PASSWORD_PEPPER}", hashed):
+                return True
+            # Fallback: try without pepper (for legacy hashes)
+            return pwd_ctx.verify(pw, hashed)
         return pwd_ctx.verify(pw, hashed)
     except Exception:
         return False
 
 
-def _make_token(user_id: str) -> str:
-    """Create JWT with jti claim for revocation support."""
-    jti = str(uuid.uuid4())  # Unique token ID for revocation
+async def is_token_revoked(jti: str) -> bool:
+    """Check if token ID has been revoked"""
+    return await db.revoked_tokens.find_one({
+        "jti": jti,
+        "expires_at": {"$gt": now_iso()}
+    }) is not None
+
+
+async def revoke_token(jti: str, expires_at: str):
+    """Add token to revocation list with TTL"""
+    await db.revoked_tokens.insert_one({
+        "jti": jti,
+        "revoked_at": now_iso(),
+        "expires_at": expires_at,
+    })
+    # TTL index ensures auto-cleanup after expiry
+    try:
+        await db.revoked_tokens.create_index(
+            [("expires_at", 1)],
+            expireAfterSeconds=0,
+            background=True
+        )
+    except Exception:
+        pass  # Index may already exist
+
+
+def _decode_app_token(token: str, verify_exp: bool = True) -> dict:
+    """Decode JWT safely."""
+    return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"verify_exp": verify_exp})
+
+
+def _make_token(user_id: str, extra_claims: Optional[dict] = None) -> str:
+    """Generate JWT with SOC-2 compliant claims including token ID for revocation"""
     exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
-    return jwt.encode(
-        {"sub": user_id, "exp": exp, "jti": jti, "iat": datetime.now(timezone.utc)},
-        JWT_SECRET,
-        algorithm=JWT_ALG
-    )
+    payload = {
+        "sub": user_id,
+        "iss": "fuelpro-backend",    # Token issuer
+        "aud": "fuelpro-client",     # Intended audience
+        "exp": exp,
+        "iat": datetime.now(timezone.utc),
+        "jti": new_id(),              # Unique token ID for revocation
+        "scope": "user",
+        **(extra_claims or {}),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
 def _strip_oid(d: dict) -> dict:
@@ -215,20 +255,21 @@ async def get_current_user(
         payload = jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
         uid = payload.get("sub")
         jti = payload.get("jti")
+
+        # CRITICAL: Check if token was revoked (user logged out)
+        if jti and await is_token_revoked(jti):
+            raise HTTPException(status_code=401, detail="Session ended. Please log in again.")
+
     except JWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+
     if not uid:
         raise HTTPException(status_code=401, detail="Invalid token payload")
-    
-    # Check revocation list (logout)
-    if jti:
-        revoked = await db.token_revocations.find_one({"jti": jti})
-        if revoked:
-            raise HTTPException(status_code=401, detail="Token has been revoked (logout)")
     
     user = await db.users.find_one({"id": uid}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+
     return user
 
 
@@ -245,10 +286,8 @@ async def get_current_user_optional(
             return None
         
         # Check revocation
-        if jti:
-            revoked = await db.token_revocations.find_one({"jti": jti})
-            if revoked:
-                return None
+        if jti and await is_token_revoked(jti):
+            return None
         
         return await db.users.find_one({"id": uid}, {"_id": 0})
     except JWTError:

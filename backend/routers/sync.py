@@ -45,6 +45,23 @@ async def save_user_data(
         {"$set": {"user_id": uid, "data": data, "updated_at": now}},
         upsert=True,
     )
+
+    # If the user is authenticated, also sync to preferences in the users collection
+    if user:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {
+                "preferences": {
+                    "locale": body.get("locale", "en") if isinstance(body, dict) else "en",
+                    "theme": body.get("theme", "light") if isinstance(body, dict) else "light",
+                    "currency": body.get("currency") if isinstance(body, dict) else None,
+                    "timezone": body.get("timezone") if isinstance(body, dict) else None,
+                    "last_synced": now,
+                },
+                "updated_at": now,
+            }}
+        )
+
     # Realtime — fan out to other devices on the same account
     try:
         from routers.ws import publish_to_user
@@ -52,6 +69,41 @@ async def save_user_data(
     except Exception:
         pass
     return {"ok": True, "updated_at": now}
+
+
+@router.post("/sync/user-data")
+async def sync_user_data(
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """Push local user preferences to cloud"""
+    data = await request.json()
+    now = now_iso()
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "preferences": {
+                "locale": data.get("locale", "en"),
+                "theme": data.get("theme", "light"),
+                "currency": data.get("currency"),
+                "timezone": data.get("timezone"),
+                "last_synced": now,
+            },
+            "updated_at": now,
+        }}
+    )
+
+    return {"ok": True, "synced_at": now}
+
+
+@router.get("/sync/user-data")
+async def get_user_sync_data(user: dict = Depends(get_current_user)):
+    """Fetch user preferences for all devices"""
+    return {
+        "preferences": user.get("preferences", {}),
+        "updated_at": user.get("updated_at"),
+    }
 
 
 @router.get("/sync/{collection}")

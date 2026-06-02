@@ -134,7 +134,7 @@ if IS_PRODUCTION:
     # Strict: only allow known frontend domains
     allowed_origins = [
         origin.strip() for origin in 
-        os.environ.get("CORS_ORIGINS", "https://fuel-app-mobile.vercel.app").split(",")
+        os.environ.get("CORS_ORIGINS", "https://fuel-app-mobile.vercel.app,https://fuelpro.app").split(",")
         if origin.strip() and origin.strip() != "*"
     ]
     allowed_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]

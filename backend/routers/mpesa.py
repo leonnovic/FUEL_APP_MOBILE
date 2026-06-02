@@ -284,10 +284,15 @@ async def mpesa_stk_callback_handler(request: Request):
                     request.client.host if request.client else "unknown",
                     request.headers.get("user-agent", "")[:80],
                 )
+                if IS_PRODUCTION:
+                    return {"ResultCode": 1, "ResultDesc": "Signature mismatch"}
         except Exception as sig_err:
             log.warning("fuelpro.mpesa.callback.sig_error: %s", sig_err)
+            if IS_PRODUCTION:
+                return {"ResultCode": 1, "ResultDesc": "Signature verification error"}
     elif IS_PRODUCTION and webhook_secret and not x_signature:
         log.warning("fuelpro.mpesa.callback.no_signature ip=%s", request.client.host if request.client else "unknown")
+        return {"ResultCode": 1, "ResultDesc": "Missing signature"}
 
     # --- Parse body ---
     try:
