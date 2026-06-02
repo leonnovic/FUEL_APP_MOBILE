@@ -86,7 +86,7 @@ function useFounderAuth() {
       } else if (r.status === 401) {
         // Surface the precise reason from the backend so users aren't guessing.
         const body = await r.json().catch(() => ({}));
-        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
+        setError(body.detail || 'Invalid password. Please contact support if you have forgotten your credentials.');
         return false;
       }
       // Fall through to client-side check below (back-compat for offline UX)
@@ -95,15 +95,14 @@ function useFounderAuth() {
        
       console.warn('Founder login network error:', e);
     }
-    // Back-compat: allow local-only login when username + password match defaults.
-    // Username is case-insensitive (e.g. "founder", "Founder", "FOUNDER" all work).
-    if (cleanUser.toUpperCase() === DEFAULT_CREDS.username && cleanPw === DEFAULT_CREDS.password) {
+    // Offline fallback — only if a non-empty default password is configured.
+    if (DEFAULT_CREDS.password && cleanPw && cleanUser.toUpperCase() === DEFAULT_CREDS.username && cleanPw === DEFAULT_CREDS.password) {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: 'FOUNDER', active: true, loginTime: Date.now() }));
       setIsAuthenticated(true);
       setUsername('FOUNDER');
       return true;
     }
-    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock + that you didn\'t paste a trailing space.');
+    setError('Invalid password. Please contact support if you have forgotten your credentials.');
     return false;
   };
 

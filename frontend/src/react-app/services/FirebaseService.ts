@@ -53,7 +53,11 @@ function decrypt(data: string, key: string): string {
 
 // Derive encryption key from station credentials
 function getEncryptionKey(stationId: string): string {
-  const base = localStorage.getItem('fuelpro_cloud_key') || crypto.randomUUID();
+  let base = localStorage.getItem('fuelpro_cloud_key');
+  if (!base) {
+    base = crypto.randomUUID();
+    localStorage.setItem('fuelpro_cloud_key', base);
+  }
   return `${base}_${stationId}`;
 }
 

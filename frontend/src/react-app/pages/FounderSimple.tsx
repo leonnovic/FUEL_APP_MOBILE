@@ -95,7 +95,7 @@ function useFounderAuth() {
         return false;
       } else if (r.status === 401) {
         const body = await r.json().catch(() => ({}));
-        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
+        setError(body.detail || 'Invalid password. Please contact support if you have forgotten your credentials.');
         return false;
       }
     } catch (e) {
@@ -110,7 +110,7 @@ function useFounderAuth() {
       setUsername('FOUNDER');
       return true;
     }
-    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock and trailing spaces.');
+    setError('Invalid password. Please contact support if you have forgotten your credentials.');
     return false;
   };
 
