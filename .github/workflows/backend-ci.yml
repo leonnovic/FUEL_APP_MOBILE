@@ -13,6 +13,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       mongodb:
         image: mongo:7
@@ -27,6 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd backend
+          sed -i '/emergentintegrations/d' requirements.txt
           pip install -r requirements.txt
           pip install pytest pytest-asyncio httpx motor passlib[bcrypt] python-jose[cryptography] python-dotenv google-auth google-auth-oauthlib starlette pydantic[email] pywebpush py-vapid http_ece pytz
       - name: Run tests

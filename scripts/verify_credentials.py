@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 
 async def verify_stripe(api_key):
-    print(f"Verifying Stripe with key: {api_key[:8]}...")
+    print(f"Verifying Stripe with key prefix: {api_key[:4]}...")
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(
@@ -17,7 +17,7 @@ async def verify_stripe(api_key):
                 print("✅ Stripe API Key is VALID")
                 return True
             else:
-                print(f"❌ Stripe verification FAILED: {resp.text}")
+                print(f"❌ Stripe verification FAILED with status {resp.status_code}")
                 return False
         except Exception as e:
             print(f"❌ Stripe verification ERROR: {e}")
@@ -37,7 +37,7 @@ async def verify_mpesa(consumer_key, consumer_secret):
                 print("✅ M-PESA credentials are VALID (Sandbox)")
                 return True
             else:
-                print(f"❌ M-PESA verification FAILED: {resp.text}")
+                print(f"❌ M-PESA verification FAILED with status {resp.status_code}")
                 return False
         except Exception as e:
             print(f"❌ M-PESA verification ERROR: {e}")
