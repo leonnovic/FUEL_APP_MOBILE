@@ -19,7 +19,7 @@ const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
 // Mirror the pattern from /lib/backendApi.ts: prefer the env var, otherwise
 // use window.location.origin so the ingress proxies /api/* correctly.
 const API_BASE = (
-  (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_REACT_APP_BACKEND_URL
   || (typeof window !== 'undefined' ? window.location.origin : '')
 ).replace(/\/$/, '');
 

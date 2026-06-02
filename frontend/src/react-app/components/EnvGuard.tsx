@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, XCircle, CheckCircle2, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { GOOGLE_CLIENT_ID } from '../lib/googleAuthConfig';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,31 +32,35 @@ function detectIssues(): EnvIssue[] {
 
   // 1. Backend URL — falls back to window.location.origin, but on Vercel static the
   //    backend is a separate server so /api/* calls will 404.
-  const backendUrl = getEnv('REACT_APP_BACKEND_URL') || getEnv('VITE_BACKEND_URL');
+  const backendUrl = getEnv('VITE_REACT_APP_BACKEND_URL') || getEnv('VITE_BACKEND_URL');
   if (!backendUrl) {
     issues.push({
       id: 'backend-url',
       severity: isProd ? 'critical' : 'warning',
-      variable: 'REACT_APP_BACKEND_URL',
+      variable: 'VITE_REACT_APP_BACKEND_URL',
       title: 'Backend API URL not set',
       description: `API calls fall back to ${typeof window !== 'undefined' ? window.location.origin : 'window.location.origin'}. On a static host (Vercel, Render, Cloudflare Pages) your backend is a separate server, so auth, payments, and sync will 404.`,
-      fix: 'Add REACT_APP_BACKEND_URL=https://your-backend.example.com to your deployment environment variables.',
+      fix: 'Add VITE_REACT_APP_BACKEND_URL=https://your-backend.example.com to your deployment environment variables.',
       impact: 'Login, M-PESA payments, Stripe checkout, and cloud sync',
     });
   }
 
-  // 2. Google OAuth client ID — has a hardcoded fallback but it's a demo ID
-  //    that may not be authorized for the deployed origin.
-  const googleId = getEnv('VITE_GOOGLE_CLIENT_ID');
-  if (!googleId) {
+  // 2. Google OAuth client ID — check if we have a valid-looking ID
+  //    (either from env or the fallback in googleAuthConfig.ts)
+  const googleId = getEnv('VITE_GOOGLE_CLIENT_ID') || GOOGLE_CLIENT_ID;
+  const isFallbackId = googleId === '49625052041-kgt0hghf445lmcmhijv46b715m2mpbct.apps.googleusercontent.com';
+
+  if (!googleId || (isFallbackId && isProd)) {
     issues.push({
       id: 'google-client-id',
-      severity: 'warning',
+      severity: isProd ? 'warning' : 'info',
       variable: 'VITE_GOOGLE_CLIENT_ID',
-      title: 'Google OAuth client ID not set',
-      description: 'Google Sign-In is using a built-in fallback client ID that is only authorized for localhost. Sign-in attempts from your deployed domain will be blocked by Google with an "origin not allowed" error.',
+      title: isFallbackId ? 'Using default Google Client ID' : 'Google OAuth client ID not set',
+      description: isFallbackId
+        ? 'Google Sign-In is using the default fallback client ID. If you are seeing "origin_mismatch" errors on your production domain, you must provide your own Client ID.'
+        : 'Google Sign-In is missing a Client ID. Sign-in attempts will fail.',
       fix: 'Create an OAuth 2.0 Web Client ID at console.cloud.google.com and add VITE_GOOGLE_CLIENT_ID=<your-id>.apps.googleusercontent.com to your environment.',
-      impact: 'Google Sign-In button',
+      impact: 'Google Sign-In functionality',
     });
   }
 
