@@ -1,0 +1,80 @@
+founder acces is admin/dev backend access to the whole site
+
+"founder" access is only for dev backend access eg: me.  
+every new user gets owner access rights which have limits (unless assigned other role eg; auditor, staff, etc by owner)
+
+
+
+founder acces is admin/dev backend access to the whole site
+
+
+5:13 PM
+user avatar
+Worked for 7s
+Got it — "founder" access = admin/dev backend access to the whole site. Could you clarify what you'd like me to do with this? For example:
+
+Add a "founder" role/access level to the app?
+Update existing role logic so founders get full admin + dev backend access?
+Something else?
+I'll start exploring the codebase in the meantime to understand the current auth/role setup.
+
+
+
+5:13 PM
+"founder" access is only for dev backend access eg: me.  
+every new user gets owner access rights which have limits (unless assigned other role eg; auditor, staff, etc by owner)
+
+
+5:27 PM
+user avatar
+Thought for 9s
+Got it, clear picture now:
+
+Founder: Dev/backend access to everything (only you)
+Owner: Default role for every new user, with limited access
+Other roles (auditor, staff, etc.) can be assigned by the owner
+I'll explore the codebase to understand the current auth/role setup and then implement this role hierarchy.
+
+
+
+5:28 PM
+Worked for 5m 9s
++57
+−20
+Enforce role hierarchy: founder > owner > manager/staff/auditor
+FUEL_APP_MOBILE#34
+•
++57
+−20
+•
+devin-ai-integration[bot]
+
+
+Review with Devin
+Worked for 1s
+Received feedback from codesandbox[bot], bolt-new-by-stackblitz[bot], vercel[bot] (3)
+Worked for 1m
+Bot comment from cloudflare-workers-and-pages[bot] ignored
+Viewed CI status for PR #34 in github.com/leonnovic/FUEL_APP_MOBILE
+Viewed pull request #34 in leonnovic/FUEL_APP_MOBILE
+Thought for 5s
+Viewed CI status for PR #34 in github.com/leonnovic/FUEL_APP_MOBILE
+Thought for 5s
+Viewed CI job logs for job 79096430214 in github.com/leonnovic/FUEL_APP_MOBILE
+Viewed CI job logs for job 79096436158 in github.com/leonnovic/FUEL_APP_MOBILE
+Thought for 7s
+Thought for 10s
+10/10Wait for CI checks — all failures are pre-existing (Capacitor dep, Vercel billing, Cloudflare)
+PR ready: FUEL_APP_MOBILE#34 (Devin Review)
+
+What changed:
+
+Owners can only assign manager/staff/auditor roles (not owner)
+New PATCH /api/founder/users/{id}/role — founder-only endpoint that can assign ANY role including owner
+Invites restricted to manager/staff/auditor
+TeamManagement UI: owners show as a read-only purple badge; dropdown only offers subordinate roles
+CI failures are all pre-existing (not caused by this PR):
+
+Vercel: billing plan restriction on multi-region serverless
+TypeScript builds: @capacitor/android@^8.7.0 doesn't exist in npm registry
+Cloudflare Workers: deployment failure
