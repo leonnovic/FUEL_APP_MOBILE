@@ -3,8 +3,8 @@ import os
 import httpx
 
 async def verify_stripe(api_key):
-    # Log only the prefix to avoid leaking sensitive data
-    print(f"Verifying Stripe with key prefix: {api_key[:4]}...")
+    # Do not log any part of the key to satisfy security scans
+    print("Verifying Stripe API key...")
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(
