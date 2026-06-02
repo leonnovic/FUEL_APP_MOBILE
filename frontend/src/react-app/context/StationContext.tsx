@@ -138,10 +138,28 @@ interface StationContextType {
   decryptSensitive: (encoded: string) => string;
 }
 
+// Generate or retrieve a per-installation encryption key
+function getEncryptionKey(): string {
+  const KEY_STORAGE = 'fuelpro_encryption_key';
+  try {
+    const existing = localStorage.getItem(KEY_STORAGE);
+    if (existing) return existing;
+    // Generate a new random key
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const key = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(KEY_STORAGE, key);
+    return key;
+  } catch {
+    // Fallback for SSR or restricted environments
+    return 'runtime_generated_key_' + Math.random().toString(36).slice(2);
+  }
+}
+
 const defaultAdminSettings: AdminSettings = {
   adminUsername: 'ADMIN',
-  adminPasswordHash: encrypt('fuelpro2026', 'fuelpro_secret_key_2026'),
-  secretKey: 'fuelpro_secret_key_2026',
+  adminPasswordHash: '', // Password hash is set during first setup, not hardcoded
+  secretKey: getEncryptionKey(), // Per-installation generated key
   apiKeys: {
     kra_etims: '',
     mpesa_api: '',

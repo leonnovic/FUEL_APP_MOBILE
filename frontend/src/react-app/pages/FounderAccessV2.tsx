@@ -15,7 +15,7 @@ import FounderBroadcastForm from '@/react-app/components/FounderBroadcastForm';
 const SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
 // Display-only hint — actual auth is performed by the backend.
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+const DEFAULT_CREDS = { username: 'FOUNDER', password: '' };
 // Mirror the pattern from /lib/backendApi.ts: prefer the env var, otherwise
 // use window.location.origin so the ingress proxies /api/* correctly.
 const API_BASE = (
@@ -86,7 +86,7 @@ function useFounderAuth() {
       } else if (r.status === 401) {
         // Surface the precise reason from the backend so users aren't guessing.
         const body = await r.json().catch(() => ({}));
-        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
+        setError(body.detail || 'Invalid password. Contact your system administrator.');
         return false;
       }
       // Fall through to client-side check below (back-compat for offline UX)
@@ -95,15 +95,14 @@ function useFounderAuth() {
        
       console.warn('Founder login network error:', e);
     }
-    // Back-compat: allow local-only login when username + password match defaults.
-    // Username is case-insensitive (e.g. "founder", "Founder", "FOUNDER" all work).
-    if (cleanUser.toUpperCase() === DEFAULT_CREDS.username && cleanPw === DEFAULT_CREDS.password) {
+    // Back-compat: require server auth, offline fallback disabled for security
+    if (cleanUser.toUpperCase() === DEFAULT_CREDS.username && DEFAULT_CREDS.password && cleanPw === DEFAULT_CREDS.password) {
       localStorage.setItem(SESSION_KEY, JSON.stringify({ username: 'FOUNDER', active: true, loginTime: Date.now() }));
       setIsAuthenticated(true);
       setUsername('FOUNDER');
       return true;
     }
-    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock + that you didn\'t paste a trailing space.');
+    setError('Invalid password. Contact your system administrator for credentials.');
     return false;
   };
 
@@ -200,7 +199,7 @@ function FounderLogin({ onLogin }: { onLogin: () => void }) {
                   onKeyDown={onKeyDown}
                   autoComplete="current-password"
                   name="password"
-                  placeholder="publican1D#20 (default)"
+                  placeholder="Enter password"
                   data-testid="founder-password-input"
                   className="w-full px-4 py-3 pr-10 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 text-sm"
                   autoFocus
@@ -218,7 +217,7 @@ function FounderLogin({ onLogin }: { onLogin: () => void }) {
               <Shield size={16} /> {isSubmitting ? 'Authenticating...' : 'Access Backend'}
             </button>
             <p className="text-[11px] text-gray-600 text-center mt-3">
-              Default: <code className="px-1.5 py-0.5 bg-gray-800 rounded text-amber-400 font-mono">publican1D#20</code> · Rate-limited 5/h per IP
+              Contact system administrator for credentials · Rate-limited 5/h per IP
             </p>
           </div>
         </div>

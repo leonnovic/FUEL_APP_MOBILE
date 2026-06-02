@@ -74,7 +74,8 @@ const FOUNDER_SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_2FA_KEY = 'fuelpro_founder_2fa';
 
 function getDefaultPassword() {
-  return { username: 'FOUNDER', password: 'fuelpro2026' };
+  // Auth is server-side - no credentials in frontend code
+  return { username: 'FOUNDER', password: '' };
 }
 
 function loadSecrets(): Secret[] {

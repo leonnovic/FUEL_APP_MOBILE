@@ -14,8 +14,8 @@ import {
 
 const SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
-// Display-only fallback; backend is the authority.
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+// Auth is server-side only - no credentials stored in frontend code
+const DEFAULT_CREDS = { username: 'FOUNDER', password: '' };
 const API_BASE = (
   (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_REACT_APP_BACKEND_URL
   || (typeof window !== 'undefined' ? window.location.origin : '')
@@ -95,7 +95,7 @@ function useFounderAuth() {
         return false;
       } else if (r.status === 401) {
         const body = await r.json().catch(() => ({}));
-        setError(body.detail || 'Invalid password. Default is publican1D#20 (case-sensitive).');
+        setError(body.detail || 'Invalid password. Check credentials with your system administrator.');
         return false;
       }
     } catch (e) {
@@ -110,7 +110,7 @@ function useFounderAuth() {
       setUsername('FOUNDER');
       return true;
     }
-    setError('Invalid password. Default is "publican1D#20" (case-sensitive). Check Caps Lock and trailing spaces.');
+    setError('Invalid password. Contact your system administrator for credentials.');
     return false;
   };
 
@@ -2313,7 +2313,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
       if (result) return; // parent state flip handles redirect
       // Hook's setError already surfaced the precise reason (rate limit / 401 / network).
       // Try to read it from localStorage marker the hook leaves; fall back to generic.
-      setErr('Invalid password. Default: "publican1D#20" (case-sensitive). Check Caps Lock & trailing whitespace.');
+      setErr('Invalid password. Contact your system administrator for credentials.');
       setPw('');
       if (pwRef.current) pwRef.current.value = '';
     } finally {
@@ -2369,7 +2369,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
                   defaultValue=""
                   onChange={e => { setPw(e.target.value); setErr(''); }}
                   onKeyDown={handleKeyDown}
-                  placeholder="publican1D#20 (default)"
+                  placeholder="Enter password"
                   autoComplete="current-password"
                   name="password"
                   autoFocus
@@ -2393,7 +2393,7 @@ function FounderLogin({ onLogin }: { onLogin: (user: string, pw: string) => Prom
               <Shield size={16} /> {submitting ? 'Authenticating…' : 'Access Backend'}
             </button>
             <p style={{ fontSize: 10, color: '#444', textAlign: 'center', margin: '4px 0 0' }}>
-              Default password: <code style={{ background: '#1a1a1f', padding: '2px 6px', borderRadius: 4, color: '#f59e0b', fontFamily: 'monospace' }}>publican1D#20</code> · Rate-limited 5/h per IP
+              Contact system administrator for credentials · Rate-limited 5/h per IP
             </p>
           </div>
         </div>

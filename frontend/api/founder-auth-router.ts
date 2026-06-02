@@ -11,12 +11,18 @@ import { getDb } from "./queries/connection";
 import { desc } from "drizzle-orm";
 
 // ─── Credential Store ───
-// Default credentials (configurable via localStorage on frontend)
-const DEFAULT_CREDS = { username: "FOUNDER", password: "publican1D#20" };
+// Credentials are read from environment variables - NEVER hardcoded
+const DEFAULT_CREDS = { 
+  username: process.env.FOUNDER_USERNAME || "FOUNDER", 
+  password: process.env.FOUNDER_PASSWORD || "" // Must be set in environment
+};
 
 function getStoredCreds(): { username: string; password: string } {
-  // In production, this could read from environment variables or encrypted store
-  return DEFAULT_CREDS;
+  // Read from environment variables for security
+  return {
+    username: process.env.FOUNDER_USERNAME || DEFAULT_CREDS.username,
+    password: process.env.FOUNDER_PASSWORD || DEFAULT_CREDS.password,
+  };
 }
 
 export const founderAuthRouter = createRouter({
