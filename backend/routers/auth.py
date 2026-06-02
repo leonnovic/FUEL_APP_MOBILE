@@ -303,9 +303,8 @@ async def auth_quick_start(request: Request):
     user_doc = build_user_doc(
         email, name,
         auth_methods=["quick_start"],
-        extra_fields={"is_guest": True},
+        extra_fields={"is_guest": True, "id": uid},
     )
-    uid = user_doc["id"]
     await db.users.insert_one(user_doc)
     await write_audit_log(
         uid, "user.quick_start",
