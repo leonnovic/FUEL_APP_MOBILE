@@ -4,11 +4,12 @@
 // All data encrypted locally before transmission
 // ============================================================
 
-// Firebase config - configure your own Firebase project
+// Firebase config — loaded from environment variables, never hardcoded.
+const _env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
 const FIREBASE_CONFIG = {
-  databaseURL: 'https://fuelpro-cloud-default-rtdb.firebaseio.com',
-  apiKey: 'YOUR_FIREBASE_API_KEY',
-  projectId: 'fuelpro-cloud',
+  databaseURL: _env.VITE_FIREBASE_DATABASE_URL ?? '',
+  apiKey: _env.VITE_FIREBASE_API_KEY ?? '',
+  projectId: _env.VITE_FIREBASE_PROJECT_ID ?? '',
 };
 
 interface CloudData {
@@ -29,7 +30,8 @@ function getDeviceId(): string {
   return id;
 }
 
-// Simple XOR encryption for data before transmission
+// WARNING: XOR is NOT real encryption — it is trivially reversible.
+// TODO: Replace with Web Crypto API (AES-GCM) for actual confidentiality.
 function encrypt(data: string, key: string): string {
   let result = '';
   for (let i = 0; i < data.length; i++) {
@@ -51,7 +53,7 @@ function decrypt(data: string, key: string): string {
 
 // Derive encryption key from station credentials
 function getEncryptionKey(stationId: string): string {
-  const base = localStorage.getItem('fuelpro_cloud_key') || 'fuelpro_default_key_2026';
+  const base = localStorage.getItem('fuelpro_cloud_key') || crypto.randomUUID();
   return `${base}_${stationId}`;
 }
 

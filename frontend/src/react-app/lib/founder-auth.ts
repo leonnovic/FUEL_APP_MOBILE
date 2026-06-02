@@ -1,12 +1,12 @@
 /**
  * Founder Authentication — secure credential management.
- * Credentials are configurable via environment/localStorage,
- * NOT hardcoded in source code.
+ * Credentials are validated server-side via /api/founder/login.
+ * No default passwords are shipped in client code.
  */
 
 const DEFAULT_CREDS = {
   username: 'FOUNDER',
-  password: 'fuelpro2026',
+  password: '',
 };
 
 const STORAGE_KEY = 'fuelpro_founder_creds';

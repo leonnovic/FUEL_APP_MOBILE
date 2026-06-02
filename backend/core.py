@@ -8,6 +8,7 @@ circular imports between routers.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import uuid
@@ -300,7 +301,7 @@ def now_iso() -> str:
 
 
 def verify_mpesa_webhook(body: str, signature: str) -> bool:
-    """Verify M-PESA webhook signature using HMAC."""
+    """Verify M-PESA webhook signature using HMAC (timing-safe)."""
     if not MPESA_WEBHOOK_SECRET:
         log.warning("MPESA_WEBHOOK_SECRET not configured; skipping signature verification")
         return IS_PRODUCTION is False  # Only allow in non-prod
@@ -308,4 +309,4 @@ def verify_mpesa_webhook(body: str, signature: str) -> bool:
     expected_sig = hashlib.sha256(
         f"{body}{MPESA_WEBHOOK_SECRET}".encode()
     ).hexdigest()
-    return signature == expected_sig
+    return hmac.compare_digest(signature, expected_sig)

@@ -98,6 +98,7 @@ async def fuel_prices(region: str = "nairobi"):
 
 @router.get("/audit-log")
 async def audit_log_list(user: dict = Depends(get_current_user), limit: int = 200):
+    limit = max(1, min(limit, 1000))
     rows = await db.audit_log.find({"user_id": user["id"]}, {"_id": 0}).sort("at", -1).to_list(limit)
     return {"items": rows, "ok": True}
 

@@ -14,8 +14,8 @@ import FounderBroadcastForm from '@/react-app/components/FounderBroadcastForm';
 // ─── Storage Keys ───
 const SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
-// Display-only hint — actual auth is performed by the backend.
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+// Auth is performed by the backend — no default password in client code.
+const DEFAULT_CREDS = { username: 'FOUNDER', password: '' };
 // Mirror the pattern from /lib/backendApi.ts: prefer the env var, otherwise
 // use window.location.origin so the ingress proxies /api/* correctly.
 const API_BASE = (

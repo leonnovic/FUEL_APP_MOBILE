@@ -7,10 +7,10 @@
 // ═══════════════════════════════════════════════════
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDummyForDemo-ReplaceWithRealKey",
-  databaseURL: "https://fuelpro-global-default-rtdb.firebaseio.com",
-  projectId: "fuelpro-global",
-  appId: "1:123456789:web:abcdef123456"
+  apiKey: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_API_KEY ?? "",
+  databaseURL: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_DATABASE_URL ?? "",
+  projectId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_PROJECT_ID ?? "",
+  appId: (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_FIREBASE_APP_ID ?? "",
 };
 
 let firebaseDB: any = null;
@@ -31,8 +31,8 @@ async function initFirebase(): Promise<boolean> {
 // PROVIDER 2: Supabase
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = "https://dummy-for-demo.supabase.co";
-const SUPABASE_KEY = "eyJdummy-for-demo-replace-with-real-key";
+const SUPABASE_URL = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL ?? "";
+const SUPABASE_KEY = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY ?? "";
 
 let supabaseClient: any = null;
 

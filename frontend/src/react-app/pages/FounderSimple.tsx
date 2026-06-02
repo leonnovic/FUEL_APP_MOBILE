@@ -14,8 +14,8 @@ import {
 
 const SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_JWT_KEY = 'fuelpro_founder_jwt';
-// Display-only fallback; backend is the authority.
-const DEFAULT_CREDS = { username: 'FOUNDER', password: 'publican1D#20' };
+// Auth is performed by the backend — no default password in client code.
+const DEFAULT_CREDS = { username: 'FOUNDER', password: '' };
 const API_BASE = (
   (import.meta as unknown as { env?: Record<string, string> }).env?.REACT_APP_BACKEND_URL
   || (typeof window !== 'undefined' ? window.location.origin : '')

@@ -138,10 +138,16 @@ interface StationContextType {
   decryptSensitive: (encoded: string) => string;
 }
 
+function _generateSecretKey(): string {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 const defaultAdminSettings: AdminSettings = {
   adminUsername: 'ADMIN',
-  adminPasswordHash: encrypt('fuelpro2026', 'fuelpro_secret_key_2026'),
-  secretKey: 'fuelpro_secret_key_2026',
+  adminPasswordHash: '',
+  secretKey: _generateSecretKey(),
   apiKeys: {
     kra_etims: '',
     mpesa_api: '',
