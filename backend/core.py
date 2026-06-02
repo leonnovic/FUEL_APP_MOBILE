@@ -171,7 +171,8 @@ def _verify_pw(pw: str, hashed: str) -> bool:
         if PASSWORD_PEPPER:
             pw = f"{pw}{PASSWORD_PEPPER}"
         return pwd_ctx.verify(pw, hashed)
-    except Exception:
+    except (ValueError, TypeError) as e:
+        log.debug("Password verification failed (malformed hash): %s", e)
         return False
 
 

@@ -46,7 +46,10 @@ function decrypt(data: string, key: string): string {
       result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
     }
     return result;
-  } catch { return '{}'; }
+  } catch (e) {
+    console.error('[Firebase] Decryption failed — data may be corrupt or key mismatch:', e instanceof Error ? e.message : e);
+    return '{}';
+  }
 }
 
 // Derive encryption key from station credentials

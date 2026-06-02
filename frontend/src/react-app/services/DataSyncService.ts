@@ -26,7 +26,11 @@ function loadSyncRecords(): Record<string, SyncRecord> {
   try {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  } catch (e) {
+    console.warn('Corrupted sync records in localStorage, resetting:', e instanceof Error ? e.message : e);
+    localStorage.removeItem(SYNC_STORAGE_KEY);
+    return {};
+  }
 }
 
 function saveSyncRecord(record: SyncRecord) {

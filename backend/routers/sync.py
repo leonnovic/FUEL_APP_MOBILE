@@ -11,6 +11,7 @@ from core import (
     db,
     get_current_user,
     get_current_user_optional,
+    log,
     new_id,
     now_iso,
     scoped_user_id,
@@ -49,8 +50,8 @@ async def save_user_data(
     try:
         from routers.ws import publish_to_user
         await publish_to_user(uid, {"type": "user-data.updated", "updated_at": now})
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("WebSocket publish failed for user-data.updated (user=%s): %s", uid, e)
     return {"ok": True, "updated_at": now}
 
 
@@ -84,8 +85,8 @@ async def sync_put(collection: str, request: Request, user: dict = Depends(get_c
             "collection": collection,
             "count": len(items),
         })
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("WebSocket publish failed for sync.updated (collection=%s): %s", collection, e)
     return {"ok": True, "saved": len(items), "collection": collection}
 
 

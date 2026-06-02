@@ -203,7 +203,10 @@ export function startAutoBackup(stationId: string, getData: () => any, intervalM
           if (old.id) await deleteBackup(old.id);
         }
       }
-    } catch (e) { console.error('Auto-backup failed:', e); }
+    } catch (e) {
+      console.error('Auto-backup failed:', e);
+      window.dispatchEvent(new CustomEvent('fuelpro-backup-error', { detail: { error: e instanceof Error ? e.message : String(e) } }));
+    }
   }, intervalMs);
 }
 
@@ -221,34 +224,58 @@ export async function syncToGoogleSheets(data: any): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'sync', data, timestamp: new Date().toISOString() }),
     });
+    if (!response.ok) {
+      console.warn('Google Sheets sync failed: HTTP %d', response.status);
+    }
     return response.ok;
-  } catch { return false; }
+  } catch (e) {
+    console.warn('Google Sheets sync failed:', e instanceof Error ? e.message : e);
+    return false;
+  }
 }
 
 // Main CloudStorage API
 export const CloudStorage = {
   // Data operations
   async save(key: string, value: any): Promise<void> {
-    try { await dbSet(key, value); } catch (e) { localStorage.setItem(key, JSON.stringify(value)); }
+    try {
+      await dbSet(key, value);
+    } catch (e) {
+      console.warn('IndexedDB save failed, falling back to localStorage (key=%s):', key, e instanceof Error ? e.message : e);
+      localStorage.setItem(key, JSON.stringify(value));
+    }
   },
   async load(key: string): Promise<any> {
     try {
       const value = await dbGet(key);
       if (value !== null) return value;
-    } catch { /* fallback */ }
+    } catch (e) {
+      console.warn('IndexedDB load failed, falling back to localStorage (key=%s):', key, e instanceof Error ? e.message : e);
+    }
     // Fallback to localStorage
     try {
       const ls = localStorage.getItem(key);
       if (ls) return JSON.parse(ls);
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.warn('localStorage parse failed (key=%s):', key, e instanceof Error ? e.message : e);
+    }
     return null;
   },
   async remove(key: string): Promise<void> {
-    try { await dbDelete(key); } catch { /* */ }
+    try {
+      await dbDelete(key);
+    } catch (e) {
+      console.warn('IndexedDB delete failed (key=%s):', key, e instanceof Error ? e.message : e);
+    }
     localStorage.removeItem(key);
   },
   async loadAll(): Promise<Record<string, any>> {
-    try { return await dbGetAll(); } catch { return {}; }
+    try {
+      return await dbGetAll();
+    } catch (e) {
+      console.warn('IndexedDB loadAll failed:', e instanceof Error ? e.message : e);
+      return {};
+    }
   },
 
   // Backup

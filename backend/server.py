@@ -220,7 +220,7 @@ async def on_startup():
             await db[f"sync_{c}"].create_index("user_id")
         log.info("MongoDB indexes ready (including JWT revocation TTL)")
     except Exception as e:
-        log.warning("Index creation issue: %s", e)
+        log.error("MongoDB index creation failed — data integrity may be at risk: %s", e, exc_info=True)
 
     if os.environ.get("DIGEST_ENABLED", "1") == "1":
         from services.digest import digest_scheduler
@@ -232,14 +232,14 @@ async def on_startup():
     try:
         await ensure_founder_seeded()
     except Exception as e:
-        log.warning("Founder seed failed: %s", e)
+        log.error("Founder seed failed — founder access may be unavailable: %s", e, exc_info=True)
 
     # Apply any runtime integration keys the founder previously stored
     # (Resend, Twilio, Stripe, Daraja) so services pick them up immediately.
     try:
         await apply_runtime_config_to_env()
     except Exception as e:
-        log.warning("Runtime config apply failed: %s", e)
+        log.error("Runtime config apply failed — integration keys may be stale: %s", e, exc_info=True)
 
 
 @app.on_event("shutdown")

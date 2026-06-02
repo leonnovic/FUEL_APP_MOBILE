@@ -296,6 +296,9 @@ export default function PointOfSale() {
       localStorage.setItem('fuelpro_pos_transactions', JSON.stringify(localTransactions.slice(-100)));
     } catch (error) {
       console.error('Failed to save POS transaction locally:', error);
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        import('@/react-app/lib/toast').then(({toastWarning}) => toastWarning('Local storage full. Transaction may not be saved locally.'));
+      }
     }
 
     // Sync fuel sales to salesHistory for reporting

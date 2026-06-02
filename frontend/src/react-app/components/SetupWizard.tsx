@@ -168,6 +168,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       }
     } catch (err) {
       console.error('Station creation failed:', err);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Station creation failed. Data saved locally as fallback.'));
     }
 
     // Also write directly to localStorage as fallback

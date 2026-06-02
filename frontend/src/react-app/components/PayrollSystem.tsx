@@ -244,7 +244,9 @@ export default function PayrollSystem() {
           notes: emp.notes || '',
         })));
       }
-    } catch { /* */ }
+    } catch (e) {
+      console.warn('Failed to parse local payroll employees:', e instanceof Error ? e.message : e);
+    }
   };
 
   const fetchSettings = async () => {
@@ -323,10 +325,12 @@ export default function PayrollSystem() {
       if (response.ok) {
         console.log('Settings saved successfully');
       } else {
-        console.error('Failed to save settings');
+        console.error('Failed to save settings: HTTP %d', response.status);
+        import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to save payroll settings. Please try again.'));
       }
     } catch (error) {
       console.error('Error saving settings:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Network error saving settings. Please check your connection.'));
     } finally {
       setImporting(false);
     }
@@ -455,10 +459,12 @@ export default function PayrollSystem() {
           saveSettings(updatedSettings);
         }
       } else {
-        console.error('Failed to save employee');
+        console.error('Failed to save employee: HTTP %d', response.status);
+        import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to save employee. Please try again.'));
       }
     } catch (error) {
       console.error('Error saving employee:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Network error saving employee. Please check your connection.'));
     } finally {
       setSaving(false);
     }
@@ -483,10 +489,12 @@ export default function PayrollSystem() {
           setShowDeleteModal(false);
           setEmployeeToDelete(null);
         } else {
-          console.error('Failed to delete employee');
+          console.error('Failed to delete employee: HTTP %d', response.status);
+          import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to delete employee. Please try again.'));
         }
       } catch (error) {
         console.error('Error deleting employee:', error);
+        import('@/react-app/lib/toast').then(({toastError}) => toastError('Network error deleting employee.'));
       } finally {
         setSaving(false);
       }
@@ -512,10 +520,12 @@ export default function PayrollSystem() {
         setSettings(updatedSettings);
         setShowShaModal(false);
       } else {
-        console.error('Failed to update SHA for all employees');
+        console.error('Failed to update SHA: HTTP %d', response.status);
+        import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to update SHA for all employees.'));
       }
     } catch (error) {
       console.error('Error updating SHA:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Network error updating SHA.'));
     } finally {
       setSaving(false);
     }
@@ -539,10 +549,12 @@ export default function PayrollSystem() {
         setSettings(updatedSettings);
         setShowNssfModal(false);
       } else {
-        console.error('Failed to update NSSF for all employees');
+        console.error('Failed to update NSSF: HTTP %d', response.status);
+        import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to update NSSF for all employees.'));
       }
     } catch (error) {
       console.error('Error updating NSSF:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Network error updating NSSF.'));
     } finally {
       setSaving(false);
     }

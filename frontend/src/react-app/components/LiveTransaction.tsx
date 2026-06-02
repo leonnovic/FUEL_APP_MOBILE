@@ -123,10 +123,11 @@ export default function LiveTransaction() {
         const data = await response.json();
         setPaymentSources(data.sources || []);
       } else {
-        console.error('Failed to load payment sources');
+        console.error('Failed to load payment sources: HTTP %d', response.status);
       }
     } catch (error) {
       console.error('Error loading payment sources:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to load payment sources.'));
     }
   };
 
@@ -138,10 +139,11 @@ export default function LiveTransaction() {
         const data = await response.json();
         setLiveTransactions(data.transactions || []);
       } else {
-        console.error('Failed to load live transactions');
+        console.error('Failed to load live transactions: HTTP %d', response.status);
       }
     } catch (error) {
       console.error('Error loading live transactions:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to load transactions. Please check your connection.'));
     } finally {
       setIsRefreshing(false);
     }

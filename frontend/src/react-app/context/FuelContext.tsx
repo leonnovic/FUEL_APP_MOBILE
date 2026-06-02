@@ -773,6 +773,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error saving to localStorage:', error);
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        import('@/react-app/lib/toast').then(({toastWarning}) => toastWarning('Local storage is full. Some data may not be saved.'));
+      }
     }
   };
 
@@ -862,6 +865,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       console.log(`Compact data saved to cloud (${savings}% smaller)`);
     } catch (error) {
       console.error('Error saving to cloud:', error);
+      import('@/react-app/lib/toast').then(({toastError}) => toastError('Failed to save data to cloud. Changes saved locally.'));
     } finally {
       setIsCloudSaving(false);
     }
@@ -1007,6 +1011,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('Error loading from localStorage:', error);
+      import('@/react-app/lib/toast').then(({toastWarning}) => toastWarning('Could not restore saved data. Starting fresh.'));
     }
   };
 
