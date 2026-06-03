@@ -34,7 +34,7 @@ import { toast } from 'sonner'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'admin'
+type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'admin'
 
 interface NavItem {
   id: TabId
@@ -272,6 +272,7 @@ const navigationItems: NavItem[] = [
   { id: 'deliveries', label: 'Deliveries', icon: <Package className="size-4" />, group: 'Operations' },
   { id: 'reconciliation', label: 'Reconciliation', icon: <CheckSquare className="size-4" />, group: 'Finance' },
   { id: 'compliance', label: 'Compliance', icon: <ShieldCheck className="size-4" />, group: 'Finance' },
+  { id: 'reports', label: 'Reports', icon: <BarChart3 className="size-4" />, group: 'Finance' },
   { id: 'suppliers', label: 'Suppliers', icon: <Truck className="size-4" />, group: 'Supply Chain' },
   { id: 'coupons', label: 'Coupons', icon: <Ticket className="size-4" />, group: 'Supply Chain' },
   { id: 'admin', label: 'Admin', icon: <Settings className="size-4" />, group: 'System' },
@@ -390,11 +391,18 @@ export default function FuelProDashboard() {
   const [reconciliationDialogOpen, setReconciliationDialogOpen] = useState(false)
   const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
   const [stationDetailDialogOpen, setStationDetailDialogOpen] = useState(false)
+  const [stationEditDialogOpen, setStationEditDialogOpen] = useState(false)
+  const [editStation, setEditStation] = useState<StationAPIResponse['data'][number] | null>(null)
+  const [editStationForm, setEditStationForm] = useState({ name: '', location: '', phone: '', county: '' })
+  const [tankPriceDialogOpen, setTankPriceDialogOpen] = useState(false)
+  const [editTank, setEditTank] = useState<{ id: string; stationId: string; fuelType: string; pricePerLiter: number; alertThreshold: number } | null>(null)
   const [selectedStation, setSelectedStation] = useState<StationAPIResponse['data'][number] | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   // Form states
   const [newStation, setNewStation] = useState({ name: '', location: '', manager: '', phone: '', county: '' })
-  const [newSale, setNewSale] = useState({ stationId: '', fuelType: 'Petrol', quantityLiters: 0, pricePerLiter: 199.63, paymentMethod: 'cash', userId: 'demo-user' })
+  const [newSale, setNewSale] = useState({ stationId: '', fuelType: 'Petrol', quantityLiters: 0, pricePerLiter: 199.63, paymentMethod: 'cash', userId: 'demo-user', customerName: '' })
   const [newShift, setNewShift] = useState({ stationId: '', attendantName: '', fuelType: 'Petrol', openingReading: 0, userId: 'demo-user' })
   const [newSupplier, setNewSupplier] = useState({ name: '', contact: '', fuelTypes: '', location: '' })
   const [newCoupon, setNewCoupon] = useState({ code: '', type: 'percentage', value: 0, maxUses: 100 })
@@ -581,7 +589,7 @@ export default function FuelProDashboard() {
       if (json.ok) {
         setSales(prev => [json.data, ...prev])
         setSaleDialogOpen(false)
-        setNewSale({ stationId: '', fuelType: 'Petrol', quantityLiters: 0, pricePerLiter: 199.63, paymentMethod: 'cash', userId: 'demo-user' })
+        setNewSale({ stationId: '', fuelType: 'Petrol', quantityLiters: 0, pricePerLiter: 199.63, paymentMethod: 'cash', userId: 'demo-user', customerName: '' })
         toast.success('Sale recorded successfully')
       } else { toast.error(json.error || 'Failed to record sale') }
     } catch { toast.error('Failed to record sale') }
@@ -727,6 +735,50 @@ export default function FuelProDashboard() {
       if (json.ok) { setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status: newStatus } : c)); toast.success(`Coupon ${newStatus === 'active' ? 'activated' : 'deactivated'}`) }
       else { toast.error(json.error || 'Failed to update') }
     } catch { toast.error('Failed to update coupon') }
+  }
+
+  const handleEditStation = async () => {
+    if (!editStation || !editStationForm.name) { toast.error('Station name is required'); return }
+    try {
+      const res = await fetch(`/api/stations/${editStation.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editStationForm) })
+      const json = await res.json()
+      if (json.ok) {
+        setStations(prev => prev.map(s => s.id === editStation.id ? { ...s, ...editStationForm } : s))
+        setStationEditDialogOpen(false)
+        setEditStation(null)
+        toast.success('Station updated successfully')
+      } else { toast.error(json.error || 'Failed to update station') }
+    } catch { toast.error('Failed to update station') }
+  }
+
+  const handleUpdateTankPrice = async () => {
+    if (!editTank) return
+    try {
+      const res = await fetch(`/api/stations/${editTank.stationId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tankId: editTank.id, pricePerLiter: editTank.pricePerLiter, alertThreshold: editTank.alertThreshold }) })
+      const json = await res.json()
+      if (json.ok) {
+        setStations(prev => prev.map(s => {
+          if (s.id === editTank.stationId) {
+            return { ...s, tanks: s.tanks.map(t => t.id === editTank.id ? { ...t, pricePerLiter: editTank.pricePerLiter, alertThreshold: editTank.alertThreshold } : t) }
+          }
+          return s
+        }))
+        setInventory(prev => prev.map(t => t.id === editTank.id ? { ...t, pricePerLiter: editTank.pricePerLiter, alertThreshold: editTank.alertThreshold } : t))
+        setTankPriceDialogOpen(false)
+        setEditTank(null)
+        toast.success(`${editTank.fuelType} price updated to ${formatCurrency(editTank.pricePerLiter)}/L`)
+      } else { toast.error(json.error || 'Failed to update price') }
+    } catch { toast.error('Failed to update tank price') }
+  }
+
+  const handleSaveConfig = async () => {
+    if (!adminData) return
+    try {
+      const res = await fetch('/api/admin', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminData.config) })
+      const json = await res.json()
+      if (json.ok) { toast.success('Configuration saved successfully') }
+      else { toast.error(json.error || 'Failed to save configuration') }
+    } catch { toast.error('Failed to save configuration') }
   }
 
   const unreadCount = notifications.filter(n => !n.read).length
@@ -1133,7 +1185,12 @@ export default function FuelProDashboard() {
                         <div key={tank.id} className={`p-3 rounded-lg border ${isLow ? 'bg-red-950/20 border-red-900/30' : 'bg-slate-800/50 border-slate-700'}`}>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-medium text-slate-200">{tank.fuelType}</span>
-                            <span className="text-xs text-slate-400">{formatNumber(Math.round(tank.currentStock))}L / {formatNumber(tank.capacity)}L</span>
+                            <div className="flex items-center gap-1.5">
+                              <Button variant="ghost" size="sm" className="h-6 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 px-2" onClick={(e) => { e.stopPropagation(); setEditTank({ id: tank.id, stationId: selectedStation.id, fuelType: tank.fuelType, pricePerLiter: tank.pricePerLiter, alertThreshold: tank.alertThreshold }); setTankPriceDialogOpen(true) }}>
+                                <DollarSign className="size-3 mr-0.5" /> Price
+                              </Button>
+                              <span className="text-xs text-slate-400">{formatNumber(Math.round(tank.currentStock))}L / {formatNumber(tank.capacity)}L</span>
+                            </div>
                           </div>
                           <Progress value={pct} className="h-2" />
                           <div className="flex justify-between mt-1">
@@ -1153,7 +1210,10 @@ export default function FuelProDashboard() {
                 <Button variant="outline" onClick={() => setStationDetailDialogOpen(false)} className="border-slate-700 text-slate-300 flex-1">Close</Button>
                 {selectedStation && (
                   <>
-                    <Button variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10" onClick={() => { handleToggleStationStatus(selectedStation.id, selectedStation.status, { stopPropagation: () => {} } as React.MouseEvent) }}>
+                    <Button variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10" onClick={() => { setStationDetailDialogOpen(false); setEditStation(selectedStation); setEditStationForm({ name: selectedStation.name, location: selectedStation.location || '', phone: selectedStation.phone || '', county: selectedStation.county || '' }); setStationEditDialogOpen(true) }}>
+                      <Edit className="size-4 mr-2" /> Edit
+                    </Button>
+                    <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => { handleToggleStationStatus(selectedStation.id, selectedStation.status, { stopPropagation: () => {} } as React.MouseEvent) }}>
                       <Power className="size-4 mr-2" /> {selectedStation.status === 'active' ? 'Maintenance' : 'Activate'}
                     </Button>
                     <Button variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={() => { if (confirm('Delete this station permanently?')) handleDeleteStation(selectedStation.id, { stopPropagation: () => {} } as React.MouseEvent) }}>
@@ -1225,6 +1285,7 @@ export default function FuelProDashboard() {
                     <TableHead className="text-slate-400 text-right">Min Level</TableHead>
                     <TableHead className="text-slate-400 text-right">Price/L</TableHead>
                     <TableHead className="text-slate-400">Status</TableHead>
+                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1245,6 +1306,7 @@ export default function FuelProDashboard() {
                       <TableCell className="text-right text-slate-400">{formatNumber(tank.alertThreshold)}</TableCell>
                       <TableCell className="text-right text-slate-300">{formatCurrency(tank.pricePerLiter)}</TableCell>
                       <TableCell><Badge className={tank.isLow ? 'bg-red-500/15 text-red-400 border-0' : 'bg-emerald-500/15 text-emerald-400 border-0'}>{tank.isLow ? 'Low' : 'Good'}</Badge></TableCell>
+                      <TableCell className="text-right"><Button variant="ghost" size="sm" className="h-7 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10" onClick={() => { setEditTank({ id: tank.id, stationId: tank.stationId, fuelType: tank.fuelType, pricePerLiter: tank.pricePerLiter, alertThreshold: tank.alertThreshold }); setTankPriceDialogOpen(true) }}><Edit className="size-3 mr-1" /> Price</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1259,9 +1321,11 @@ export default function FuelProDashboard() {
   const renderSales = () => {
     if (loading.sales) return <TableSkeletons cols={7} rows={6} />
     const filteredSales = sales.filter(s => {
-      const matchesSearch = !salesSearch || s.station.name.toLowerCase().includes(salesSearch.toLowerCase()) || s.id.toLowerCase().includes(salesSearch.toLowerCase())
+      const matchesSearch = !salesSearch || s.station.name.toLowerCase().includes(salesSearch.toLowerCase()) || s.id.toLowerCase().includes(salesSearch.toLowerCase()) || (s.customerName && s.customerName.toLowerCase().includes(salesSearch.toLowerCase()))
       const matchesFilter = salesFilter === 'all' || s.fuelType === salesFilter || s.paymentMethod === salesFilter
-      return matchesSearch && matchesFilter
+      const matchesDateFrom = !dateFrom || new Date(s.createdAt) >= new Date(dateFrom)
+      const matchesDateTo = !dateTo || new Date(s.createdAt) <= new Date(dateTo + 'T23:59:59')
+      return matchesSearch && matchesFilter && matchesDateFrom && matchesDateTo
     })
     const totalAmount = filteredSales.reduce((sum, s) => sum + s.totalAmount, 0)
     const totalQty = filteredSales.reduce((sum, s) => sum + s.quantityLiters, 0)
@@ -1291,6 +1355,7 @@ export default function FuelProDashboard() {
                     <div className="grid gap-2"><Label className="text-slate-300">Unit Price (KES)</Label><Input type="number" value={newSale.pricePerLiter} onChange={e => setNewSale(p => ({ ...p, pricePerLiter: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
                   </div>
                   <div className="grid gap-2"><Label className="text-slate-300">Payment Method</Label><Select value={newSale.paymentMethod} onValueChange={v => setNewSale(p => ({ ...p, paymentMethod: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="cash">Cash</SelectItem><SelectItem value="mpesa">M-Pesa</SelectItem><SelectItem value="card">Card</SelectItem></SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Customer Name (optional)</Label><Input value={newSale.customerName} onChange={e => setNewSale(p => ({ ...p, customerName: e.target.value }))} placeholder="Walk-in customer" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
                   {newSale.quantityLiters > 0 && <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><p className="text-sm text-amber-400 font-medium">Total: {formatCurrency(newSale.quantityLiters * newSale.pricePerLiter)}</p></div>}
                 </div>
                 <DialogFooter><Button variant="outline" onClick={() => setSaleDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddSale} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Record Sale</Button></DialogFooter>
@@ -1302,11 +1367,17 @@ export default function FuelProDashboard() {
         <Card className="bg-slate-900 border-slate-800 rounded-xl">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search by station or ID..." value={salesSearch} onChange={e => setSalesSearch(e.target.value)} className="pl-9 bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search by station, customer or ID..." value={salesSearch} onChange={e => setSalesSearch(e.target.value)} className="pl-9 bg-slate-800 border-slate-700 text-slate-100" /></div>
               <Select value={salesFilter} onValueChange={setSalesFilter}>
                 <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-slate-100"><Filter className="size-4 mr-2" /><SelectValue placeholder="Filter" /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="all">All Sales</SelectItem><SelectItem value="Petrol">Petrol</SelectItem><SelectItem value="Diesel">Diesel</SelectItem><SelectItem value="Kerosene">Kerosene</SelectItem><SelectItem value="cash">Cash</SelectItem><SelectItem value="mpesa">M-Pesa</SelectItem><SelectItem value="card">Card</SelectItem></SelectContent>
               </Select>
+              <div className="flex items-center gap-2">
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-slate-800 border-slate-700 text-slate-100 text-xs h-9" placeholder="From" />
+                <span className="text-slate-600 text-xs">to</span>
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-slate-800 border-slate-700 text-slate-100 text-xs h-9" placeholder="To" />
+                {(dateFrom || dateTo) && <Button variant="ghost" size="sm" className="h-9 text-xs text-slate-400 hover:text-slate-200" onClick={() => { setDateFrom(''); setDateTo('') }}>Clear</Button>}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1315,7 +1386,7 @@ export default function FuelProDashboard() {
           <CardContent className="pt-6">
             <ScrollArea className="max-h-[500px]">
               <Table>
-                <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Product</TableHead><TableHead className="text-slate-400 text-right">Qty (L)</TableHead><TableHead className="text-slate-400 text-right">Unit Price</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Payment</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Product</TableHead><TableHead className="text-slate-400 text-right">Qty (L)</TableHead><TableHead className="text-slate-400 text-right">Unit Price</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Payment</TableHead><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filteredSales.map(sale => (
                     <TableRow key={sale.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
@@ -1325,6 +1396,7 @@ export default function FuelProDashboard() {
                       <TableCell className="text-right text-slate-400">{formatCurrency(sale.pricePerLiter)}</TableCell>
                       <TableCell className="text-right text-slate-200 font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
                       <TableCell><Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] capitalize">{sale.paymentMethod}</Badge></TableCell>
+                      <TableCell className="text-slate-400 text-xs">{sale.customerName || <span className="text-slate-600">Walk-in</span>}</TableCell>
                       <TableCell className="text-right text-slate-400 text-xs">{formatTimeAgo(sale.createdAt)}</TableCell>
                     </TableRow>
                   ))}
@@ -1748,6 +1820,220 @@ export default function FuelProDashboard() {
     )
   }
 
+  const renderReports = () => {
+    const totalRevenue = sales.reduce((sum, s) => sum + s.totalAmount, 0)
+    const totalLiters = sales.reduce((sum, s) => sum + s.quantityLiters, 0)
+    const avgPrice = totalLiters > 0 ? totalRevenue / totalLiters : 0
+    const byFuel = ['Petrol', 'Diesel', 'Kerosene'].map(ft => {
+      const ftSales = sales.filter(s => s.fuelType === ft)
+      return { fuelType: ft, count: ftSales.length, liters: ftSales.reduce((s, x) => s + x.quantityLiters, 0), revenue: ftSales.reduce((s, x) => s + x.totalAmount, 0) }
+    })
+    const byPayment = ['cash', 'mpesa', 'card'].map(pm => {
+      const pmSales = sales.filter(s => s.paymentMethod === pm)
+      return { method: pm.charAt(0).toUpperCase() + pm.slice(1), count: pmSales.length, revenue: pmSales.reduce((s, x) => s + x.totalAmount, 0) }
+    })
+    const byStation = stations.map(st => {
+      const stSales = sales.filter(s => s.stationId === st.id)
+      return { name: st.name, count: stSales.length, revenue: stSales.reduce((s, x) => s + x.totalAmount, 0), liters: stSales.reduce((s, x) => s + x.quantityLiters, 0) }
+    }).sort((a, b) => b.revenue - a.revenue)
+    const deliveryCost = deliveries.reduce((sum, d) => sum + (d.totalCost || 0), 0)
+    const netProfit = totalRevenue - deliveryCost
+    const dailySales: Record<string, { revenue: number; liters: number; count: number }> = {}
+    sales.forEach(s => {
+      const day = new Date(s.createdAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })
+      if (!dailySales[day]) dailySales[day] = { revenue: 0, liters: 0, count: 0 }
+      dailySales[day].revenue += s.totalAmount
+      dailySales[day].liters += s.quantityLiters
+      dailySales[day].count += 1
+    })
+    const dailyChartData = Object.entries(dailySales).map(([day, data]) => ({ day, ...data }))
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Reports & Analytics</h2><p className="text-sm text-slate-400 mt-1">Comprehensive business intelligence overview</p></div>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(byFuel.map(f => ({ FuelType: f.fuelType, Transactions: f.count, LitersSold: Math.round(f.liters), Revenue: f.revenue })), 'fuelpro_fuel_report')}>
+              <Download className="size-4 mr-2" /> Fuel Report
+            </Button>
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(byStation.map(s => ({ Station: s.name, Transactions: s.count, LitersSold: Math.round(s.liters), Revenue: s.revenue })), 'fuelpro_station_report')}>
+              <Download className="size-4 mr-2" /> Station Report
+            </Button>
+          </div>
+        </div>
+
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-amber-500/5 to-slate-900 border-slate-800 rounded-xl border-l-4 border-l-amber-500 hover:scale-[1.02] transition-transform duration-200">
+            <CardContent className="pt-5 pb-4"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Revenue</p><p className="text-2xl font-bold text-slate-100">{formatCurrency(totalRevenue)}</p></div><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15 text-amber-400"><DollarSign className="size-5" /></div></div></CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-emerald-500/5 to-slate-900 border-slate-800 rounded-xl border-l-4 border-l-emerald-500 hover:scale-[1.02] transition-transform duration-200">
+            <CardContent className="pt-5 pb-4"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Volume</p><p className="text-2xl font-bold text-slate-100">{formatNumber(Math.round(totalLiters))}L</p></div><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15 text-emerald-400"><Droplets className="size-5" /></div></div></CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-violet-500/5 to-slate-900 border-slate-800 rounded-xl border-l-4 border-l-violet-500 hover:scale-[1.02] transition-transform duration-200">
+            <CardContent className="pt-5 pb-4"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Avg Price/L</p><p className="text-2xl font-bold text-slate-100">{formatCurrency(avgPrice)}</p></div><div className="flex items-center justify-center size-10 rounded-lg bg-violet-500/15 text-violet-400"><Gauge className="size-5" /></div></div></CardContent>
+          </Card>
+          <Card className={`bg-gradient-to-br ${netProfit >= 0 ? 'from-emerald-500/5' : 'from-red-500/5'} to-slate-900 border-slate-800 rounded-xl border-l-4 ${netProfit >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'} hover:scale-[1.02] transition-transform duration-200`}>
+            <CardContent className="pt-5 pb-4"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Net Margin</p><p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(netProfit)}</p></div><div className={`flex items-center justify-center size-10 rounded-lg ${netProfit >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{netProfit >= 0 ? <TrendingUp className="size-5" /> : <ArrowDownRight className="size-5" />}</div></div></CardContent>
+          </Card>
+        </div>
+
+        {/* Daily Revenue Trend */}
+        <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><TrendingUp className="size-4 text-amber-400" /> Daily Revenue Trend</CardTitle><CardDescription>Revenue performance over recent days</CardDescription></CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {dailyChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyChartData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number, name: string) => [name === 'revenue' ? formatCurrency(value) : formatNumber(Math.round(value)), name === 'revenue' ? 'Revenue' : 'Liters']} />
+                    <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={2.5} dot={{ fill: '#f59e0b', r: 4 }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-500 text-sm">No sales data to display</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Sales by Fuel Type */}
+          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Fuel className="size-4 text-amber-400" /> Sales by Fuel Type</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={byFuel} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="fuelType" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
+                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                      <Cell fill="#f59e0b" />
+                      <Cell fill="#64748b" />
+                      <Cell fill="#10b981" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 space-y-2">
+                {byFuel.map(f => (
+                  <div key={f.fuelType} className="flex items-center justify-between text-sm p-2 rounded-lg bg-slate-800/30">
+                    <span className="text-slate-300">{f.fuelType}</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-slate-400 text-xs">{formatNumber(Math.round(f.liters))}L · {f.count} sales</span>
+                      <span className="text-slate-100 font-medium">{formatCurrency(f.revenue)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment Method Distribution */}
+          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-4 text-amber-400" /> Payment Method Distribution</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={byPayment.filter(p => p.count > 0)} dataKey="revenue" nameKey="method" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4}>
+                      <Cell fill="#f59e0b" />
+                      <Cell fill="#10b981" />
+                      <Cell fill="#64748b" />
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+                    <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 space-y-2">
+                {byPayment.map(p => (
+                  <div key={p.method} className="flex items-center justify-between text-sm p-2 rounded-lg bg-slate-800/30">
+                    <span className="text-slate-300">{p.method}</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-slate-400 text-xs">{p.count} transactions</span>
+                      <span className="text-slate-100 font-medium">{formatCurrency(p.revenue)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Station Performance Ranking */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Building2 className="size-4 text-amber-400" /> Station Performance Ranking</CardTitle><CardDescription>Revenue and volume comparison across all stations</CardDescription></CardHeader>
+          <CardContent>
+            {byStation.length === 0 ? (
+              <div className="text-center py-8"><BarChart3 className="size-10 text-slate-600 mx-auto mb-3" /><p className="text-slate-400">No station data available</p></div>
+            ) : (
+              <div className="space-y-3">
+                {byStation.map((st, idx) => {
+                  const maxRev = byStation[0]?.revenue || 1
+                  const pct = maxRev > 0 ? (st.revenue / maxRev) * 100 : 0
+                  return (
+                    <div key={st.name} className="flex items-center gap-4 p-3 rounded-lg bg-slate-800/20 hover:bg-slate-800/40 transition-colors">
+                      <div className={`flex items-center justify-center size-8 rounded-lg font-bold text-sm ${idx === 0 ? 'bg-amber-500/20 text-amber-400' : idx === 1 ? 'bg-slate-600/20 text-slate-300' : 'bg-slate-800 text-slate-500'}`}>#{idx + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-slate-200 truncate">{st.name}</span>
+                          <span className="text-sm font-medium text-slate-100">{formatCurrency(st.revenue)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 rounded-full flex-1 bg-slate-800">
+                            <div className="h-full rounded-full bg-amber-500/60 transition-all duration-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs text-slate-500 shrink-0">{formatNumber(Math.round(st.liters))}L · {st.count} sales</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Expense Breakdown */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><FileText className="size-4 text-amber-400" /> Delivery Expense Summary</CardTitle><CardDescription>Fuel procurement costs analysis</CardDescription></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div className="p-4 rounded-lg bg-slate-800/30 text-center"><p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Deliveries</p><p className="text-xl font-bold text-slate-100">{deliveries.length}</p></div>
+              <div className="p-4 rounded-lg bg-slate-800/30 text-center"><p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Volume</p><p className="text-xl font-bold text-slate-100">{formatNumber(Math.round(deliveries.reduce((s, d) => s + d.volumeLiters, 0)))}L</p></div>
+              <div className="p-4 rounded-lg bg-slate-800/30 text-center"><p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Cost</p><p className="text-xl font-bold text-red-400">{formatCurrency(deliveryCost)}</p></div>
+            </div>
+            {deliveries.length > 0 && (
+              <ScrollArea className="max-h-[300px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Supplier</TableHead><TableHead className="text-slate-400">Fuel</TableHead><TableHead className="text-slate-400 text-right">Volume</TableHead><TableHead className="text-slate-400 text-right">Cost/L</TableHead><TableHead className="text-slate-400 text-right">Total Cost</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {deliveries.map(d => (
+                      <TableRow key={d.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-slate-200 font-medium">{d.station.name}</TableCell>
+                        <TableCell className="text-slate-300">{d.supplierName}</TableCell>
+                        <TableCell><Badge variant="secondary" className="bg-slate-800 text-slate-300 border-0">{d.fuelType}</Badge></TableCell>
+                        <TableCell className="text-right text-slate-300">{formatNumber(d.volumeLiters)}L</TableCell>
+                        <TableCell className="text-right text-slate-400">{d.costPerLiter ? formatCurrency(d.costPerLiter) : '-'}</TableCell>
+                        <TableCell className="text-right text-red-400 font-medium">{d.totalCost ? formatCurrency(d.totalCost) : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const renderAdmin = () => {
     if (loading.admin) return <TableSkeletons cols={5} rows={4} />
     if (!adminData) return null
@@ -1815,20 +2101,20 @@ export default function FuelProDashboard() {
               <CardContent>
                 <div className="grid gap-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label className="text-slate-300">Company Name</Label><Input defaultValue={adminData.config.companyName} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                    <div className="space-y-2"><Label className="text-slate-300">Currency</Label><Input defaultValue={adminData.config.currency} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                    <div className="space-y-2"><Label className="text-slate-300">Timezone</Label><Input defaultValue={adminData.config.timezone} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                    <div className="space-y-2"><Label className="text-slate-300">Tax Rate (%)</Label><Input type="number" defaultValue={adminData.config.taxRate} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                    <div className="space-y-2"><Label className="text-slate-300">Auto Reorder Level (L)</Label><Input type="number" defaultValue={adminData.config.autoReorderLevel} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                    <div className="space-y-2"><Label className="text-slate-300">Shift Duration (hrs)</Label><Input type="number" defaultValue={adminData.config.shiftDuration} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Company Name</Label><Input value={adminData.config.companyName} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, companyName: e.target.value } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Currency</Label><Input value={adminData.config.currency} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, currency: e.target.value } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Timezone</Label><Input value={adminData.config.timezone} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, timezone: e.target.value } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Tax Rate (%)</Label><Input type="number" value={adminData.config.taxRate} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, taxRate: parseFloat(e.target.value) || 0 } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Auto Reorder Level (L)</Label><Input type="number" value={adminData.config.autoReorderLevel} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, autoReorderLevel: parseInt(e.target.value) || 0 } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="space-y-2"><Label className="text-slate-300">Shift Duration (hrs)</Label><Input type="number" value={adminData.config.shiftDuration} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, shiftDuration: parseInt(e.target.value) || 8 } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
                   </div>
                   <Separator className="bg-slate-800" />
                   <div className="flex items-center justify-between">
                     <div><p className="text-sm font-medium text-slate-200">KRA eTIMS Integration</p><p className="text-xs text-slate-500">Enable electronic tax invoice management</p></div>
-                    <Switch defaultChecked={adminData.config.kraEtimsEnabled} />
+                    <Switch checked={adminData.config.kraEtimsEnabled} onCheckedChange={checked => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, kraEtimsEnabled: checked } } : null)} />
                   </div>
-                  <div className="space-y-2"><Label className="text-slate-300">Receipt Footer</Label><Input defaultValue={adminData.config.receiptFooter} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
-                  <Button className="bg-amber-500 hover:bg-amber-600 text-black font-semibold w-fit">Save Configuration</Button>
+                  <div className="space-y-2"><Label className="text-slate-300">Receipt Footer</Label><Input value={adminData.config.receiptFooter} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, receiptFooter: e.target.value } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <Button className="bg-amber-500 hover:bg-amber-600 text-black font-semibold w-fit" onClick={handleSaveConfig}><Zap className="size-4 mr-2" /> Save Configuration</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1852,6 +2138,7 @@ export default function FuelProDashboard() {
       case 'compliance': return renderCompliance()
       case 'suppliers': return renderSuppliers()
       case 'coupons': return renderCoupons()
+      case 'reports': return renderReports()
       case 'admin': return renderAdmin()
       default: return renderDashboard()
     }
@@ -1945,6 +2232,43 @@ export default function FuelProDashboard() {
           <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v2.1.0</p>
         </footer>
       </div>
+
+      {/* Station Edit Dialog */}
+      <Dialog open={stationEditDialogOpen} onOpenChange={setStationEditDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+          <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit Station</DialogTitle><DialogDescription className="text-slate-400">Update station information</DialogDescription></DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2"><Label className="text-slate-300">Station Name *</Label><Input value={editStationForm.name} onChange={e => setEditStationForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            <div className="grid gap-2"><Label className="text-slate-300">Location</Label><Input value={editStationForm.location} onChange={e => setEditStationForm(p => ({ ...p, location: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2"><Label className="text-slate-300">County</Label><Input value={editStationForm.county} onChange={e => setEditStationForm(p => ({ ...p, county: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Phone</Label><Input value={editStationForm.phone} onChange={e => setEditStationForm(p => ({ ...p, phone: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStationEditDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
+            <Button onClick={handleEditStation} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tank Price Edit Dialog */}
+      <Dialog open={tankPriceDialogOpen} onOpenChange={setTankPriceDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+          <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-5 text-amber-400" /> Update Tank Price</DialogTitle><DialogDescription className="text-slate-400">{editTank ? `Set price for ${editTank.fuelType}` : ''}</DialogDescription></DialogHeader>
+          {editTank && (
+            <div className="grid gap-4 py-4">
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><p className="text-sm text-amber-400">Current: {formatCurrency(editTank.pricePerLiter)}/L · Alert at: {formatNumber(editTank.alertThreshold)}L</p></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Price Per Liter (KES)</Label><Input type="number" value={editTank.pricePerLiter} onChange={e => setEditTank(prev => prev ? { ...prev, pricePerLiter: parseFloat(e.target.value) || 0 } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Alert Threshold (Litres)</Label><Input type="number" value={editTank.alertThreshold} onChange={e => setEditTank(prev => prev ? { ...prev, alertThreshold: parseFloat(e.target.value) || 0 } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTankPriceDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
+            <Button onClick={handleUpdateTankPrice} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Update Price</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

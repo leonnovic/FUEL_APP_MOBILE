@@ -42,7 +42,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, location, phone, county, status } = body
+    const { name, location, phone, county, status, tankId, pricePerLiter, alertThreshold } = body
 
     const existing = await db.station.findUnique({ where: { id } })
     if (!existing) {
@@ -50,6 +50,14 @@ export async function PUT(
         { ok: false, error: 'Station not found' },
         { status: 404 }
       )
+    }
+
+    // Handle tank price update
+    if (tankId) {
+      const tankData: { pricePerLiter?: number; alertThreshold?: number } = {}
+      if (pricePerLiter !== undefined) tankData.pricePerLiter = pricePerLiter
+      if (alertThreshold !== undefined) tankData.alertThreshold = alertThreshold
+      await db.tank.update({ where: { id: tankId }, data: tankData })
     }
 
     const station = await db.station.update({

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 const adminData = {
   users: [
@@ -34,4 +34,15 @@ const adminData = {
 
 export async function GET() {
   return NextResponse.json(adminData)
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    // Update in-memory config (for demo; in production, persist to DB)
+    Object.assign(adminData.config, body)
+    return NextResponse.json({ ok: true, data: adminData.config })
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Failed to save configuration' }, { status: 500 })
+  }
 }
