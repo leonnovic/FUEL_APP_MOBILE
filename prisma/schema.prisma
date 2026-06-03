@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,19 +11,181 @@ datasource db {
 }
 
 model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          String   @default("owner") // owner, manager, staff, auditor
+  tier          String   @default("free")  // free, starter, pro, enterprise
+  isGuest       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stations      StationMember[]
+  sales         Sale[]
+  shifts        Shift[]
+}
+
+model Station {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  phone       String?
+  county      String?   // Kenya county
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     StationMember[]
+  tanks       Tank[]
+  sales       Sale[]
+  shifts      Shift[]
+  deliveries  Delivery[]
+  reconciliations Reconciliation[]
+}
+
+model StationMember {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  userId    String
+  stationId String
+  role      String   @default("staff") // owner, manager, staff
+  joinedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  station   Station  @relation(fields: [stationId], references: [id])
+
+  @@unique([userId, stationId])
+}
+
+model Tank {
+  id              String   @id @default(cuid())
+  stationId       String
+  fuelType        String   // Petrol, Diesel, Kerosene
+  currentStock    Float    @default(0)    // liters
+  capacity        Float    @default(0)    // liters
+  pricePerLiter   Float    @default(0)    // KES
+  alertThreshold  Float    @default(0)    // liters
+  station         Station  @relation(fields: [stationId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Sale {
+  id             String   @id @default(cuid())
+  stationId      String
+  userId         String
+  fuelType       String
+  quantityLiters Float
+  pricePerLiter  Float
+  totalAmount    Float
+  paymentMethod  String   @default("cash") // cash, mpesa, card
+  mpesaReceipt   String?
+  customerName   String?
+  station        Station  @relation(fields: [stationId], references: [id])
+  user           User     @relation(fields: [userId], references: [id])
+  createdAt      DateTime @default(now())
+}
+
+model Shift {
+  id              String   @id @default(cuid())
+  stationId       String
+  userId          String
+  attendantName   String
+  fuelType        String
+  openingReading  Float    @default(0)
+  closingReading  Float?
+  litersSold      Float?
+  cashCollected   Float?
+  status          String   @default("active") // active, completed
+  station         Station  @relation(fields: [stationId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+}
+
+model Delivery {
+  id            String   @id @default(cuid())
+  stationId     String
+  supplierName  String
+  fuelType      String
+  volumeLiters  Float
+  costPerLiter  Float?
+  totalCost     Float?
+  deliveredAt   DateTime @default(now())
+  station       Station  @relation(fields: [stationId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model Reconciliation {
+  id              String   @id @default(cuid())
+  stationId       String
+  fuelType        String
+  bookStock       Float
+  physicalStock   Float
+  deliveryReceived Float  @default(0)
+  variance        Float
+  variancePct     Float
+  flag            String   @default("normal") // normal, warning, critical
+  notes           String?
+  station         Station  @relation(fields: [stationId], references: [id])
+  recordedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+}
+
+model EpraPrice {
+  id          String   @id @default(cuid())
+  fuelType    String
+  region      String   @default("Nairobi")
+  maxPrice    Float    // KES per liter
+  effectiveAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([fuelType, region, effectiveAt])
+}
+
+model ComplianceInvoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  sellerTin     String
+  buyerTin      String?
+  fuelType      String
+  quantity      Float
+  unitPrice     Float
+  vatAmount     Float
+  totalAmount   Float
+  issuedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  meta      String?  // JSON string
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
+model Coupon {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  type      String   @default("percentage") // percentage, fixed
+  value     Float
+  maxUses   Int      @default(100)
+  uses      Int      @default(0)
+  status    String   @default("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  contact     String?
+  fuelTypes   String?  // comma separated
+  location    String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
