@@ -8,7 +8,8 @@ import {
   Search, Filter, CircleDot, CheckCircle2, XCircle, AlertCircle, Bell,
   FileText, Users, Database, Shield, Zap, ChevronRight, Edit, Trash2,
   Play, Square, BarChart3, ArrowUpRight, ArrowDownRight,
-  Gauge, Loader2, Package, Eye, Power, Copy
+  Gauge, Loader2, Package, Eye, Power, Copy, Sun, Moon, LogOut,
+  RefreshCw, Mail, Lock, Sparkles, ChevronLeft
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -32,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTheme } from 'next-themes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -362,12 +364,51 @@ function exportToCSV(data: Record<string, unknown>[], filename: string) {
   toast.success(`Exported ${data.length} records`)
 }
 
+function exportToPDF(title: string) {
+  // Create a printable window with the current report
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { toast.error('Please allow popups to export PDF'); return }
+  const content = document.querySelector('main')?.innerHTML || ''
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title} - FuelPro Report</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; color: #1e293b; }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        h2 { font-size: 18px; color: #64748b; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+        th, td { border: 1px solid #e2e8f0; padding: 8px 12px; text-align: left; }
+        th { background: #f1f5f9; font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; }
+      </style>
+    </head>
+    <body>
+      <h1>⛽ ${title}</h1>
+      <h2>FuelPro Station Manager · Generated: ${new Date().toLocaleString('en-KE')}</h2>
+      ${content}
+      <div class="footer">© ${new Date().getFullYear()} FuelPro Station Manager · All rights reserved · Confidential</div>
+    </body>
+    </html>
+  `)
+  printWindow.document.close()
+  setTimeout(() => { printWindow.print(); toast.success('PDF export ready for printing') }, 500)
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function FuelProDashboard() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [loginLoading, setLoginLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
   // Data states
   const [dashboardData, setDashboardData] = useState<DashboardAPIResponse['data'] | null>(null)
@@ -426,6 +467,14 @@ export default function FuelProDashboard() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
+
+  // User management
+  const [realUsers, setRealUsers] = useState<{ id: string; name: string; email: string; role: string; status: string; stationCount: number; lastLogin: string; createdAt: string }[]>([])
+  const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'staff' })
+  const [userEditDialogOpen, setUserEditDialogOpen] = useState(false)
+  const [editUser, setEditUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null)
+  const [editUserForm, setEditUserForm] = useState({ name: '', email: '', role: 'staff' })
 
   // ─── Data Fetching ─────────────────────────────────────────────────────────
 
@@ -551,6 +600,14 @@ export default function FuelProDashboard() {
     finally { setLoading(prev => ({ ...prev, deliveries: false })) }
   }, [])
 
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users')
+      const json = await res.json()
+      if (json.ok) setRealUsers(json.data)
+    } catch { /* silent */ }
+  }, [])
+
   // Load data when tab changes
   useEffect(() => {
     switch (activeTab) {
@@ -560,7 +617,7 @@ export default function FuelProDashboard() {
       case 'sales': fetchSales(); break
       case 'shifts': fetchShifts(); break
       case 'compliance': fetchCompliance(); break
-      case 'admin': fetchAdmin(); break
+      case 'admin': fetchAdmin(); fetchUsers(); break
       case 'suppliers': fetchSuppliers(); break
       case 'coupons': fetchCoupons(); break
       case 'reconciliation': fetchReconciliations(); break
@@ -568,11 +625,43 @@ export default function FuelProDashboard() {
     }
   }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries])
 
+  // Mount & auto-login check
+  useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
+
   // Clock update
   useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
+  // Auto-refresh every 60 seconds when logged in
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const interval = setInterval(() => {
+      fetchDashboard()
+      setLastRefresh(new Date())
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [isLoggedIn, fetchDashboard])
+
   // Initial load
-  useEffect(() => { fetchDashboard() }, [fetchDashboard])
+  useEffect(() => { if (isLoggedIn) fetchDashboard() }, [isLoggedIn, fetchDashboard])
+
+  // Login handler
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loginForm.email || !loginForm.password) { toast.error('Please enter email and password'); return }
+    setLoginLoading(true)
+    // Simulate auth check (accept any credentials for demo)
+    await new Promise(r => setTimeout(r, 800))
+    localStorage.setItem('fuelpro_auth', JSON.stringify({ email: loginForm.email, role: 'admin', name: loginForm.email.split('@')[0] }))
+    setIsLoggedIn(true)
+    setLoginLoading(false)
+    toast.success('Welcome back to FuelPro!')
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('fuelpro_auth')
+    setIsLoggedIn(false)
+    toast.success('Logged out successfully')
+  }
 
   // ─── Action Handlers ───────────────────────────────────────────────────────
 
@@ -802,6 +891,43 @@ export default function FuelProDashboard() {
         toast.success('Supplier updated successfully')
       } else { toast.error(json.error || 'Failed to update supplier') }
     } catch { toast.error('Failed to update supplier') }
+  }
+
+  const handleAddUser = async () => {
+    if (!newUser.name || !newUser.email) { toast.error('Name and email are required'); return }
+    try {
+      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) })
+      const json = await res.json()
+      if (json.ok) {
+        setRealUsers(prev => [json.data, ...prev])
+        setUserDialogOpen(false)
+        setNewUser({ name: '', email: '', role: 'staff' })
+        toast.success(`User "${json.data.name}" created successfully`)
+      } else { toast.error(json.error || 'Failed to create user') }
+    } catch { toast.error('Failed to create user') }
+  }
+
+  const handleEditUser = async () => {
+    if (!editUser || !editUserForm.name || !editUserForm.email) { toast.error('Name and email are required'); return }
+    try {
+      const res = await fetch(`/api/users/${editUser.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editUserForm) })
+      const json = await res.json()
+      if (json.ok) {
+        setRealUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...editUserForm } : u))
+        setUserEditDialogOpen(false)
+        setEditUser(null)
+        toast.success('User updated successfully')
+      } else { toast.error(json.error || 'Failed to update user') }
+    } catch { toast.error('Failed to update user') }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setRealUsers(prev => prev.filter(u => u.id !== userId)); toast.success('User removed') }
+      else { toast.error(json.error || 'Failed to delete user') }
+    } catch { toast.error('Failed to delete user') }
   }
 
   const handleGlobalSearch = useCallback((query: string) => {
@@ -1939,6 +2065,9 @@ export default function FuelProDashboard() {
             <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(byStation.map(s => ({ Station: s.name, Transactions: s.count, LitersSold: Math.round(s.liters), Revenue: s.revenue })), 'fuelpro_station_report')}>
               <Download className="size-4 mr-2" /> Station Report
             </Button>
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToPDF('FuelPro Reports & Analytics')}>
+              <FileText className="size-4 mr-2" /> Print / PDF
+            </Button>
           </div>
         </div>
 
@@ -2131,22 +2260,64 @@ export default function FuelProDashboard() {
 
           <TabsContent value="users">
             <Card className="bg-slate-900 border-slate-800 rounded-xl">
-              <CardHeader><div className="flex items-center justify-between"><div><CardTitle className="text-slate-100 flex items-center gap-2"><Users className="size-4 text-amber-400" /> User Management</CardTitle><CardDescription>Manage system users and permissions</CardDescription></div><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add User</Button></div></CardHeader>
+              <CardHeader><div className="flex items-center justify-between"><div><CardTitle className="text-slate-100 flex items-center gap-2"><Users className="size-4 text-amber-400" /> User Management</CardTitle><CardDescription>Manage system users and permissions · {realUsers.length} users registered</CardDescription></div>
+              <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
+                <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add User</Button></DialogTrigger>
+                <DialogContent className="bg-slate-900 border-slate-800">
+                  <DialogHeader><DialogTitle className="text-slate-100">Create New User</DialogTitle><DialogDescription className="text-slate-400">Add a new team member to the system</DialogDescription></DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2"><Label className="text-slate-300">Full Name *</Label><Input value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="e.g., John Doe" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Email Address *</Label><Input type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="e.g., john@fuelpro.ke" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Role</Label>
+                      <Select value={newUser.role} onValueChange={v => setNewUser(p => ({ ...p, role: v }))}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-slate-800 border-slate-700">
+                          <SelectItem value="owner">Owner</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="staff">Staff</SelectItem>
+                          <SelectItem value="auditor">Auditor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter><Button variant="outline" onClick={() => setUserDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddUser} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Create User</Button></DialogFooter>
+                </DialogContent>
+              </Dialog>
+              </div></CardHeader>
               <CardContent>
+                {realUsers.length === 0 ? (
+                  <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Users className="size-7 text-slate-500" /></div><p className="text-slate-400">No users found</p></div>
+                ) : (
                 <Table>
-                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Name</TableHead><TableHead className="text-slate-400">Email</TableHead><TableHead className="text-slate-400">Role</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400">Last Login</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Name</TableHead><TableHead className="text-slate-400">Email</TableHead><TableHead className="text-slate-400">Role</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400">Stations</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {adminData.users.map(user => (
+                    {realUsers.map(user => (
                       <TableRow key={user.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                        <TableCell className="text-slate-200 font-medium">{user.name}</TableCell>
+                        <TableCell className="text-slate-200 font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center size-7 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold">{user.name.charAt(0).toUpperCase()}</div>
+                            {user.name}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-slate-400">{user.email}</TableCell>
-                        <TableCell><Badge variant="secondary" className="bg-slate-800 text-slate-300 border-0 capitalize">{user.role}</Badge></TableCell>
-                        <TableCell><Badge className={user.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-red-500/15 text-red-400 border-0'}>{user.status}</Badge></TableCell>
-                        <TableCell className="text-slate-400 text-xs">{formatTimeAgo(user.lastLogin)}</TableCell>
+                        <TableCell><Badge variant="secondary" className={`border-0 capitalize ${user.role === 'owner' ? 'bg-amber-500/15 text-amber-400' : user.role === 'manager' ? 'bg-emerald-500/15 text-emerald-400' : user.role === 'auditor' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-800 text-slate-300'}`}>{user.role}</Badge></TableCell>
+                        <TableCell><Badge className={user.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-slate-700 text-slate-400'}>{user.status}</Badge></TableCell>
+                        <TableCell className="text-slate-400 text-xs">{user.stationCount || 0}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => { setEditUser({ id: user.id, name: user.name, email: user.email, role: user.role }); setEditUserForm({ name: user.name, email: user.email, role: user.role }); setUserEditDialogOpen(true) }} title="Edit">
+                              <Edit className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={() => { if (confirm(`Remove user "${user.name}"?`)) handleDeleteUser(user.id) }} title="Delete">
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -2200,6 +2371,126 @@ export default function FuelProDashboard() {
             </Card>
           </TabsContent>
         </Tabs>
+      </div>
+    )
+  }
+
+  // ─── Login Page ──────────────────────────────────────────────────────────────
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 size-96 rounded-full bg-amber-500/5 blur-3xl animate-pulse" />
+          <div className="absolute -bottom-40 -left-40 size-96 rounded-full bg-emerald-500/5 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[600px] rounded-full bg-amber-500/3 blur-3xl" />
+        </div>
+
+        {/* Floating fuel icons */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="absolute animate-float" style={{
+              left: `${10 + i * 12}%`,
+              top: `${15 + (i % 3) * 25}%`,
+              animationDelay: `${i * 0.7}s`,
+              animationDuration: `${6 + i * 0.5}s`
+            }}>
+              <Droplets className="size-4 text-amber-500/30" />
+            </div>
+          ))}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="relative z-10 w-full max-w-md px-4"
+        >
+          <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-800/50 shadow-2xl shadow-black/50 rounded-2xl">
+            <CardContent className="pt-8 pb-6 px-8">
+              {/* Logo & Branding */}
+              <div className="text-center mb-8">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                  className="inline-flex items-center justify-center size-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/20 mb-4"
+                >
+                  <Fuel className="size-8 text-amber-500" />
+                </motion.div>
+                <h1 className="text-2xl font-bold text-white tracking-tight">FuelPro</h1>
+                <p className="text-sm text-slate-400 mt-1">Station Management Dashboard</p>
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]">
+                    <Sparkles className="size-3 mr-1" /> v3.0
+                  </Badge>
+                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">
+                    <Shield className="size-3 mr-1" /> Secure
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Login Form */}
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-slate-300 text-sm font-medium">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+                    <Input
+                      type="email"
+                      placeholder="admin@fuelpro.ke"
+                      value={loginForm.email}
+                      onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))}
+                      className="pl-10 h-11 bg-slate-800/80 border-slate-700/50 text-slate-100 placeholder:text-slate-600 focus:border-amber-500/50 focus:ring-amber-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-slate-300 text-sm font-medium">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+                    <Input
+                      type="password"
+                      placeholder="Enter your password"
+                      value={loginForm.password}
+                      onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
+                      className="pl-10 h-11 bg-slate-800/80 border-slate-700/50 text-slate-100 placeholder:text-slate-600 focus:border-amber-500/50 focus:ring-amber-500/20 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+                    <input type="checkbox" className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500/20" defaultChecked />
+                    Remember me
+                  </label>
+                  <button type="button" className="text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors">Forgot password?</button>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-11 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold rounded-lg shadow-lg shadow-amber-500/20 transition-all duration-200 hover:shadow-amber-500/30"
+                  disabled={loginLoading}
+                >
+                  {loginLoading ? <Loader2 className="size-5 animate-spin" /> : <>
+                    Sign In <ChevronRight className="size-4 ml-1" />
+                  </>}
+                </Button>
+              </form>
+
+              {/* Demo credentials hint */}
+              <div className="mt-6 p-3 rounded-lg bg-slate-800/40 border border-slate-700/30">
+                <p className="text-xs text-slate-500 text-center">Demo: Use any email & password to sign in</p>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-6 pt-4 border-t border-slate-800/50 text-center">
+                <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved</p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     )
   }
@@ -2262,6 +2553,18 @@ export default function FuelProDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Refresh indicator */}
+            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200 hidden sm:flex" onClick={() => { fetchDashboard(); setLastRefresh(new Date()); toast.success('Dashboard refreshed') }} title="Refresh data">
+              <RefreshCw className="size-4" />
+            </Button>
+
+            {/* Theme Toggle */}
+            {mounted && (
+              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              </Button>
+            )}
+
             {/* Notification Bell */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
               <PopoverTrigger asChild>
@@ -2308,6 +2611,9 @@ export default function FuelProDashboard() {
               </div>
               <div className="flex items-center justify-center size-8 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-600/10 text-amber-500 font-semibold text-xs">AD</div>
               <div className="hidden sm:block"><p className="text-xs font-medium text-slate-200">Admin</p><p className="text-[10px] text-slate-500">Super Admin</p></div>
+              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-400 ml-1" onClick={handleLogout} title="Sign out">
+                <LogOut className="size-4" />
+              </Button>
             </div>
           </div>
         </header>
@@ -2328,8 +2634,9 @@ export default function FuelProDashboard() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-slate-800 bg-slate-950 px-4 py-3 text-center">
-          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v2.1.0</p>
+        <footer className="border-t border-slate-800 bg-slate-950 px-4 py-3 flex items-center justify-between">
+          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.0.0</p>
+          <p className="text-xs text-slate-600 hidden sm:block">Last refresh: {lastRefresh.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh: 60s</p>
         </footer>
       </div>
 
@@ -2388,6 +2695,32 @@ export default function FuelProDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* User Edit Dialog */}
+      <Dialog open={userEditDialogOpen} onOpenChange={setUserEditDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+          <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit User</DialogTitle><DialogDescription className="text-slate-400">Update user information and role</DialogDescription></DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2"><Label className="text-slate-300">Full Name *</Label><Input value={editUserForm.name} onChange={e => setEditUserForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            <div className="grid gap-2"><Label className="text-slate-300">Email Address *</Label><Input type="email" value={editUserForm.email} onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            <div className="grid gap-2"><Label className="text-slate-300">Role</Label>
+              <Select value={editUserForm.role} onValueChange={v => setEditUserForm(p => ({ ...p, role: v }))}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="auditor">Auditor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUserEditDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
+            <Button onClick={handleEditUser} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -2415,17 +2748,23 @@ function KPICard({ title, value, subtitle, icon, color, trend, trendUp }: {
     red: 'bg-red-500/15 text-red-400',
     violet: 'bg-violet-500/15 text-violet-400',
   }
+  const glowMap: Record<string, string> = {
+    amber: 'hover:shadow-amber-500/10',
+    emerald: 'hover:shadow-emerald-500/10',
+    red: 'hover:shadow-red-500/10',
+    violet: 'hover:shadow-violet-500/10',
+  }
 
   return (
-    <Card className={`bg-gradient-to-br ${colorMap[color] || ''} to-slate-900 border-slate-800 rounded-xl border-l-4 hover:scale-[1.02] transition-transform duration-200`}>
+    <Card className={`bg-gradient-to-br ${colorMap[color] || ''} to-slate-900 border-slate-800 rounded-xl border-l-4 hover:scale-[1.02] transition-all duration-300 hover:shadow-lg ${glowMap[color] || ''}`}>
       <CardContent className="pt-5 pb-4">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
-            <p className="text-2xl font-bold text-slate-100">{value}</p>
+            <p className="text-2xl font-bold text-slate-100 tabular-nums">{value}</p>
             {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
           </div>
-          <div className={`flex items-center justify-center size-10 rounded-lg ${iconBgMap[color] || 'bg-slate-800 text-slate-400'}`}>
+          <div className={`flex items-center justify-center size-10 rounded-lg ${iconBgMap[color] || 'bg-slate-800 text-slate-400'} transition-transform duration-300 group-hover:scale-110`}>
             {icon}
           </div>
         </div>
