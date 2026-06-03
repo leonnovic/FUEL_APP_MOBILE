@@ -326,3 +326,82 @@ Unresolved Issues / Risks:
 - Light theme styling could use further refinement for all component color mappings
 - Consider adding two-factor authentication for enhanced security
 - Consider adding role-based access control (different views for owner/manager/staff/auditor)
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Activity Feed, M-Pesa UI, Light Theme, Breadcrumbs, Pagination, Coupon Redeem
+
+Work Log:
+- Performed QA testing using agent-browser across all 12 tabs - confirmed zero console errors
+- Added Activity Feed to Dashboard:
+  - New "Activity Feed" card showing recent system activities with color-coded timeline
+  - Aggregates 4 activity types: Sale (emerald), Delivery (sky), Shift Start (amber), Tank Alert (red)
+  - Each activity shows icon, description, and time ago
+  - Sorted by most recent first, capped at 15 items
+  - Uses ScrollArea with max-h-[400px]
+- Added M-Pesa Payment Integration UI in Sales tab:
+  - New "M-Pesa Integration" card with STK Push simulation
+  - Left: Phone number + Amount input + "Send STK Push" button
+  - Right: Recent M-Pesa transactions list (filtered from sales)
+  - Added Smartphone icon to lucide-react imports
+  - "Live" badge indicator
+  - Toast notification on STK Push
+- Enhanced Light Theme support:
+  - Replaced 7 hardcoded dark-slate classes with theme-aware CSS variables
+  - Main wrapper: bg-slate-950 → bg-background
+  - Desktop sidebar: border-slate-800 bg-slate-950 → border-border bg-card
+  - Mobile sidebar: bg-slate-950 border-slate-800 → bg-card border-border
+  - Header: border-slate-800 bg-slate-950/80 → border-border bg-background/80
+  - Footer: border-slate-800 bg-slate-950 → border-border bg-card
+  - Sidebar logo border: border-slate-800 → border-border
+  - Sidebar user area border: border-slate-800 → border-border
+- Added Breadcrumb Navigation and Fuel Price Ticker:
+  - Breadcrumb bar above content: FuelPro > [Tab Name] with group badge
+  - Fuel price ticker showing average prices for Petrol/Diesel/Kerosene
+  - Uses real inventory data for price calculation
+  - Theme-aware styling (text-muted-foreground, text-foreground)
+- Added Pagination to Sales table:
+  - Page size of 10 records per page
+  - Previous/Next buttons with page number indicators
+  - "Showing X–Y of Z sales" counter
+  - Smart page number pagination (shows 5 pages around current)
+  - Amber-colored active page indicator
+  - Resets to page 1 when filters change
+- Added Coupon Redeem functionality:
+  - New "Redeem" button (copy icon) in Coupons table actions
+  - Increments coupon uses via PUT /api/coupons/[id] with uses field
+  - Validates coupon is active and not at max uses
+  - Updated coupon API to accept `uses` field in PUT request
+  - Toast notification showing redemption count
+- All 12 tabs tested via agent-browser with zero errors
+- Lint passes clean
+
+Stage Summary:
+- Added Activity Feed with 4 color-coded activity types
+- Added M-Pesa STK Push simulation UI in Sales tab
+- Enhanced light theme with 7 theme-aware CSS variable replacements
+- Added breadcrumb navigation and fuel price ticker
+- Added pagination to Sales table (10 per page)
+- Added coupon redeem button with real API integration
+- Zero console errors, zero page errors, lint passes clean
+
+Current Project Status:
+- Application now has 12 tabs, all using real data
+- Dashboard shows Activity Feed with live system events
+- Sales tab includes M-Pesa payment integration UI
+- Light and dark themes both supported with proper CSS variables
+- Breadcrumb navigation provides context awareness
+- Fuel price ticker shows real-time average prices
+- Sales table supports pagination for large datasets
+- Coupons can be redeemed with real usage tracking
+
+Unresolved Issues / Risks:
+- Login uses demo auth (any credentials accepted) - needs real backend auth
+- EPRA compliance prices still partially hardcoded
+- M-Pesa STK Push is simulated (needs real Daraja API integration)
+- PDF export uses browser print (could use dedicated library)
+- Light theme inner card content still uses slate-800/900 (needs additional passes)
+- Consider adding role-based access control
+- Consider adding real-time WebSocket for tank alerts
+- Consider adding station comparison analytics

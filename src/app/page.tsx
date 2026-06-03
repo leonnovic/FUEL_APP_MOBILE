@@ -9,7 +9,7 @@ import {
   FileText, Users, Database, Shield, Zap, ChevronRight, Edit, Trash2,
   Play, Square, BarChart3, ArrowUpRight, ArrowDownRight,
   Gauge, Loader2, Package, Eye, Power, Copy, Sun, Moon, LogOut,
-  RefreshCw, Mail, Lock, Sparkles, ChevronLeft
+  RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -462,6 +462,10 @@ export default function FuelProDashboard() {
   // Filter states
   const [salesFilter, setSalesFilter] = useState('all')
   const [salesSearch, setSalesSearch] = useState('')
+
+  // Pagination
+  const [salesPage, setSalesPage] = useState(1)
+  const salesPageSize = 10
 
   // Notifications
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -950,7 +954,7 @@ export default function FuelProDashboard() {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-800">
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-border">
         <div className="flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 shrink-0">
           <Fuel className="size-5 text-amber-500" />
         </div>
@@ -991,7 +995,7 @@ export default function FuelProDashboard() {
       </ScrollArea>
 
       {(sidebarOpen || mobileSidebarOpen) && (
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
             <div className="flex items-center justify-center size-9 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-600/10 text-amber-500 font-semibold text-sm">AD</div>
             <div className="flex-1 min-w-0">
@@ -1153,6 +1157,47 @@ export default function FuelProDashboard() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        {/* Activity Feed */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2"><Activity className="size-4 text-amber-400" /> Activity Feed</CardTitle>
+            <CardDescription>Recent system activities across all stations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-1">
+                {(() => {
+                  type FeedItem = { id: string; type: 'sale' | 'delivery' | 'shift' | 'alert'; description: string; time: string }
+                  const items: FeedItem[] = [
+                    ...d.recentSales.map(s => ({ id: `sale-${s.id}`, type: 'sale' as const, description: `Sale recorded: ${s.quantityLiters}L ${s.fuelType} at ${s.station.name} — ${formatCurrency(s.totalAmount)}`, time: s.createdAt })),
+                    ...deliveries.map(del => ({ id: `del-${del.id}`, type: 'delivery' as const, description: `Delivery received: ${formatNumber(del.volumeLiters)}L ${del.fuelType} from ${del.supplierName} at ${del.station.name}`, time: del.deliveredAt })),
+                    ...shifts.filter(s => s.status === 'active').map(s => ({ id: `shift-${s.id}`, type: 'shift' as const, description: `Shift started: ${s.attendantName} at ${s.station.name} (${s.fuelType})`, time: s.startedAt })),
+                    ...d.tankAlerts.map(a => ({ id: `alert-${a.id}`, type: 'alert' as const, description: `Low tank alert: ${a.fuelType} at ${a.station.name} — ${formatNumber(a.currentStock)}L / ${formatNumber(a.capacity)}L`, time: new Date().toISOString() })),
+                  ]
+                  items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+                  return items.slice(0, 15).map(item => {
+                    const colorMap = { sale: 'bg-emerald-500', delivery: 'bg-sky-500', shift: 'bg-amber-500', alert: 'bg-red-500' }
+                    const iconMap = { sale: <ShoppingCart className="size-3.5 text-emerald-400" />, delivery: <Truck className="size-3.5 text-sky-400" />, shift: <Clock className="size-3.5 text-amber-400" />, alert: <AlertTriangle className="size-3.5 text-red-400" /> }
+                    return (
+                      <div key={item.id} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-slate-800/40 transition-colors">
+                        <div className="mt-1 shrink-0">{iconMap[item.type]}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-200 leading-relaxed">{item.description}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">{formatTimeAgo(item.time)}</p>
+                        </div>
+                        <div className={`size-2 rounded-full ${colorMap[item.type]} shrink-0 mt-2`} />
+                      </div>
+                    )
+                  })
+                })()}
+                {d.recentSales.length === 0 && deliveries.length === 0 && shifts.length === 0 && d.tankAlerts.length === 0 && (
+                  <div className="text-center py-8"><Activity className="size-8 text-slate-600 mx-auto mb-2" /><p className="text-sm text-slate-400">No recent activity</p></div>
+                )}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
 
@@ -1585,27 +1630,95 @@ export default function FuelProDashboard() {
           </CardContent>
         </Card>
 
+        {/* M-Pesa Payment Integration */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2">
+              <Smartphone className="size-4 text-emerald-400" /> M-Pesa Integration
+            </CardTitle>
+            <CardDescription>Simulate M-Pesa STK Push payments</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* STK Push Form */}
+              <div className="space-y-3">
+                <div className="grid gap-2">
+                  <Label className="text-slate-300 text-xs">Phone Number</Label>
+                  <Input placeholder="+254 7XX XXX XXX" className="bg-slate-800 border-slate-700 text-slate-100 h-9 text-sm" />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-slate-300 text-xs">Amount (KES)</Label>
+                  <Input type="number" placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100 h-9 text-sm" />
+                </div>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium h-9 text-sm" onClick={() => toast.success('M-Pesa STK Push sent! Awaiting confirmation...')}>
+                  <Smartphone className="size-3.5 mr-2" /> Send STK Push
+                </Button>
+              </div>
+              {/* Recent M-Pesa Transactions */}
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-slate-300">Recent M-Pesa Transactions</p>
+                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-0 text-[10px]">Live</Badge>
+                </div>
+                <ScrollArea className="max-h-[160px]">
+                  <div className="space-y-2">
+                    {sales.filter(s => s.paymentMethod === 'mpesa').slice(0, 5).map(s => (
+                      <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center size-6 rounded-full bg-emerald-500/15"><Smartphone className="size-3 text-emerald-400" /></div>
+                          <div>
+                            <p className="text-xs text-slate-200">{s.station.name}</p>
+                            <p className="text-[10px] text-slate-500">{s.mpesaReceipt || 'Pending'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-medium text-emerald-400">{formatCurrency(s.totalAmount)}</p>
+                          <p className="text-[10px] text-slate-500">{formatTimeAgo(s.createdAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {sales.filter(s => s.paymentMethod === 'mpesa').length === 0 && (
+                      <div className="text-center py-4"><p className="text-xs text-slate-500">No M-Pesa transactions yet</p></div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="bg-slate-900 border-slate-800 rounded-xl">
           <CardContent className="pt-6">
-            <ScrollArea className="max-h-[500px]">
-              <Table>
-                <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Product</TableHead><TableHead className="text-slate-400 text-right">Qty (L)</TableHead><TableHead className="text-slate-400 text-right">Unit Price</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Payment</TableHead><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {filteredSales.map(sale => (
-                    <TableRow key={sale.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                      <TableCell className="text-slate-200">{sale.station.name}</TableCell>
-                      <TableCell><Badge variant="secondary" className="bg-slate-800 text-slate-300 border-0">{sale.fuelType}</Badge></TableCell>
-                      <TableCell className="text-right text-slate-300">{formatNumber(sale.quantityLiters)}</TableCell>
-                      <TableCell className="text-right text-slate-400">{formatCurrency(sale.pricePerLiter)}</TableCell>
-                      <TableCell className="text-right text-slate-200 font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
-                      <TableCell><Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] capitalize">{sale.paymentMethod}</Badge></TableCell>
-                      <TableCell className="text-slate-400 text-xs">{sale.customerName || <span className="text-slate-600">Walk-in</span>}</TableCell>
-                      <TableCell className="text-right text-slate-400 text-xs">{formatTimeAgo(sale.createdAt)}</TableCell>
-                    </TableRow>
+            <Table>
+              <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Product</TableHead><TableHead className="text-slate-400 text-right">Qty (L)</TableHead><TableHead className="text-slate-400 text-right">Unit Price</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Payment</TableHead><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {filteredSales.slice((salesPage - 1) * salesPageSize, salesPage * salesPageSize).map(sale => (
+                  <TableRow key={sale.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                    <TableCell className="text-slate-200">{sale.station.name}</TableCell>
+                    <TableCell><Badge variant="secondary" className="bg-slate-800 text-slate-300 border-0">{sale.fuelType}</Badge></TableCell>
+                    <TableCell className="text-right text-slate-300">{formatNumber(sale.quantityLiters)}</TableCell>
+                    <TableCell className="text-right text-slate-400">{formatCurrency(sale.pricePerLiter)}</TableCell>
+                    <TableCell className="text-right text-slate-200 font-medium">{formatCurrency(sale.totalAmount)}</TableCell>
+                    <TableCell><Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px] capitalize">{sale.paymentMethod}</Badge></TableCell>
+                    <TableCell className="text-slate-400 text-xs">{sale.customerName || <span className="text-slate-600">Walk-in</span>}</TableCell>
+                    <TableCell className="text-right text-slate-400 text-xs">{formatTimeAgo(sale.createdAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {/* Pagination */}
+            {filteredSales.length > salesPageSize && (
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
+                <p className="text-xs text-slate-500">Showing {((salesPage - 1) * salesPageSize) + 1}–{Math.min(salesPage * salesPageSize, filteredSales.length)} of {filteredSales.length} sales</p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800" disabled={salesPage <= 1} onClick={() => setSalesPage(p => Math.max(1, p - 1))}>Previous</Button>
+                  {Array.from({ length: Math.ceil(filteredSales.length / salesPageSize) }, (_, i) => i + 1).slice(Math.max(0, salesPage - 3), salesPage + 2).map(p => (
+                    <Button key={p} variant={p === salesPage ? 'default' : 'outline'} size="sm" className={`h-7 w-7 p-0 text-xs ${p === salesPage ? 'bg-amber-500 text-black hover:bg-amber-600' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`} onClick={() => setSalesPage(p)}>{p}</Button>
                   ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+                  <Button variant="outline" size="sm" className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800" disabled={salesPage >= Math.ceil(filteredSales.length / salesPageSize)} onClick={() => setSalesPage(p => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -2007,6 +2120,17 @@ export default function FuelProDashboard() {
                       <TableCell className="text-right text-slate-400 text-xs">{new Date(coupon.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10" onClick={() => {
+                            if (coupon.status !== 'active' || coupon.uses >= coupon.maxUses) { toast.error('Coupon not available for redemption'); return }
+                            // Simulate coupon redemption - increment uses via PUT
+                            fetch(`/api/coupons/${coupon.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uses: coupon.uses + 1 }) })
+                              .then(r => r.json()).then(j => {
+                                if (j.ok) { setCoupons(prev => prev.map(c => c.id === coupon.id ? { ...c, uses: c.uses + 1 } : c)); toast.success(`Coupon "${coupon.code}" redeemed! (${coupon.uses + 1}/${coupon.maxUses})`) }
+                                else { toast.error('Redemption failed') }
+                              }).catch(() => toast.error('Redemption failed'))
+                          }} title="Redeem Coupon">
+                            <Copy className="size-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => handleToggleCouponStatus(coupon.id, coupon.status)} title={coupon.status === 'active' ? 'Deactivate' : 'Activate'}>
                             <Power className="size-3.5" />
                           </Button>
@@ -2518,22 +2642,22 @@ export default function FuelProDashboard() {
   // ─── Main Layout ────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex bg-slate-950">
+    <div className="min-h-screen flex bg-background">
       {/* Desktop Sidebar */}
-      <aside className={`hidden lg:flex flex-col border-r border-slate-800 bg-slate-950 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
+      <aside className={`hidden lg:flex flex-col border-r border-border bg-card transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
         <SidebarContent />
       </aside>
 
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setMobileSidebarOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 border-r border-slate-800 transform transition-transform duration-300 lg:hidden ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 lg:hidden ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <SidebarContent />
       </aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-14 border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 z-30">
+        <header className="h-14 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200 lg:hidden" onClick={() => setMobileSidebarOpen(true)}><Menu className="size-5" /></Button>
             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200 hidden lg:flex" onClick={() => setSidebarOpen(!sidebarOpen)}><Menu className="size-5" /></Button>
@@ -2620,6 +2744,33 @@ export default function FuelProDashboard() {
 
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-auto">
+          {/* Breadcrumb & Fuel Price Ticker */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Fuel className="size-4 text-amber-500" />
+              <span className="text-muted-foreground">FuelPro</span>
+              <ChevronRight className="size-3 text-muted-foreground/50" />
+              <span className="font-medium text-foreground">{navigationItems.find(n => n.id === activeTab)?.label}</span>
+              <Badge variant="secondary" className="text-[10px] ml-2 bg-amber-500/10 text-amber-500 border-amber-500/20">
+                {navigationItems.find(n => n.id === activeTab)?.group}
+              </Badge>
+            </div>
+            {/* Fuel Price Ticker */}
+            <div className="flex items-center gap-3 text-xs">
+              {inventory.length > 0 && ['Petrol', 'Diesel', 'Kerosene'].map(ft => {
+                const tanks = inventory.filter(t => t.fuelType === ft)
+                const avgPrice = tanks.length > 0 ? tanks.reduce((s, t) => s + t.pricePerLiter, 0) / tanks.length : 0
+                return avgPrice > 0 ? (
+                  <div key={ft} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border">
+                    <Droplets className={`size-3 ${ft === 'Petrol' ? 'text-amber-500' : ft === 'Diesel' ? 'text-slate-400' : 'text-emerald-400'}`} />
+                    <span className="text-muted-foreground">{ft}</span>
+                    <span className="font-semibold text-foreground">{formatCurrency(avgPrice)}</span>
+                    <span className="text-muted-foreground">/L</span>
+                  </div>
+                ) : null
+              })}
+            </div>
+          </div>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -2634,7 +2785,7 @@ export default function FuelProDashboard() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-slate-800 bg-slate-950 px-4 py-3 flex items-center justify-between">
+        <footer className="border-t border-border bg-card px-4 py-3 flex items-center justify-between">
           <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.0.0</p>
           <p className="text-xs text-slate-600 hidden sm:block">Last refresh: {lastRefresh.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh: 60s</p>
         </footer>

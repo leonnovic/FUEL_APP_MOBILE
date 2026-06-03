@@ -8,7 +8,7 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { code, type, value, maxUses, status } = body
+    const { code, type, value, maxUses, uses, status } = body
 
     const existing = await db.coupon.findUnique({ where: { id } })
     if (!existing) {
@@ -25,6 +25,7 @@ export async function PUT(
         ...(type !== undefined && { type }),
         ...(value !== undefined && { value }),
         ...(maxUses !== undefined && { maxUses }),
+        ...(uses !== undefined && { uses }),
         ...(status !== undefined && { status }),
       },
     })
