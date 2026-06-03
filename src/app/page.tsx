@@ -9,7 +9,7 @@ import {
   FileText, Users, Database, Shield, Zap, ChevronRight, Edit, Trash2,
   Play, Square, BarChart3, ArrowUpRight, ArrowDownRight,
   Gauge, Loader2, Package, Eye, Power, Copy, Sun, Moon, LogOut,
-  RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone
+  RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone, Receipt
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -37,7 +37,7 @@ import { useTheme } from 'next-themes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'admin'
+type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'expenses' | 'admin'
 
 interface NavItem {
   id: TabId
@@ -239,6 +239,21 @@ interface DeliveryAPIResponse {
   }[]
 }
 
+interface ExpenseAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    stationId: string
+    category: string
+    description: string
+    amount: number
+    date: string
+    station: { id: string; name: string }
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
 interface AdminData {
   users: { id: number; name: string; email: string; role: string; status: string; lastLogin: string }[]
   auditLogs: { id: number; user: string; action: string; details: string; timestamp: string; severity: string }[]
@@ -278,6 +293,7 @@ const navigationItems: NavItem[] = [
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="size-4" />, group: 'Finance' },
   { id: 'suppliers', label: 'Suppliers', icon: <Truck className="size-4" />, group: 'Supply Chain' },
   { id: 'coupons', label: 'Coupons', icon: <Ticket className="size-4" />, group: 'Supply Chain' },
+  { id: 'expenses', label: 'Expenses', icon: <Receipt className="size-4" />, group: 'Finance' },
   { id: 'admin', label: 'Admin', icon: <Settings className="size-4" />, group: 'System' },
 ]
 
@@ -422,6 +438,7 @@ export default function FuelProDashboard() {
   const [coupons, setCoupons] = useState<CouponAPIResponse['data']>([])
   const [reconciliations, setReconciliations] = useState<ReconciliationAPIResponse['data']>([])
   const [deliveries, setDeliveries] = useState<DeliveryAPIResponse['data']>([])
+  const [expenses, setExpenses] = useState<ExpenseAPIResponse['data']>([])
 
   // Loading states
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -458,10 +475,14 @@ export default function FuelProDashboard() {
   const [newCoupon, setNewCoupon] = useState({ code: '', type: 'percentage', value: 0, maxUses: 100 })
   const [newReconciliation, setNewReconciliation] = useState({ stationId: '', fuelType: 'Petrol', bookStock: 0, physicalStock: 0, deliveryReceived: 0, notes: '' })
   const [newDelivery, setNewDelivery] = useState({ stationId: '', supplierName: '', fuelType: 'Petrol', volumeLiters: 0, costPerLiter: 0 })
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [newExpense, setNewExpense] = useState({ stationId: '', category: 'electricity', description: '', amount: 0 })
 
   // Filter states
   const [salesFilter, setSalesFilter] = useState('all')
   const [salesSearch, setSalesSearch] = useState('')
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all')
+  const [expenseSearch, setExpenseSearch] = useState('')
 
   // Pagination
   const [salesPage, setSalesPage] = useState(1)
@@ -604,6 +625,16 @@ export default function FuelProDashboard() {
     finally { setLoading(prev => ({ ...prev, deliveries: false })) }
   }, [])
 
+  const fetchExpenses = useCallback(async () => {
+    setLoading(prev => ({ ...prev, expenses: true }))
+    try {
+      const res = await fetch('/api/expenses')
+      const json = await res.json()
+      if (json.ok) setExpenses(json.data)
+    } catch { toast.error('Failed to load expenses') }
+    finally { setLoading(prev => ({ ...prev, expenses: false })) }
+  }, [])
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch('/api/users')
@@ -626,8 +657,9 @@ export default function FuelProDashboard() {
       case 'coupons': fetchCoupons(); break
       case 'reconciliation': fetchReconciliations(); break
       case 'deliveries': fetchDeliveries(); break
+      case 'expenses': fetchExpenses(); break
     }
-  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries])
+  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses])
 
   // Mount & auto-login check
   useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
@@ -778,6 +810,29 @@ export default function FuelProDashboard() {
         toast.success('Delivery recorded and tank stock updated')
       } else { toast.error(json.error || 'Failed to record delivery') }
     } catch { toast.error('Failed to record delivery') }
+  }
+
+  const handleAddExpense = async () => {
+    if (!newExpense.stationId || !newExpense.description || !newExpense.amount) { toast.error('Station, description and amount are required'); return }
+    try {
+      const res = await fetch('/api/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newExpense) })
+      const json = await res.json()
+      if (json.ok) {
+        setExpenses(prev => [json.data, ...prev])
+        setExpenseDialogOpen(false)
+        setNewExpense({ stationId: '', category: 'electricity', description: '', amount: 0 })
+        toast.success('Expense recorded successfully')
+      } else { toast.error(json.error || 'Failed to record expense') }
+    } catch { toast.error('Failed to record expense') }
+  }
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    try {
+      const res = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setExpenses(prev => prev.filter(e => e.id !== expenseId)); toast.success('Expense deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete expense') }
   }
 
   const handleDeleteStation = async (stationId: string, e: React.MouseEvent) => {
@@ -1031,6 +1086,20 @@ export default function FuelProDashboard() {
           <KPICard title="Active Shifts" value={d.activeShifts} icon={<Clock className="size-5" />} color="violet" trend="Running" trendUp />
         </div>
 
+        {/* Clock & Live Status */}
+        <div className="flex items-center gap-4 px-1">
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>System Online</span>
+          </div>
+          <span className="text-sm text-slate-500">|</span>
+          <span className="text-sm text-slate-400">{currentTime.toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          <span className="text-sm text-slate-500">|</span>
+          <span className="text-sm font-mono text-amber-400 tabular-nums">{currentTime.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          <span className="text-sm text-slate-500">|</span>
+          <span className="text-sm text-slate-400">EAT (UTC+3)</span>
+        </div>
+
         {/* Revenue Chart + Tank Alerts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
@@ -1045,13 +1114,19 @@ export default function FuelProDashboard() {
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={revenueChartData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.2} />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
                     <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
-                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={40} fill="url(#revenueGradient)">
                       {revenueChartData.map((_, index) => (
-                        <Cell key={index} fill={index === revenueChartData.length - 1 ? '#f59e0b' : '#334155'} />
+                        <Cell key={index} fill={index === revenueChartData.length - 1 ? '#f59e0b' : 'url(#revenueGradient)'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -1107,14 +1182,28 @@ export default function FuelProDashboard() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={fuelTrendData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="petrolGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="dieselGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#64748b" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#64748b" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="keroseneGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
                   <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} />
                   <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                  <Line type="monotone" dataKey="Petrol" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="Diesel" stroke="#64748b" strokeWidth={2} dot={{ fill: '#64748b', r: 3 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="Kerosene" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="Petrol" stroke="#f59e0b" strokeWidth={2.5} dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey="Diesel" stroke="#64748b" strokeWidth={2.5} dot={{ fill: '#64748b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                  <Line type="monotone" dataKey="Kerosene" stroke="#10b981" strokeWidth={2.5} dot={{ fill: '#10b981', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1276,6 +1365,9 @@ export default function FuelProDashboard() {
               <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-red-400 h-11" onClick={() => { setActiveTab('reconciliation'); setTimeout(() => setReconciliationDialogOpen(true), 300) }}>
                 <CheckSquare className="size-4 mr-3 text-red-400" /> New Reconciliation
               </Button>
+              <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-sky-400 h-11" onClick={() => { setActiveTab('expenses'); setTimeout(() => setExpenseDialogOpen(true), 300) }}>
+                <Receipt className="size-4 mr-3 text-sky-400" /> Record Expense
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -1315,6 +1407,41 @@ export default function FuelProDashboard() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Top Customers */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2"><Users className="size-4 text-amber-400" /> Top Customers</CardTitle>
+            <CardDescription>Most frequent purchasers</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const customerMap: Record<string, { name: string; totalSpent: number; visits: number }> = {}
+              sales.forEach(s => {
+                const name = s.customerName || 'Walk-in'
+                if (!customerMap[name]) customerMap[name] = { name, totalSpent: 0, visits: 0 }
+                customerMap[name].totalSpent += s.totalAmount
+                customerMap[name].visits += 1
+              })
+              const topCustomers = Object.values(customerMap).sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 8)
+              if (topCustomers.length === 0) return <div className="text-center py-6"><Users className="size-8 text-slate-600 mx-auto mb-2" /><p className="text-sm text-slate-500">No customer data yet</p></div>
+              return (
+                <div className="space-y-2">
+                  {topCustomers.map((c, i) => (
+                    <div key={c.name} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-800/40 transition-colors">
+                      <div className="size-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0">{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-200 truncate">{c.name}</p>
+                        <p className="text-xs text-slate-500">{c.visits} visit{c.visits > 1 ? 's' : ''}</p>
+                      </div>
+                      <span className="text-sm font-medium text-emerald-400 tabular-nums">{formatCurrency(c.totalSpent)}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
           </CardContent>
         </Card>
       </div>
@@ -2367,6 +2494,112 @@ export default function FuelProDashboard() {
     )
   }
 
+  const renderExpenses = () => {
+    if (loading.expenses) return <TableSkeletons cols={6} rows={4} />
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+    const thisMonth = expenses.filter(e => {
+      const d = new Date(e.date || e.createdAt)
+      const now = new Date()
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    })
+    const thisMonthTotal = thisMonth.reduce((sum, e) => sum + e.amount, 0)
+    const avgPerStation = stations.length > 0 ? totalExpenses / stations.length : 0
+    const categoryTotals: Record<string, number> = {}
+    expenses.forEach(e => { categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount })
+    const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]
+    const categoryColors: Record<string, string> = {
+      electricity: 'bg-yellow-500/15 text-yellow-400 border-0',
+      rent: 'bg-blue-500/15 text-blue-400 border-0',
+      salaries: 'bg-emerald-500/15 text-emerald-400 border-0',
+      maintenance: 'bg-orange-500/15 text-orange-400 border-0',
+      transport: 'bg-purple-500/15 text-purple-400 border-0',
+      other: 'bg-slate-500/15 text-slate-400 border-0',
+    }
+    const filteredExpenses = expenses.filter(e => {
+      if (expenseCategoryFilter !== 'all' && e.category !== expenseCategoryFilter) return false
+      if (expenseSearch && !e.description.toLowerCase().includes(expenseSearch.toLowerCase()) && !e.station.name.toLowerCase().includes(expenseSearch.toLowerCase())) return false
+      return true
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Expenses</h2><p className="text-sm text-slate-400 mt-1">Track and manage operational expenses</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(expenses.map(e => ({ Station: e.station.name, Category: e.category, Description: e.description, Amount: e.amount, Date: e.date || e.createdAt })), 'fuelpro_expenses')}>
+              <Download className="size-4 mr-2" /> Export CSV
+            </Button>
+            <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+              <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Record Expense</Button></DialogTrigger>
+              <DialogContent className="bg-slate-900 border-slate-800">
+                <DialogHeader><DialogTitle className="text-slate-100">Record Expense</DialogTitle><DialogDescription className="text-slate-400">Add a new operational expense</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newExpense.stationId} onValueChange={v => setNewExpense(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700">{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Category</Label><Select value={newExpense.category} onValueChange={v => setNewExpense(p => ({ ...p, category: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="electricity">Electricity</SelectItem><SelectItem value="rent">Rent</SelectItem><SelectItem value="salaries">Salaries</SelectItem><SelectItem value="maintenance">Maintenance</SelectItem><SelectItem value="transport">Transport</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Description</Label><Input value={newExpense.description} onChange={e => setNewExpense(p => ({ ...p, description: e.target.value }))} placeholder="e.g. Monthly electricity bill" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Amount (KES)</Label><Input type="number" value={newExpense.amount || ''} onChange={e => setNewExpense(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <DialogFooter><Button variant="outline" onClick={() => setExpenseDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddExpense} className="bg-amber-600 hover:bg-amber-700 text-white">Record Expense</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Receipt className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalExpenses)}</p><p className="text-xs text-slate-400">Total Expenses</p></div></div></CardContent></Card>
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><TrendingUp className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(thisMonthTotal)}</p><p className="text-xs text-slate-400">This Month</p></div></div></CardContent></Card>
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><Building2 className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(avgPerStation)}</p><p className="text-xs text-slate-400">Avg / Station</p></div></div></CardContent></Card>
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-purple-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-purple-500/15"><BarChart3 className="size-5 text-purple-400" /></div><div><p className="text-2xl font-bold text-slate-100">{topCategory ? topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1) : 'N/A'}</p><p className="text-xs text-slate-400">{topCategory ? formatCurrency(topCategory[1]) : 'No data'}</p></div></div></CardContent></Card>
+        </div>
+
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100">Expense Records</CardTitle>
+            <CardDescription>All operational expenses across stations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search expenses..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} /></div>
+              <Select value={expenseCategoryFilter} onValueChange={setExpenseCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-44 bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="electricity">Electricity</SelectItem>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="salaries">Salaries</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="transport">Transport</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filteredExpenses.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Receipt className="size-7 text-slate-500" /></div><p className="text-slate-400">No expenses recorded</p><p className="text-sm text-slate-500 mt-1">Record an expense to get started</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Category</TableHead><TableHead className="text-slate-400">Description</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredExpenses.map(e => (
+                      <TableRow key={e.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-slate-200 font-medium">{e.station.name}</TableCell>
+                        <TableCell><Badge variant="secondary" className={categoryColors[e.category] || categoryColors.other}>{e.category.charAt(0).toUpperCase() + e.category.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-300 max-w-[200px] truncate">{e.description}</TableCell>
+                        <TableCell className="text-right text-amber-400 font-medium tabular-nums">{formatCurrency(e.amount)}</TableCell>
+                        <TableCell className="text-right text-slate-400 text-xs">{formatTimeAgo(e.date || e.createdAt)}</TableCell>
+                        <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteExpense(e.id)}><Trash2 className="size-3.5" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const renderAdmin = () => {
     if (loading.admin) return <TableSkeletons cols={5} rows={4} />
     if (!adminData) return null
@@ -2634,6 +2867,7 @@ export default function FuelProDashboard() {
       case 'suppliers': return renderSuppliers()
       case 'coupons': return renderCoupons()
       case 'reports': return renderReports()
+      case 'expenses': return renderExpenses()
       case 'admin': return renderAdmin()
       default: return renderDashboard()
     }
@@ -2642,7 +2876,8 @@ export default function FuelProDashboard() {
   // ─── Main Layout ────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
+      <div className="flex flex-1">
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:flex flex-col border-r border-border bg-card transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
         <SidebarContent />
@@ -2655,7 +2890,7 @@ export default function FuelProDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Header */}
         <header className="h-14 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -2785,10 +3020,11 @@ export default function FuelProDashboard() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-border bg-card px-4 py-3 flex items-center justify-between">
+        <footer className="border-t border-border bg-card px-4 py-3 flex items-center justify-between mt-auto">
           <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.0.0</p>
           <p className="text-xs text-slate-600 hidden sm:block">Last refresh: {lastRefresh.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh: 60s</p>
         </footer>
+      </div>
       </div>
 
       {/* Station Edit Dialog */}
@@ -2869,6 +3105,49 @@ export default function FuelProDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserEditDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
             <Button onClick={handleEditUser} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Dialog */}
+      <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle>Record Expense</DialogTitle>
+            <DialogDescription className="text-slate-400">Add a new operational expense</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div><Label className="text-slate-300">Station</Label>
+              <Select value={newExpense.stationId} onValueChange={v => setNewExpense(prev => ({ ...prev, stationId: v }))}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Select station" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-slate-300">Category</Label>
+              <Select value={newExpense.category} onValueChange={v => setNewExpense(prev => ({ ...prev, category: v }))}>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-200"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="electricity">Electricity</SelectItem>
+                  <SelectItem value="rent">Rent</SelectItem>
+                  <SelectItem value="salaries">Salaries</SelectItem>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="transport">Transport</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-slate-300">Description</Label>
+              <Input className="bg-slate-800 border-slate-700 text-slate-200" placeholder="e.g. Monthly electricity bill" value={newExpense.description} onChange={e => setNewExpense(prev => ({ ...prev, description: e.target.value }))} />
+            </div>
+            <div><Label className="text-slate-300">Amount (KES)</Label>
+              <Input type="number" className="bg-slate-800 border-slate-700 text-slate-200" placeholder="0" value={newExpense.amount || ''} onChange={e => setNewExpense(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="border-slate-700 text-slate-300" onClick={() => setExpenseDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={handleAddExpense}>Record Expense</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
