@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -280,32 +281,34 @@ const navigationItems: NavItem[] = [
 
 const navGroups = ['Overview', 'Operations', 'Finance', 'Supply Chain', 'System']
 
-// ─── Mock data for charts ──────────────────────────────────────────────────
+// ─── Real chart data helpers (computed from sales) ───────────────────────────
 
-const revenueChartData = [
-  { month: 'Jan', revenue: 185000, sales: 1420 },
-  { month: 'Feb', revenue: 210000, sales: 1580 },
-  { month: 'Mar', revenue: 195000, sales: 1490 },
-  { month: 'Apr', revenue: 240000, sales: 1750 },
-  { month: 'May', revenue: 225000, sales: 1680 },
-  { month: 'Jun', revenue: 260000, sales: 1920 },
-  { month: 'Jul', revenue: 280000, sales: 2050 },
-  { month: 'Aug', revenue: 275000, sales: 1980 },
-  { month: 'Sep', revenue: 290000, sales: 2100 },
-  { month: 'Oct', revenue: 310000, sales: 2250 },
-  { month: 'Nov', revenue: 295000, sales: 2150 },
-  { month: 'Dec', revenue: 320000, sales: 2350 },
-]
+function buildRevenueChartData(sales: { createdAt: string; totalAmount: number }[]) {
+  const monthly: Record<string, number> = {}
+  const now = new Date()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = d.toLocaleDateString('en-KE', { month: 'short' })
+    monthly[key] = 0
+  }
+  sales.forEach(s => {
+    const key = new Date(s.createdAt).toLocaleDateString('en-KE', { month: 'short' })
+    if (monthly[key] !== undefined) monthly[key] += s.totalAmount
+  })
+  return Object.entries(monthly).map(([month, revenue]) => ({ month, revenue }))
+}
 
-const fuelTrendData = [
-  { day: 'Mon', Petrol: 42, Diesel: 35, Kerosene: 12 },
-  { day: 'Tue', Petrol: 48, Diesel: 32, Kerosene: 15 },
-  { day: 'Wed', Petrol: 52, Diesel: 38, Kerosene: 11 },
-  { day: 'Thu', Petrol: 45, Diesel: 41, Kerosene: 14 },
-  { day: 'Fri', Petrol: 61, Diesel: 45, Kerosene: 18 },
-  { day: 'Sat', Petrol: 58, Diesel: 42, Kerosene: 16 },
-  { day: 'Sun', Petrol: 35, Diesel: 28, Kerosene: 9 },
-]
+function buildFuelTrendData(sales: { createdAt: string; fuelType: string; quantityLiters: number }[]) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const data: Record<string, { day: string; Petrol: number; Diesel: number; Kerosene: number }> = {}
+  days.forEach(d => { data[d] = { day: d, Petrol: 0, Diesel: 0, Kerosene: 0 } })
+  sales.forEach(s => {
+    const dayName = days[new Date(s.createdAt).getDay()]
+    const ft = s.fuelType as 'Petrol' | 'Diesel' | 'Kerosene'
+    if (ft in data[dayName]) data[dayName][ft] += s.quantityLiters
+  })
+  return days.map(d => data[d])
+}
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -396,6 +399,12 @@ export default function FuelProDashboard() {
   const [editStationForm, setEditStationForm] = useState({ name: '', location: '', phone: '', county: '' })
   const [tankPriceDialogOpen, setTankPriceDialogOpen] = useState(false)
   const [editTank, setEditTank] = useState<{ id: string; stationId: string; fuelType: string; pricePerLiter: number; alertThreshold: number } | null>(null)
+  const [supplierEditDialogOpen, setSupplierEditDialogOpen] = useState(false)
+  const [editSupplier, setEditSupplier] = useState<SupplierAPIResponse['data'][number] | null>(null)
+  const [editSupplierForm, setEditSupplierForm] = useState({ name: '', contact: '', fuelTypes: '', location: '' })
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<{ type: string; label: string; tab: TabId; id?: string }[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
   const [selectedStation, setSelectedStation] = useState<StationAPIResponse['data'][number] | null>(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -781,6 +790,34 @@ export default function FuelProDashboard() {
     } catch { toast.error('Failed to save configuration') }
   }
 
+  const handleEditSupplier = async () => {
+    if (!editSupplier || !editSupplierForm.name) { toast.error('Supplier name is required'); return }
+    try {
+      const res = await fetch(`/api/suppliers/${editSupplier.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editSupplierForm) })
+      const json = await res.json()
+      if (json.ok) {
+        setSuppliers(prev => prev.map(s => s.id === editSupplier.id ? { ...s, ...editSupplierForm } : s))
+        setSupplierEditDialogOpen(false)
+        setEditSupplier(null)
+        toast.success('Supplier updated successfully')
+      } else { toast.error(json.error || 'Failed to update supplier') }
+    } catch { toast.error('Failed to update supplier') }
+  }
+
+  const handleGlobalSearch = useCallback((query: string) => {
+    setGlobalSearch(query)
+    if (!query.trim()) { setSearchResults([]); setSearchOpen(false); return }
+    const q = query.toLowerCase()
+    const results: { type: string; label: string; tab: TabId; id?: string }[] = []
+    stations.forEach(s => { if (s.name.toLowerCase().includes(q)) results.push({ type: 'Station', label: s.name, tab: 'stations', id: s.id }) })
+    sales.forEach(s => { if (s.station.name.toLowerCase().includes(q) || (s.customerName && s.customerName.toLowerCase().includes(q))) results.push({ type: 'Sale', label: `${s.station.name} — ${s.fuelType} ${formatCurrency(s.totalAmount)}`, tab: 'sales' }) })
+    suppliers.forEach(s => { if (s.name.toLowerCase().includes(q) || (s.contact && s.contact.toLowerCase().includes(q))) results.push({ type: 'Supplier', label: s.name, tab: 'suppliers', id: s.id }) })
+    coupons.forEach(c => { if (c.code.toLowerCase().includes(q)) results.push({ type: 'Coupon', label: `${c.code} — ${c.type === 'percentage' ? c.value + '%' : formatCurrency(c.value)}`, tab: 'coupons' }) })
+    inventory.forEach(t => { if (t.fuelType.toLowerCase().includes(q) || t.station.name.toLowerCase().includes(q)) results.push({ type: 'Tank', label: `${t.station.name} — ${t.fuelType}`, tab: 'inventory' }) })
+    setSearchResults(results.slice(0, 8))
+    setSearchOpen(results.length > 0)
+  }, [stations, sales, suppliers, coupons, inventory])
+
   const unreadCount = notifications.filter(n => !n.read).length
 
   // ─── Sidebar Component ─────────────────────────────────────────────────────
@@ -850,6 +887,8 @@ export default function FuelProDashboard() {
     if (loading.dashboard) return <DashboardSkeletons />
     if (!dashboardData) return null
     const d = dashboardData
+    const revenueChartData = buildRevenueChartData(sales)
+    const fuelTrendData = buildFuelTrendData(sales)
 
     return (
       <div className="space-y-6">
@@ -867,9 +906,9 @@ export default function FuelProDashboard() {
           <Card className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100">Revenue Overview</CardTitle>
-              <CardDescription>Monthly revenue performance for 2026</CardDescription>
+              <CardDescription>Monthly revenue performance (real data)</CardDescription>
               <CardAction>
-                <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-400 border-0"><TrendingUp className="size-3 mr-1" /> +8.3% YoY</Badge>
+                <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-400 border-0"><TrendingUp className="size-3 mr-1" /> Live</Badge>
               </CardAction>
             </CardHeader>
             <CardContent>
@@ -932,7 +971,7 @@ export default function FuelProDashboard() {
         <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2"><TrendingUp className="size-4 text-amber-400" /> Fuel Sales Trends</CardTitle>
-            <CardDescription>Daily sales volume by fuel type (litres)</CardDescription>
+            <CardDescription>Weekly sales volume by fuel type (real data)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-64">
@@ -1069,6 +1108,44 @@ export default function FuelProDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Station Health Overview */}
+        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2"><Activity className="size-4 text-emerald-400" /> Station Health Overview</CardTitle>
+            <CardDescription>Live status of all stations and tank levels</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stations.length === 0 ? (
+              <div className="text-center py-6"><Activity className="size-8 text-slate-600 mx-auto mb-2" /><p className="text-sm text-slate-500">No stations configured</p></div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {stations.map(st => {
+                  const activeTanks = st.tanks.length
+                  const lowTanks = st.tanks.filter(t => t.currentStock <= t.alertThreshold).length
+                  const avgFill = activeTanks > 0 ? Math.round(st.tanks.reduce((s, t) => s + (t.capacity > 0 ? (t.currentStock / t.capacity) * 100 : 0), 0) / activeTanks) : 0
+                  const isHealthy = st.status === 'active' && lowTanks === 0
+                  return (
+                    <div key={st.id} className={`p-3 rounded-lg border transition-all duration-200 hover:scale-[1.01] cursor-pointer ${isHealthy ? 'bg-emerald-950/20 border-emerald-900/30' : st.status === 'maintenance' ? 'bg-amber-950/20 border-amber-900/30' : 'bg-red-950/20 border-red-900/30'}`} onClick={() => { setSelectedStation(st); setStationDetailDialogOpen(true) }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-slate-200 truncate">{st.name}</span>
+                        <Badge className={`${isHealthy ? 'bg-emerald-500/15 text-emerald-400 border-0' : st.status === 'maintenance' ? 'bg-amber-500/15 text-amber-400 border-0' : 'bg-red-500/15 text-red-400 border-0'} text-[10px]`}>{isHealthy ? 'Healthy' : st.status === 'maintenance' ? 'Maintenance' : lowTanks > 0 ? `${lowTanks} Low` : 'Active'}</Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-500">
+                        <span>{activeTanks} tanks</span>
+                        <span>Avg {avgFill}%</span>
+                        {lowTanks > 0 && <span className="text-red-400">{lowTanks} low</span>}
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-slate-800">
+                        <div className={`h-full rounded-full transition-all duration-500 ${avgFill > 60 ? 'bg-emerald-500' : avgFill > 30 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${avgFill}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -1729,6 +1806,9 @@ export default function FuelProDashboard() {
                     <div><CardTitle className="text-slate-100 text-base">{supplier.name}</CardTitle><CardDescription className="mt-1">{supplier.location || 'No location'}</CardDescription></div>
                     <div className="flex items-center gap-1.5">
                       <Badge className={supplier.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-slate-700 text-slate-400'}>{supplier.status}</Badge>
+                      <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => { setEditSupplier(supplier); setEditSupplierForm({ name: supplier.name, contact: supplier.contact || '', fuelTypes: supplier.fuelTypes || '', location: supplier.location || '' }); setSupplierEditDialogOpen(true) }} title="Edit">
+                        <Edit className="size-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => handleToggleSupplierStatus(supplier.id, supplier.status)} title={supplier.status === 'active' ? 'Deactivate' : 'Activate'}>
                         <Power className="size-3.5" />
                       </Button>
@@ -2168,7 +2248,17 @@ export default function FuelProDashboard() {
             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200 hidden lg:flex" onClick={() => setSidebarOpen(!sidebarOpen)}><Menu className="size-5" /></Button>
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
-              <Input placeholder="Search anything..." className="pl-9 w-64 bg-slate-900 border-slate-800 text-slate-200 text-sm" />
+              <Input placeholder="Search stations, sales, suppliers..." value={globalSearch} onChange={e => handleGlobalSearch(e.target.value)} className="pl-9 w-72 bg-slate-900 border-slate-800 text-slate-200 text-sm" />
+              {searchOpen && searchResults.length > 0 && (
+                <div className="absolute top-full mt-1 left-0 w-full bg-slate-900 border border-slate-800 rounded-lg shadow-xl z-50 overflow-hidden">
+                  {searchResults.map((r, i) => (
+                    <button key={i} className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors" onClick={() => { setActiveTab(r.tab); setSearchOpen(false); setGlobalSearch(''); setSearchResults([]) }}>
+                      <Badge variant="secondary" className="bg-slate-800 text-slate-400 border-0 text-[10px] shrink-0">{r.type}</Badge>
+                      <span className="text-sm text-slate-200 truncate">{r.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2224,7 +2314,17 @@ export default function FuelProDashboard() {
 
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-auto">
-          {renderContent()}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
+              {renderContent()}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         {/* Footer */}
@@ -2266,6 +2366,25 @@ export default function FuelProDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setTankPriceDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
             <Button onClick={handleUpdateTankPrice} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Update Price</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Supplier Edit Dialog */}
+      <Dialog open={supplierEditDialogOpen} onOpenChange={setSupplierEditDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+          <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit Supplier</DialogTitle><DialogDescription className="text-slate-400">Update supplier information</DialogDescription></DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2"><Label className="text-slate-300">Supplier Name *</Label><Input value={editSupplierForm.name} onChange={e => setEditSupplierForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2"><Label className="text-slate-300">Contact</Label><Input value={editSupplierForm.contact} onChange={e => setEditSupplierForm(p => ({ ...p, contact: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Location</Label><Input value={editSupplierForm.location} onChange={e => setEditSupplierForm(p => ({ ...p, location: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+            </div>
+            <div className="grid gap-2"><Label className="text-slate-300">Fuel Types (comma separated)</Label><Input value={editSupplierForm.fuelTypes} onChange={e => setEditSupplierForm(p => ({ ...p, fuelTypes: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSupplierEditDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button>
+            <Button onClick={handleEditSupplier} className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
