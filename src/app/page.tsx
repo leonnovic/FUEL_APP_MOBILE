@@ -74,6 +74,8 @@ interface DashboardAPIResponse {
       createdAt: string
       station: { id: string; name: string }
     }[]
+    paymentBreakdown?: { name: string; value: number; count: number }[]
+    fuelBreakdown?: { name: string; value: number; liters: number }[]
   }
 }
 
@@ -406,6 +408,7 @@ export default function FuelProDashboard() {
   // Notifications
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   // ─── Data Fetching ─────────────────────────────────────────────────────────
 
@@ -548,6 +551,9 @@ export default function FuelProDashboard() {
     }
   }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries])
 
+  // Clock update
+  useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t) }, [])
+
   // Initial load
   useEffect(() => { fetchDashboard() }, [fetchDashboard])
 
@@ -662,6 +668,65 @@ export default function FuelProDashboard() {
         toast.success('Delivery recorded and tank stock updated')
       } else { toast.error(json.error || 'Failed to record delivery') }
     } catch { toast.error('Failed to record delivery') }
+  }
+
+  const handleDeleteStation = async (stationId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      const res = await fetch(`/api/stations/${stationId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setStations(prev => prev.filter(s => s.id !== stationId)); toast.success('Station deleted'); setStationDetailDialogOpen(false) }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete station') }
+  }
+
+  const handleToggleStationStatus = async (stationId: string, currentStatus: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newStatus = currentStatus === 'active' ? 'maintenance' : 'active'
+    try {
+      const res = await fetch(`/api/stations/${stationId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) })
+      const json = await res.json()
+      if (json.ok) { setStations(prev => prev.map(s => s.id === stationId ? { ...s, status: newStatus } : s)); toast.success(`Station ${newStatus === 'active' ? 'activated' : 'set to maintenance'}`) }
+      else { toast.error(json.error || 'Failed to update') }
+    } catch { toast.error('Failed to update station') }
+  }
+
+  const handleDeleteSupplier = async (supplierId: string) => {
+    try {
+      const res = await fetch(`/api/suppliers/${supplierId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setSuppliers(prev => prev.filter(s => s.id !== supplierId)); toast.success('Supplier removed') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete supplier') }
+  }
+
+  const handleToggleSupplierStatus = async (supplierId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
+    try {
+      const res = await fetch(`/api/suppliers/${supplierId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) })
+      const json = await res.json()
+      if (json.ok) { setSuppliers(prev => prev.map(s => s.id === supplierId ? { ...s, status: newStatus } : s)); toast.success(`Supplier ${newStatus === 'active' ? 'activated' : 'deactivated'}`) }
+      else { toast.error(json.error || 'Failed to update') }
+    } catch { toast.error('Failed to update supplier') }
+  }
+
+  const handleDeleteCoupon = async (couponId: string) => {
+    try {
+      const res = await fetch(`/api/coupons/${couponId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setCoupons(prev => prev.filter(c => c.id !== couponId)); toast.success('Coupon deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete coupon') }
+  }
+
+  const handleToggleCouponStatus = async (couponId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'expired' : 'active'
+    try {
+      const res = await fetch(`/api/coupons/${couponId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) })
+      const json = await res.json()
+      if (json.ok) { setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status: newStatus } : c)); toast.success(`Coupon ${newStatus === 'active' ? 'activated' : 'deactivated'}`) }
+      else { toast.error(json.error || 'Failed to update') }
+    } catch { toast.error('Failed to update coupon') }
   }
 
   const unreadCount = notifications.filter(n => !n.read).length
@@ -873,6 +938,85 @@ export default function FuelProDashboard() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* Payment & Fuel Breakdown + Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Payment Method Breakdown */}
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-4 text-amber-400" /> Payment Methods</CardTitle>
+              <CardDescription>Revenue by payment channel</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(d.paymentBreakdown && d.paymentBreakdown.length > 0) ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={d.paymentBreakdown || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4}>
+                        <Cell fill="#f59e0b" />
+                        <Cell fill="#10b981" />
+                        <Cell fill="#64748b" />
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+                      <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-slate-500 text-sm">No sales data yet today</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Fuel Type Breakdown */}
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-slate-100 flex items-center gap-2"><Droplets className="size-4 text-amber-400" /> Fuel Distribution</CardTitle>
+              <CardDescription>Revenue by fuel type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(d.fuelBreakdown && d.fuelBreakdown.length > 0) ? (
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={d.fuelBreakdown || []} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4}>
+                        <Cell fill="#f59e0b" />
+                        <Cell fill="#64748b" />
+                        <Cell fill="#10b981" />
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+                      <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-slate-500 text-sm">No sales data yet today</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-slate-100 flex items-center gap-2"><Zap className="size-4 text-amber-400" /> Quick Actions</CardTitle>
+              <CardDescription>Common operations</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-amber-400 h-11" onClick={() => { setActiveTab('sales'); setTimeout(() => setSaleDialogOpen(true), 300) }}>
+                <ShoppingCart className="size-4 mr-3 text-amber-400" /> Record Sale
+              </Button>
+              <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-emerald-400 h-11" onClick={() => { setActiveTab('shifts'); setTimeout(() => setShiftDialogOpen(true), 300) }}>
+                <Play className="size-4 mr-3 text-emerald-400" /> Start Shift
+              </Button>
+              <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-violet-400 h-11" onClick={() => { setActiveTab('deliveries'); setTimeout(() => setDeliveryDialogOpen(true), 300) }}>
+                <Package className="size-4 mr-3 text-violet-400" /> Record Delivery
+              </Button>
+              <Button variant="outline" className="w-full justify-start border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-red-400 h-11" onClick={() => { setActiveTab('reconciliation'); setTimeout(() => setReconciliationDialogOpen(true), 300) }}>
+                <CheckSquare className="size-4 mr-3 text-red-400" /> New Reconciliation
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     )
   }
@@ -921,7 +1065,14 @@ export default function FuelProDashboard() {
                     <CardTitle className="text-slate-100 text-base">{station.name}</CardTitle>
                     <CardDescription className="flex items-center gap-1 mt-1"><MapPin className="size-3" /> {station.location || 'No location'}</CardDescription>
                   </div>
-                  <Badge className={station.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : station.status === 'maintenance' ? 'bg-amber-500/15 text-amber-400 border-0' : 'bg-slate-700 text-slate-400'}>{station.status}</Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={(e) => handleToggleStationStatus(station.id, station.status, e)} title={station.status === 'active' ? 'Set Maintenance' : 'Activate'}>
+                      <Power className="size-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this station?')) handleDeleteStation(station.id, e) }} title="Delete">
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -998,7 +1149,19 @@ export default function FuelProDashboard() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStationDetailDialogOpen(false)} className="border-slate-700 text-slate-300">Close</Button>
+              <div className="flex gap-2 w-full">
+                <Button variant="outline" onClick={() => setStationDetailDialogOpen(false)} className="border-slate-700 text-slate-300 flex-1">Close</Button>
+                {selectedStation && (
+                  <>
+                    <Button variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10" onClick={() => { handleToggleStationStatus(selectedStation.id, selectedStation.status, { stopPropagation: () => {} } as React.MouseEvent) }}>
+                      <Power className="size-4 mr-2" /> {selectedStation.status === 'active' ? 'Maintenance' : 'Activate'}
+                    </Button>
+                    <Button variant="destructive" className="bg-red-600 hover:bg-red-700" onClick={() => { if (confirm('Delete this station permanently?')) handleDeleteStation(selectedStation.id, { stopPropagation: () => {} } as React.MouseEvent) }}>
+                      <Trash2 className="size-4 mr-2" /> Delete
+                    </Button>
+                  </>
+                )}
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1492,7 +1655,15 @@ export default function FuelProDashboard() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div><CardTitle className="text-slate-100 text-base">{supplier.name}</CardTitle><CardDescription className="mt-1">{supplier.location || 'No location'}</CardDescription></div>
-                    <Badge className={supplier.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-slate-700 text-slate-400'}>{supplier.status}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge className={supplier.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-slate-700 text-slate-400'}>{supplier.status}</Badge>
+                      <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => handleToggleSupplierStatus(supplier.id, supplier.status)} title={supplier.status === 'active' ? 'Deactivate' : 'Activate'}>
+                        <Power className="size-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={() => { if (confirm('Remove this supplier?')) handleDeleteSupplier(supplier.id) }} title="Delete">
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1546,7 +1717,7 @@ export default function FuelProDashboard() {
               <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Ticket className="size-7 text-slate-500" /></div><p className="text-slate-400">No coupons created</p></div>
             ) : (
               <Table>
-                <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Code</TableHead><TableHead className="text-slate-400">Discount</TableHead><TableHead className="text-slate-400">Type</TableHead><TableHead className="text-slate-400 text-right">Usage</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400 text-right">Created</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Code</TableHead><TableHead className="text-slate-400">Discount</TableHead><TableHead className="text-slate-400">Type</TableHead><TableHead className="text-slate-400 text-right">Usage</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400 text-right">Created</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {coupons.map(coupon => (
                     <TableRow key={coupon.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
@@ -1556,6 +1727,16 @@ export default function FuelProDashboard() {
                       <TableCell className="text-right"><div className="flex items-center justify-end gap-2"><Progress value={(coupon.uses / coupon.maxUses) * 100} className="h-1.5 w-16" /><span className="text-xs text-slate-400">{coupon.uses}/{coupon.maxUses}</span></div></TableCell>
                       <TableCell><Badge className={coupon.status === 'active' ? 'bg-emerald-500/15 text-emerald-400 border-0' : 'bg-slate-700 text-slate-400'}>{coupon.status}</Badge></TableCell>
                       <TableCell className="text-right text-slate-400 text-xs">{new Date(coupon.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => handleToggleCouponStatus(coupon.id, coupon.status)} title={coupon.status === 'active' ? 'Deactivate' : 'Activate'}>
+                            <Power className="size-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="size-7 text-slate-500 hover:text-red-400 hover:bg-red-500/10" onClick={() => { if (confirm('Delete this coupon?')) handleDeleteCoupon(coupon.id) }} title="Delete">
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1742,6 +1923,12 @@ export default function FuelProDashboard() {
             </Popover>
 
             <div className="flex items-center gap-2 ml-2 pl-2 border-l border-slate-800">
+              <div className="hidden sm:flex items-center gap-2 mr-3">
+                <Activity className="size-3.5 text-emerald-400 animate-pulse" />
+                <span className="text-xs text-slate-400 font-mono">{currentTime.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                <span className="text-[10px] text-slate-600">|</span>
+                <span className="text-xs text-slate-500">{currentTime.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+              </div>
               <div className="flex items-center justify-center size-8 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-600/10 text-amber-500 font-semibold text-xs">AD</div>
               <div className="hidden sm:block"><p className="text-xs font-medium text-slate-200">Admin</p><p className="text-[10px] text-slate-500">Super Admin</p></div>
             </div>
