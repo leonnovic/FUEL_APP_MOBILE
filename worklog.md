@@ -519,3 +519,63 @@ Stage Summary:
 - KPI cards now have staggered entrance animation
 - Version bumped to v3.1.0
 - Zero lint errors, zero dev server errors
+
+---
+Task ID: 9
+Agent: Feature Agent
+Task: Add AI Insights panel, Notification Settings, Tank Gauges, AreaChart, Theme-aware charts, Version bump
+
+Work Log:
+- Added AI Insights state variables (aiInsights, insightLoading) after expenses state declaration
+- Added fetchAiInsights callback function that calls /api/ai-insights endpoint
+- Updated dashboard tab loading useEffect to call fetchAiInsights() alongside fetchDashboard()
+- Added fetchAiInsights to useEffect dependency array
+- Added AI Smart Insights panel to Dashboard as the last card before renderDashboard closing:
+  - Loading skeleton with 3 pulsing placeholders
+  - Empty state with Sparkles icon and helpful message
+  - Color-coded insight cards: critical (red), warning (amber), success (emerald), info (sky)
+  - Each insight shows icon, title, category badge, description, and optional action link
+  - ScrollArea with max-h-[500px] for overflow
+  - Badge showing total insight count
+- Added Notification Settings tab to Admin section (4th tab):
+  - New TabsTrigger for "Notifications" with amber active styling
+  - 4 notification categories: Tank Alerts, Financial Alerts, Operational Alerts, Delivery Channels
+  - 11 toggle switches with descriptive labels and sublabels
+  - Save Notification Settings button with amber styling
+  - Theme-aware text colors using foreground/muted-foreground CSS variables
+- Enhanced Station Detail Dialog with visual Tank Level Gauges:
+  - Replaced simple Progress bar with gradient-filled rounded gauge bars
+  - Color-coded fill: emerald (>60%), amber (>30%), red (≤30%)
+  - Overlay text showing fuel type and current stock
+  - Capacity/stock display with percentage indicator
+  - Alert threshold and price per liter info below gauge
+- Added AreaChart and Area imports from recharts
+- Replaced Fuel Sales Trends LineChart with AreaChart:
+  - Gradient fills for each fuel type (petrolArea, dieselArea, keroseneArea)
+  - Theme-aware grid (var(--border)), axis ticks (var(--muted-foreground)), tooltip (hsl(var(--card)))
+  - Smoother visual presentation with filled areas under lines
+- Updated Revenue Overview bar chart to use theme-aware colors:
+  - CartesianGrid stroke changed from #1e293b to var(--border)
+  - XAxis/YAxis tick fill changed from #94a3b8 to var(--muted-foreground)
+  - XAxis/YAxis axisLine changed from #334155 to var(--border)
+  - Tooltip contentStyle changed from hardcoded colors to hsl(var(--card)), hsl(var(--border)), hsl(var(--card-foreground))
+- Version bumped from v3.1.0 to v3.2.0 in footer
+- Ran Prisma db:push to regenerate client (Expense model was already in schema)
+- Lint passes clean with zero errors
+
+Stage Summary:
+- Added AI Smart Insights panel with real-time business intelligence from /api/ai-insights
+- Added Notification Settings tab in Admin with 11 configurable toggles
+- Enhanced Station Detail Dialog with visual gradient tank level gauges
+- Replaced LineChart with AreaChart for Fuel Sales Trends (more visually appealing)
+- Updated both dashboard charts to use theme-aware CSS variables instead of hardcoded colors
+- Version bumped to v3.2.0
+- Zero lint errors
+
+Current Project Status:
+- Application at v3.2.0 with 13 tabs all using real data
+- Dashboard now includes AI Smart Insights panel alongside existing widgets
+- Admin tab has 4 sub-tabs: Users, Audit Logs, Configuration, Notifications
+- Station detail dialog shows visual tank gauges with gradient fills
+- Both dashboard charts use theme-aware colors for dark/light mode compatibility
+- All CRUD operations connected to real APIs

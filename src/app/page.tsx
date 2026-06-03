@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, Legend, PieChart, Pie
+  LineChart, Line, Legend, PieChart, Pie, AreaChart, Area
 } from 'recharts'
 
 import { Button } from '@/components/ui/button'
@@ -439,6 +439,8 @@ export default function FuelProDashboard() {
   const [reconciliations, setReconciliations] = useState<ReconciliationAPIResponse['data']>([])
   const [deliveries, setDeliveries] = useState<DeliveryAPIResponse['data']>([])
   const [expenses, setExpenses] = useState<ExpenseAPIResponse['data']>([])
+  const [aiInsights, setAiInsights] = useState<{ id: string; type: 'warning' | 'success' | 'info' | 'critical'; title: string; description: string; action?: string; category: string }[]>([])
+  const [insightLoading, setInsightLoading] = useState(false)
 
   // Loading states
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -635,6 +637,16 @@ export default function FuelProDashboard() {
     finally { setLoading(prev => ({ ...prev, expenses: false })) }
   }, [])
 
+  const fetchAiInsights = useCallback(async () => {
+    setInsightLoading(true)
+    try {
+      const res = await fetch('/api/ai-insights')
+      const json = await res.json()
+      if (json.ok) setAiInsights(json.data)
+    } catch { /* silent */ }
+    finally { setInsightLoading(false) }
+  }, [])
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch('/api/users')
@@ -646,7 +658,7 @@ export default function FuelProDashboard() {
   // Load data when tab changes
   useEffect(() => {
     switch (activeTab) {
-      case 'dashboard': fetchDashboard(); break
+      case 'dashboard': fetchDashboard(); fetchAiInsights(); break
       case 'stations': fetchStations(); break
       case 'inventory': fetchInventory(); break
       case 'sales': fetchSales(); break
@@ -659,7 +671,7 @@ export default function FuelProDashboard() {
       case 'deliveries': fetchDeliveries(); break
       case 'expenses': fetchExpenses(); break
     }
-  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses])
+  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights])
 
   // Mount & auto-login check
   useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
@@ -1133,10 +1145,10 @@ export default function FuelProDashboard() {
                         <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.2} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
-                    <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} axisLine={{ stroke: 'var(--border)' }} />
+                    <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} axisLine={{ stroke: 'var(--border)' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--card-foreground))' }} formatter={(value: number) => [formatCurrency(value), 'Revenue']} />
                     <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={40} fill="url(#revenueGradient)">
                       {revenueChartData.map((_, index) => (
                         <Cell key={index} fill={index === revenueChartData.length - 1 ? '#f59e0b' : 'url(#revenueGradient)'} />
@@ -1194,30 +1206,30 @@ export default function FuelProDashboard() {
           <CardContent>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={fuelTrendData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                <AreaChart data={fuelTrendData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
                   <defs>
-                    <linearGradient id="petrolGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    <linearGradient id="petrolArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="dieselGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#64748b" stopOpacity={0.3} />
+                    <linearGradient id="dieselArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#64748b" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="#64748b" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="keroseneGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                    <linearGradient id="keroseneArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={{ stroke: '#334155' }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '8px', color: '#e2e8f0' }} />
-                  <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                  <Line type="monotone" dataKey="Petrol" stroke="#f59e0b" strokeWidth={2.5} dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
-                  <Line type="monotone" dataKey="Diesel" stroke="#64748b" strokeWidth={2.5} dot={{ fill: '#64748b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
-                  <Line type="monotone" dataKey="Kerosene" stroke="#10b981" strokeWidth={2.5} dot={{ fill: '#10b981', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
-                </LineChart>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="day" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} axisLine={{ stroke: 'var(--border)' }} />
+                  <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} axisLine={{ stroke: 'var(--border)' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--card-foreground))' }} />
+                  <Legend wrapperStyle={{ color: 'var(--muted-foreground)' }} />
+                  <Area type="monotone" dataKey="Petrol" stroke="#f59e0b" strokeWidth={2.5} fill="url(#petrolArea)" dot={{ fill: '#f59e0b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="Diesel" stroke="#64748b" strokeWidth={2.5} fill="url(#dieselArea)" dot={{ fill: '#64748b', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="Kerosene" stroke="#10b981" strokeWidth={2.5} fill="url(#keroseneArea)" dot={{ fill: '#10b981', r: 3 }} activeDot={{ r: 6, strokeWidth: 2 }} />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
@@ -1571,6 +1583,69 @@ export default function FuelProDashboard() {
             })()}
           </CardContent>
         </Card>
+
+        {/* AI Smart Insights */}
+        <Card className="bg-card border-border rounded-xl overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Sparkles className="size-4 text-amber-400" /> Smart Insights
+            </CardTitle>
+            <CardDescription>AI-powered business intelligence & alerts</CardDescription>
+            <CardAction>
+              <Badge variant="secondary" className="bg-amber-500/15 text-amber-500 border-0 text-[10px]">
+                {aiInsights.length} insights
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {insightLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-16 rounded-lg bg-muted/30 animate-pulse" />
+                ))}
+              </div>
+            ) : aiInsights.length === 0 ? (
+              <div className="text-center py-8">
+                <Sparkles className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No insights available yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Insights will appear as data accumulates</p>
+              </div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <div className="space-y-2.5">
+                  {aiInsights.map(insight => {
+                    const colorMap = {
+                      critical: { bg: 'bg-red-500/10', border: 'border-red-500/20', icon: <AlertTriangle className="size-4 text-red-400" />, badge: 'bg-red-500/15 text-red-400' },
+                      warning: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', icon: <AlertCircle className="size-4 text-amber-400" />, badge: 'bg-amber-500/15 text-amber-400' },
+                      success: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', icon: <CheckCircle2 className="size-4 text-emerald-400" />, badge: 'bg-emerald-500/15 text-emerald-400' },
+                      info: { bg: 'bg-sky-500/10', border: 'border-sky-500/20', icon: <Activity className="size-4 text-sky-400" />, badge: 'bg-sky-500/15 text-sky-400' },
+                    }
+                    const style = colorMap[insight.type]
+                    return (
+                      <div key={insight.id} className={`p-3.5 rounded-lg border ${style.bg} ${style.border} transition-all duration-200 hover:scale-[1.005]`}>
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 shrink-0">{style.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-foreground">{insight.title}</span>
+                              <Badge variant="secondary" className={`text-[10px] border-0 ${style.badge}`}>{insight.category}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">{insight.description}</p>
+                            {insight.action && (
+                              <Button variant="link" size="sm" className="text-amber-500 hover:text-amber-400 p-0 h-auto text-xs mt-1.5">
+                                {insight.action} →
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -1691,13 +1766,28 @@ export default function FuelProDashboard() {
                               <Button variant="ghost" size="sm" className="h-6 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 px-2" onClick={(e) => { e.stopPropagation(); setEditTank({ id: tank.id, stationId: selectedStation.id, fuelType: tank.fuelType, pricePerLiter: tank.pricePerLiter, alertThreshold: tank.alertThreshold }); setTankPriceDialogOpen(true) }}>
                                 <DollarSign className="size-3 mr-0.5" /> Price
                               </Button>
-                              <span className="text-xs text-slate-400">{formatNumber(Math.round(tank.currentStock))}L / {formatNumber(tank.capacity)}L</span>
                             </div>
                           </div>
-                          <Progress value={pct} className="h-2" />
-                          <div className="flex justify-between mt-1">
-                            <span className="text-xs text-slate-500">Price: {formatCurrency(tank.pricePerLiter)}/L</span>
-                            <span className={`text-xs font-medium ${isLow ? 'text-red-400' : 'text-emerald-400'}`}>{isLow ? 'Low Stock' : 'Good'}</span>
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-muted-foreground">{tank.currentStock.toLocaleString()}L / {tank.capacity.toLocaleString()}L</span>
+                              <span className={`font-medium ${tank.currentStock / tank.capacity > 0.6 ? 'text-emerald-400' : tank.currentStock / tank.capacity > 0.3 ? 'text-amber-400' : 'text-red-400'}`}>
+                                {tank.capacity > 0 ? Math.round((tank.currentStock / tank.capacity) * 100) : 0}%
+                              </span>
+                            </div>
+                            <div className="h-6 bg-muted/50 rounded-full overflow-hidden relative">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${tank.currentStock / tank.capacity > 0.6 ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : tank.currentStock / tank.capacity > 0.3 ? 'bg-gradient-to-r from-amber-600 to-amber-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`}
+                                style={{ width: `${tank.capacity > 0 ? Math.min(100, (tank.currentStock / tank.capacity) * 100) : 0}%` }}
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-white drop-shadow-sm">{tank.fuelType} — {tank.currentStock.toLocaleString()}L</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1">
+                              <span>Alert: {tank.alertThreshold.toLocaleString()}L</span>
+                              <span>KES {tank.pricePerLiter.toFixed(2)}/L</span>
+                            </div>
                           </div>
                         </div>
                       )
@@ -2740,6 +2830,7 @@ export default function FuelProDashboard() {
             <TabsTrigger value="users" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Users</TabsTrigger>
             <TabsTrigger value="audit" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Audit Logs</TabsTrigger>
             <TabsTrigger value="config" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Configuration</TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Notifications</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -2851,6 +2942,77 @@ export default function FuelProDashboard() {
                   <div className="space-y-2"><Label className="text-slate-300">Receipt Footer</Label><Input value={adminData.config.receiptFooter} onChange={e => setAdminData(prev => prev ? { ...prev, config: { ...prev.config, receiptFooter: e.target.value } } : null)} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
                   <Button className="bg-amber-500 hover:bg-amber-600 text-black font-semibold w-fit" onClick={handleSaveConfig}><Zap className="size-4 mr-2" /> Save Configuration</Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications" className="space-y-4 mt-4">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2"><Bell className="size-4 text-amber-400" /> Notification Preferences</CardTitle>
+                <CardDescription>Configure how and when you receive alerts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-foreground">Tank Alerts</h4>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Low stock warnings</p><p className="text-xs text-muted-foreground">Get notified when tank levels drop below threshold</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Critical stock alerts</p><p className="text-xs text-muted-foreground">Immediate alert when tanks are critically low (&lt;20%)</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-foreground">Financial Alerts</h4>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Revenue milestones</p><p className="text-xs text-muted-foreground">Daily revenue target achievements</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Expense threshold</p><p className="text-xs text-muted-foreground">Alert when daily expenses exceed budget</p></div>
+                    <Switch />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Reconciliation variances</p><p className="text-xs text-muted-foreground">Flag when stock variance exceeds 2%</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-foreground">Operational Alerts</h4>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Shift start/end</p><p className="text-xs text-muted-foreground">Notifications when shifts begin and end</p></div>
+                    <Switch />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Delivery confirmations</p><p className="text-xs text-muted-foreground">Alert when fuel deliveries are recorded</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Station status changes</p><p className="text-xs text-muted-foreground">Notify when stations go offline or into maintenance</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-foreground">Delivery Channels</h4>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">In-app notifications</p><p className="text-xs text-muted-foreground">Show alerts in the notification bell dropdown</p></div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">Email notifications</p><p className="text-xs text-muted-foreground">Send critical alerts via email</p></div>
+                    <Switch />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-sm text-foreground">SMS alerts</p><p className="text-xs text-muted-foreground">Send SMS for critical stock-out warnings</p></div>
+                    <Switch />
+                  </div>
+                </div>
+                <Button className="bg-amber-600 hover:bg-amber-700 text-white">Save Notification Settings</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -3148,7 +3310,7 @@ export default function FuelProDashboard() {
 
         {/* Footer */}
         <footer className="border-t border-border bg-card px-4 py-3 flex items-center justify-between mt-auto">
-          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.1.0</p>
+          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.2.0</p>
           <p className="text-xs text-slate-600 hidden sm:block">Last refresh: {lastRefresh.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh: 60s</p>
         </footer>
 
