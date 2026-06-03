@@ -467,4 +467,55 @@ Unresolved Issues / Risks:
 - Light theme inner card content still uses slate-800/900 (needs additional passes)
 - Consider adding role-based access control
 - Consider adding real-time WebSocket for tank alerts
-- Consider adding fuel price comparison across stations
+- Consider adding fuel price comparison across stations → DONE in Phase 8
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Add Fuel Price Comparison, Profit & Loss Summary, Command Palette, Light Theme Enhancement, Mobile Bottom Nav, Micro-animations
+
+Work Log:
+- Added Fuel Price Comparison Widget to Dashboard:
+  - Shows Petrol/Diesel/Kerosene price bars across all stations
+  - Color-coded bars: emerald for lowest, red for highest, amber for others
+  - Displays avg price, min-max range per fuel type
+  - Arrow indicators (↑/↓) for highest/lowest prices
+- Added Profit & Loss Summary Widget to Dashboard:
+  - Revenue, Expenses, Net Profit KPI cards with color coding
+  - Profit margin percentage with progress bar
+  - Expense breakdown by category (top 4)
+  - Dynamic color: emerald for positive margin, amber for low, red for negative
+- Added Command Palette (Cmd+K / Ctrl+K):
+  - New useEffect listener for keyboard shortcut
+  - Focuses and selects the global search input on Cmd+K
+  - Updated search input placeholder to show ⌘K hint
+- Enhanced Light Theme Support:
+  - Replaced 16 occurrences of `bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800` with `bg-card border-border`
+  - Replaced 46 occurrences of `bg-slate-900 border-slate-800` with `bg-card border-border`
+  - Cards now properly adapt to light/dark theme via CSS variables
+- Added Mobile Bottom Navigation Bar:
+  - Fixed bottom nav visible on screens < lg breakpoint
+  - Shows Dashboard, Stations, Sales, Inventory tabs + More button
+  - Active tab highlighted in amber, others in muted-foreground
+  - "More" button opens mobile sidebar
+  - Added pb-20 lg:pb-6 to main element for bottom nav padding
+- Added Enhanced CSS Styling to globals.css:
+  - `.glass-card` class with backdrop-filter blur for both dark and light themes
+  - `.animate-slide-up` keyframe animation for entrance effects
+  - `.stagger-children` class for staggered child animations (6 items)
+  - `.pulse-ring` animation for active items
+  - `.tooltip-enhanced` CSS-only tooltip with hover effect
+- Added `stagger-children` class to Dashboard KPI cards grid for entrance animation
+- Version bumped from v3.0.0 to v3.1.0 in footer
+- Lint passes clean with zero errors
+- Dev server running with no errors
+
+Stage Summary:
+- Added 2 new dashboard widgets (Fuel Price Comparison + Profit & Loss Summary)
+- Added Cmd+K command palette keyboard shortcut
+- Mass-replaced 62 hardcoded dark-slate classes with theme-aware CSS variables
+- Added mobile bottom navigation bar with 4 tabs + More button
+- Added 5 new CSS utility classes (glass-card, animate-slide-up, stagger-children, pulse-ring, tooltip-enhanced)
+- KPI cards now have staggered entrance animation
+- Version bumped to v3.1.0
+- Zero lint errors, zero dev server errors

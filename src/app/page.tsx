@@ -664,6 +664,19 @@ export default function FuelProDashboard() {
   // Mount & auto-login check
   useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
 
+  // Command palette keyboard shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement
+        if (searchInput) { searchInput.focus(); searchInput.select() }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   // Clock update
   useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t) }, [])
 
@@ -1078,7 +1091,7 @@ export default function FuelProDashboard() {
     return (
       <div className="space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
           <KPICard title="Total Stations" value={d.totalStations} icon={<Building2 className="size-5" />} color="amber" trend="+2 this quarter" trendUp />
           <KPICard title="Today's Sales" value={formatNumber(d.totalLitersSold)} subtitle="litres" icon={<Droplets className="size-5" />} color="emerald" trend={`${d.salesToday} transactions`} trendUp />
           <KPICard title="Total Revenue" value={formatCurrency(d.totalRevenue)} subtitle="today" icon={<DollarSign className="size-5" />} color="emerald" trend="+8.3%" trendUp />
@@ -1102,7 +1115,7 @@ export default function FuelProDashboard() {
 
         {/* Revenue Chart + Tank Alerts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+          <Card className="lg:col-span-2 bg-card border-border rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100">Revenue Overview</CardTitle>
               <CardDescription>Monthly revenue performance (real data)</CardDescription>
@@ -1135,7 +1148,7 @@ export default function FuelProDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100 flex items-center gap-2"><AlertTriangle className="size-4 text-red-400" /> Tank Alerts</CardTitle>
               <CardDescription>Low inventory warnings</CardDescription>
@@ -1173,7 +1186,7 @@ export default function FuelProDashboard() {
         </div>
 
         {/* Fuel Price Trends */}
-        <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2"><TrendingUp className="size-4 text-amber-400" /> Fuel Sales Trends</CardTitle>
             <CardDescription>Weekly sales volume by fuel type (real data)</CardDescription>
@@ -1211,7 +1224,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {/* Recent Sales */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100">Recent Sales</CardTitle>
             <CardDescription>Latest transactions across all stations</CardDescription>
@@ -1250,7 +1263,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {/* Activity Feed */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2"><Activity className="size-4 text-amber-400" /> Activity Feed</CardTitle>
             <CardDescription>Recent system activities across all stations</CardDescription>
@@ -1293,7 +1306,7 @@ export default function FuelProDashboard() {
         {/* Payment & Fuel Breakdown + Quick Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Payment Method Breakdown */}
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-4 text-amber-400" /> Payment Methods</CardTitle>
               <CardDescription>Revenue by payment channel</CardDescription>
@@ -1320,7 +1333,7 @@ export default function FuelProDashboard() {
           </Card>
 
           {/* Fuel Type Breakdown */}
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100 flex items-center gap-2"><Droplets className="size-4 text-amber-400" /> Fuel Distribution</CardTitle>
               <CardDescription>Revenue by fuel type</CardDescription>
@@ -1347,7 +1360,7 @@ export default function FuelProDashboard() {
           </Card>
 
           {/* Quick Actions */}
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader>
               <CardTitle className="text-slate-100 flex items-center gap-2"><Zap className="size-4 text-amber-400" /> Quick Actions</CardTitle>
               <CardDescription>Common operations</CardDescription>
@@ -1373,7 +1386,7 @@ export default function FuelProDashboard() {
         </div>
 
         {/* Station Health Overview */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2"><Activity className="size-4 text-emerald-400" /> Station Health Overview</CardTitle>
             <CardDescription>Live status of all stations and tank levels</CardDescription>
@@ -1411,7 +1424,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {/* Top Customers */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2"><Users className="size-4 text-amber-400" /> Top Customers</CardTitle>
             <CardDescription>Most frequent purchasers</CardDescription>
@@ -1444,6 +1457,120 @@ export default function FuelProDashboard() {
             })()}
           </CardContent>
         </Card>
+
+        {/* Fuel Price Comparison */}
+        <Card className="bg-gradient-to-br from-slate-900/95 to-slate-800/50 border-slate-800 rounded-xl overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-4 text-amber-400" /> Fuel Price Comparison</CardTitle>
+            <CardDescription>Price per liter across all stations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stations.length === 0 ? (
+              <div className="text-center py-6"><DollarSign className="size-8 text-slate-600 mx-auto mb-2" /><p className="text-sm text-slate-500">No station data</p></div>
+            ) : (
+              <div className="space-y-4">
+                {['Petrol', 'Diesel', 'Kerosene'].map(ft => {
+                  const stationPrices = stations.map(st => {
+                    const tank = st.tanks.find(t => t.fuelType === ft)
+                    return { name: st.name, price: tank?.pricePerLiter || 0 }
+                  }).filter(s => s.price > 0)
+                  if (stationPrices.length === 0) return null
+                  const maxPrice = Math.max(...stationPrices.map(s => s.price))
+                  const minPrice = Math.min(...stationPrices.map(s => s.price))
+                  const avgPrice = stationPrices.reduce((s, p) => s + p.price, 0) / stationPrices.length
+                  return (
+                    <div key={ft} className="p-3 rounded-lg bg-slate-800/30 border border-slate-800/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                          <Droplets className={`size-3.5 ${ft === 'Petrol' ? 'text-amber-400' : ft === 'Diesel' ? 'text-slate-400' : 'text-emerald-400'}`} />
+                          {ft}
+                        </span>
+                        <div className="flex items-center gap-3 text-xs text-slate-400">
+                          <span>Avg: <span className="text-amber-400 font-medium">{formatCurrency(avgPrice)}</span></span>
+                          <span>Range: {formatCurrency(minPrice)} – {formatCurrency(maxPrice)}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {stationPrices.map(sp => {
+                          const pct = maxPrice > 0 ? (sp.price / maxPrice) * 100 : 0
+                          const isHighest = sp.price === maxPrice && stationPrices.length > 1
+                          const isLowest = sp.price === minPrice && stationPrices.length > 1
+                          return (
+                            <div key={sp.name} className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400 w-32 truncate">{sp.name}</span>
+                              <div className="flex-1 h-4 bg-slate-800/60 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-700 ${isLowest ? 'bg-emerald-500/70' : isHighest ? 'bg-red-500/50' : 'bg-amber-500/50'}`} style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className={`text-xs font-medium w-20 text-right ${isLowest ? 'text-emerald-400' : isHighest ? 'text-red-400' : 'text-slate-300'}`}>{formatCurrency(sp.price)}{isLowest ? ' ↓' : isHighest ? ' ↑' : ''}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Profit & Loss Summary */}
+        <Card className="bg-gradient-to-br from-slate-900/95 to-slate-800/50 border-slate-800 rounded-xl overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-slate-100 flex items-center gap-2"><TrendingUp className="size-4 text-emerald-400" /> Profit & Loss Summary</CardTitle>
+            <CardDescription>Revenue vs expenses analysis</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const totalRevenue = dashboardData?.totalRevenue || 0
+              const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+              const netProfit = totalRevenue - totalExpenses
+              const marginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <p className="text-[10px] uppercase tracking-wider text-emerald-400 mb-1">Revenue</p>
+                      <p className="text-lg font-bold text-emerald-400 tabular-nums">{formatCurrency(totalRevenue)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <p className="text-[10px] uppercase tracking-wider text-red-400 mb-1">Expenses</p>
+                      <p className="text-lg font-bold text-red-400 tabular-nums">{formatCurrency(totalExpenses)}</p>
+                    </div>
+                    <div className={`p-3 rounded-lg border ${netProfit >= 0 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                      <p className={`text-[10px] uppercase tracking-wider mb-1 ${netProfit >= 0 ? 'text-amber-400' : 'text-red-400'}`}>Net Profit</p>
+                      <p className={`text-lg font-bold tabular-nums ${netProfit >= 0 ? 'text-amber-400' : 'text-red-400'}`}>{formatCurrency(netProfit)}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Profit Margin</span>
+                      <span className={`font-medium ${marginPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{marginPct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${marginPct >= 20 ? 'bg-emerald-500' : marginPct >= 0 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.max(0, Math.min(100, marginPct))}%` }} />
+                    </div>
+                    {expenses.length > 0 && (
+                      <div className="pt-2 space-y-1">
+                        <p className="text-xs text-slate-500 font-medium">Expense Breakdown</p>
+                        {(() => {
+                          const cats: Record<string, number> = {}
+                          expenses.forEach(e => { cats[e.category] = (cats[e.category] || 0) + e.amount })
+                          return Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([cat, amt]) => (
+                            <div key={cat} className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 capitalize">{cat}</span>
+                              <span className="text-slate-300">{formatCurrency(amt)}</span>
+                            </div>
+                          ))
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -1464,7 +1591,7 @@ export default function FuelProDashboard() {
             <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800"><Download className="size-4 mr-2" /> Export</Button>
             <Dialog open={stationDialogOpen} onOpenChange={setStationDialogOpen}>
               <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Station</Button></DialogTrigger>
-              <DialogContent className="bg-slate-900 border-slate-800">
+              <DialogContent className="bg-card border-border">
                 <DialogHeader><DialogTitle className="text-slate-100">Add New Station</DialogTitle><DialogDescription className="text-slate-400">Register a new fuel station to the system</DialogDescription></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2"><Label className="text-slate-300">Station Name</Label><Input value={newStation.name} onChange={e => setNewStation(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Nairobi Central" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -1485,7 +1612,7 @@ export default function FuelProDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {stations.map(station => (
-            <Card key={station.id} className="bg-slate-900 border-slate-800 rounded-xl hover:border-slate-700 transition-all duration-200 hover:scale-[1.01] cursor-pointer" onClick={() => { setSelectedStation(station); setStationDetailDialogOpen(true) }}>
+            <Card key={station.id} className="bg-card border-border rounded-xl hover:border-slate-700 transition-all duration-200 hover:scale-[1.01] cursor-pointer" onClick={() => { setSelectedStation(station); setStationDetailDialogOpen(true) }}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -1536,7 +1663,7 @@ export default function FuelProDashboard() {
 
         {/* Station Detail Dialog */}
         <Dialog open={stationDetailDialogOpen} onOpenChange={setStationDetailDialogOpen}>
-          <DialogContent className="bg-slate-900 border-slate-800 max-w-lg">
+          <DialogContent className="bg-card border-border max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-slate-100 flex items-center gap-2"><Building2 className="size-5 text-amber-400" /> {selectedStation?.name}</DialogTitle>
               <DialogDescription className="text-slate-400">Station details and tank information</DialogDescription>
@@ -1602,7 +1729,7 @@ export default function FuelProDashboard() {
         </Dialog>
 
         {stations.length === 0 && (
-          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardContent className="py-12 text-center">
               <div className="flex items-center justify-center size-16 rounded-full bg-slate-800/50 mx-auto mb-4"><Building2 className="size-8 text-slate-500" /></div>
               <h3 className="text-lg font-medium text-slate-300">No stations yet</h3>
@@ -1634,18 +1761,18 @@ export default function FuelProDashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-emerald-500">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500">
             <CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><Droplets className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100">{formatNumber(totalCurrent)}</p><p className="text-xs text-slate-400">Total Current Stock (L)</p></div></div></CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-red-500">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-red-500">
             <CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><AlertTriangle className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100">{lowTanks}</p><p className="text-xs text-slate-400">Low Stock Tanks</p></div></div></CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-amber-500">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500">
             <CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Gauge className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100">{totalCapacity > 0 ? Math.round((totalCurrent / totalCapacity) * 100) : 0}%</p><p className="text-xs text-slate-400">Average Fill Level</p></div></div></CardContent>
           </Card>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100">Tank Details</CardTitle><CardDescription>Real-time tank levels across all stations</CardDescription></CardHeader>
           <CardContent>
             <ScrollArea className="max-h-[500px]">
@@ -1718,7 +1845,7 @@ export default function FuelProDashboard() {
             </Button>
             <Dialog open={saleDialogOpen} onOpenChange={setSaleDialogOpen}>
               <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Record Sale</Button></DialogTrigger>
-              <DialogContent className="bg-slate-900 border-slate-800">
+              <DialogContent className="bg-card border-border">
                 <DialogHeader><DialogTitle className="text-slate-100">Record New Sale</DialogTitle><DialogDescription className="text-slate-400">Add a new fuel sale transaction</DialogDescription></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -1739,7 +1866,7 @@ export default function FuelProDashboard() {
           </div>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search by station, customer or ID..." value={salesSearch} onChange={e => setSalesSearch(e.target.value)} className="pl-9 bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -1758,7 +1885,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {/* M-Pesa Payment Integration */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100 flex items-center gap-2">
               <Smartphone className="size-4 text-emerald-400" /> M-Pesa Integration
@@ -1814,7 +1941,7 @@ export default function FuelProDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardContent className="pt-6">
             <Table>
               <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Product</TableHead><TableHead className="text-slate-400 text-right">Qty (L)</TableHead><TableHead className="text-slate-400 text-right">Unit Price</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Payment</TableHead><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400 text-right">Date</TableHead></TableRow></TableHeader>
@@ -1863,7 +1990,7 @@ export default function FuelProDashboard() {
           <div><h2 className="text-2xl font-bold text-slate-100">Shift Management</h2><p className="text-sm text-slate-400 mt-1">{activeShiftsList.length} active · {completedShiftsList.length} completed</p></div>
           <Dialog open={shiftDialogOpen} onOpenChange={setShiftDialogOpen}>
             <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Play className="size-4 mr-2" /> Start Shift</Button></DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-800">
+            <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle className="text-slate-100">Start New Shift</DialogTitle><DialogDescription className="text-slate-400">Begin a new shift at a station</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newShift.stationId} onValueChange={v => setNewShift(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700">{stations.filter(s => s.status === 'active').map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
@@ -1878,7 +2005,7 @@ export default function FuelProDashboard() {
           </Dialog>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><CircleDot className="size-4 text-emerald-400 animate-pulse" /> Active Shifts</CardTitle></CardHeader>
           <CardContent>
             {activeShiftsList.length === 0 ? (
@@ -1904,7 +2031,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {completedShiftsList.length > 0 && (
-          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><CheckCircle2 className="size-4 text-slate-400" /> Completed Shifts</CardTitle></CardHeader>
             <CardContent>
               <ScrollArea className="max-h-[400px]">
@@ -1941,7 +2068,7 @@ export default function FuelProDashboard() {
           <div><h2 className="text-2xl font-bold text-slate-100">Deliveries</h2><p className="text-sm text-slate-400 mt-1">{deliveries.length} delivery records · Tank stock auto-updated on delivery</p></div>
           <Dialog open={deliveryDialogOpen} onOpenChange={setDeliveryDialogOpen}>
             <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Record Delivery</Button></DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-800">
+            <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle className="text-slate-100">Record Delivery</DialogTitle><DialogDescription className="text-slate-400">Log a fuel delivery — tank stock will be updated automatically</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -1960,7 +2087,7 @@ export default function FuelProDashboard() {
           </Dialog>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100">Delivery History</CardTitle><CardDescription>All fuel deliveries with automatic tank stock updates</CardDescription></CardHeader>
           <CardContent>
             {deliveries.length === 0 ? (
@@ -2007,7 +2134,7 @@ export default function FuelProDashboard() {
             </Button>
             <Dialog open={reconciliationDialogOpen} onOpenChange={setReconciliationDialogOpen}>
               <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> New Reconciliation</Button></DialogTrigger>
-              <DialogContent className="bg-slate-900 border-slate-800">
+              <DialogContent className="bg-card border-border">
                 <DialogHeader><DialogTitle className="text-slate-100">Create Reconciliation</DialogTitle><DialogDescription className="text-slate-400">Record tank stock reconciliation</DialogDescription></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -2028,12 +2155,12 @@ export default function FuelProDashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><CheckCircle2 className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100">{reconciled}</p><p className="text-xs text-slate-400">Normal</p></div></div></CardContent></Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><AlertCircle className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100">{warnings}</p><p className="text-xs text-slate-400">Warnings</p></div></div></CardContent></Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-red-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><XCircle className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100">{critical}</p><p className="text-xs text-slate-400">Critical</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><CheckCircle2 className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100">{reconciled}</p><p className="text-xs text-slate-400">Normal</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><AlertCircle className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100">{warnings}</p><p className="text-xs text-slate-400">Warnings</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-red-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><XCircle className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100">{critical}</p><p className="text-xs text-slate-400">Critical</p></div></div></CardContent></Card>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100">Reconciliation Records</CardTitle><CardDescription>Daily shift cash-up and stock verification</CardDescription></CardHeader>
           <CardContent>
             {reconciliations.length === 0 ? (
@@ -2086,7 +2213,7 @@ export default function FuelProDashboard() {
           <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800 self-start"><FileText className="size-4 mr-2" /> Compliance Report</Button>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Shield className="size-4 text-amber-400" /> KRA eTIMS Status</CardTitle><CardDescription>Electronic Tax Invoice Management System</CardDescription></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2099,7 +2226,7 @@ export default function FuelProDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><ShieldCheck className="size-4 text-amber-400" /> EPRA Maximum Prices</CardTitle><CardDescription>Energy & Petroleum Regulatory Authority — per litre in KES</CardDescription></CardHeader>
           <CardContent>
             <ScrollArea className="max-h-[400px]">
@@ -2115,7 +2242,7 @@ export default function FuelProDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><AlertCircle className="size-4 text-amber-400" /> Price Validation</CardTitle><CardDescription>Verify station prices comply with EPRA regulations</CardDescription></CardHeader>
           <CardContent>
             <ScrollArea className="max-h-[400px]">
@@ -2146,7 +2273,7 @@ export default function FuelProDashboard() {
           <div><h2 className="text-2xl font-bold text-slate-100">Suppliers</h2><p className="text-sm text-slate-400 mt-1">{suppliers.length} suppliers · {suppliers.filter(s => s.status === 'active').length} active</p></div>
           <Dialog open={supplierDialogOpen} onOpenChange={setSupplierDialogOpen}>
             <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Supplier</Button></DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-800">
+            <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle className="text-slate-100">Add New Supplier</DialogTitle><DialogDescription className="text-slate-400">Register a new fuel supply partner</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2"><Label className="text-slate-300">Supplier Name *</Label><Input value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} placeholder="e.g., TotalEnergies Kenya" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -2162,11 +2289,11 @@ export default function FuelProDashboard() {
         </div>
 
         {suppliers.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 rounded-xl"><CardContent className="py-12 text-center"><div className="flex items-center justify-center size-16 rounded-full bg-slate-800/50 mx-auto mb-4"><Truck className="size-8 text-slate-500" /></div><h3 className="text-lg font-medium text-slate-300">No suppliers yet</h3><p className="text-sm text-slate-500 mt-1">Add your first fuel supplier</p></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl"><CardContent className="py-12 text-center"><div className="flex items-center justify-center size-16 rounded-full bg-slate-800/50 mx-auto mb-4"><Truck className="size-8 text-slate-500" /></div><h3 className="text-lg font-medium text-slate-300">No suppliers yet</h3><p className="text-sm text-slate-500 mt-1">Add your first fuel supplier</p></CardContent></Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {suppliers.map(supplier => (
-              <Card key={supplier.id} className="bg-slate-900 border-slate-800 rounded-xl hover:border-slate-700 transition-all duration-200 hover:scale-[1.01]">
+              <Card key={supplier.id} className="bg-card border-border rounded-xl hover:border-slate-700 transition-all duration-200 hover:scale-[1.01]">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div><CardTitle className="text-slate-100 text-base">{supplier.name}</CardTitle><CardDescription className="mt-1">{supplier.location || 'No location'}</CardDescription></div>
@@ -2211,7 +2338,7 @@ export default function FuelProDashboard() {
           <div><h2 className="text-2xl font-bold text-slate-100">Coupons & Promotions</h2><p className="text-sm text-slate-400 mt-1">{coupons.length} coupons · {coupons.filter(c => c.status === 'active').length} active</p></div>
           <Dialog open={couponDialogOpen} onOpenChange={setCouponDialogOpen}>
             <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Create Coupon</Button></DialogTrigger>
-            <DialogContent className="bg-slate-900 border-slate-800">
+            <DialogContent className="bg-card border-border">
               <DialogHeader><DialogTitle className="text-slate-100">Create Coupon</DialogTitle><DialogDescription className="text-slate-400">Create a new discount coupon or promotion</DialogDescription></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -2228,7 +2355,7 @@ export default function FuelProDashboard() {
           </Dialog>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100">All Coupons</CardTitle><CardDescription>Promotional coupons and their usage</CardDescription></CardHeader>
           <CardContent>
             {coupons.length === 0 ? (
@@ -2339,7 +2466,7 @@ export default function FuelProDashboard() {
         </div>
 
         {/* Daily Revenue Trend */}
-        <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><TrendingUp className="size-4 text-amber-400" /> Daily Revenue Trend</CardTitle><CardDescription>Revenue performance over recent days</CardDescription></CardHeader>
           <CardContent>
             <div className="h-64">
@@ -2362,7 +2489,7 @@ export default function FuelProDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Sales by Fuel Type */}
-          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Fuel className="size-4 text-amber-400" /> Sales by Fuel Type</CardTitle></CardHeader>
             <CardContent>
               <div className="h-56">
@@ -2395,7 +2522,7 @@ export default function FuelProDashboard() {
           </Card>
 
           {/* Payment Method Distribution */}
-          <Card className="bg-slate-900 border-slate-800 rounded-xl">
+          <Card className="bg-card border-border rounded-xl">
             <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-4 text-amber-400" /> Payment Method Distribution</CardTitle></CardHeader>
             <CardContent>
               <div className="h-56">
@@ -2427,7 +2554,7 @@ export default function FuelProDashboard() {
         </div>
 
         {/* Station Performance Ranking */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Building2 className="size-4 text-amber-400" /> Station Performance Ranking</CardTitle><CardDescription>Revenue and volume comparison across all stations</CardDescription></CardHeader>
           <CardContent>
             {byStation.length === 0 ? (
@@ -2461,7 +2588,7 @@ export default function FuelProDashboard() {
         </Card>
 
         {/* Expense Breakdown */}
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><FileText className="size-4 text-amber-400" /> Delivery Expense Summary</CardTitle><CardDescription>Fuel procurement costs analysis</CardDescription></CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -2531,7 +2658,7 @@ export default function FuelProDashboard() {
             </Button>
             <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
               <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Record Expense</Button></DialogTrigger>
-              <DialogContent className="bg-slate-900 border-slate-800">
+              <DialogContent className="bg-card border-border">
                 <DialogHeader><DialogTitle className="text-slate-100">Record Expense</DialogTitle><DialogDescription className="text-slate-400">Add a new operational expense</DialogDescription></DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newExpense.stationId} onValueChange={v => setNewExpense(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700">{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
@@ -2546,13 +2673,13 @@ export default function FuelProDashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Receipt className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalExpenses)}</p><p className="text-xs text-slate-400">Total Expenses</p></div></div></CardContent></Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><TrendingUp className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(thisMonthTotal)}</p><p className="text-xs text-slate-400">This Month</p></div></div></CardContent></Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><Building2 className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(avgPerStation)}</p><p className="text-xs text-slate-400">Avg / Station</p></div></div></CardContent></Card>
-          <Card className="bg-gradient-to-br from-slate-900 to-slate-900/95 border-slate-800 rounded-xl border-l-4 border-l-purple-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-purple-500/15"><BarChart3 className="size-5 text-purple-400" /></div><div><p className="text-2xl font-bold text-slate-100">{topCategory ? topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1) : 'N/A'}</p><p className="text-xs text-slate-400">{topCategory ? formatCurrency(topCategory[1]) : 'No data'}</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Receipt className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalExpenses)}</p><p className="text-xs text-slate-400">Total Expenses</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><TrendingUp className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(thisMonthTotal)}</p><p className="text-xs text-slate-400">This Month</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><Building2 className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(avgPerStation)}</p><p className="text-xs text-slate-400">Avg / Station</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-purple-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-purple-500/15"><BarChart3 className="size-5 text-purple-400" /></div><div><p className="text-2xl font-bold text-slate-100">{topCategory ? topCategory[0].charAt(0).toUpperCase() + topCategory[0].slice(1) : 'N/A'}</p><p className="text-xs text-slate-400">{topCategory ? formatCurrency(topCategory[1]) : 'No data'}</p></div></div></CardContent></Card>
         </div>
 
-        <Card className="bg-slate-900 border-slate-800 rounded-xl">
+        <Card className="bg-card border-border rounded-xl">
           <CardHeader>
             <CardTitle className="text-slate-100">Expense Records</CardTitle>
             <CardDescription>All operational expenses across stations</CardDescription>
@@ -2616,11 +2743,11 @@ export default function FuelProDashboard() {
           </TabsList>
 
           <TabsContent value="users">
-            <Card className="bg-slate-900 border-slate-800 rounded-xl">
+            <Card className="bg-card border-border rounded-xl">
               <CardHeader><div className="flex items-center justify-between"><div><CardTitle className="text-slate-100 flex items-center gap-2"><Users className="size-4 text-amber-400" /> User Management</CardTitle><CardDescription>Manage system users and permissions · {realUsers.length} users registered</CardDescription></div>
               <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
                 <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add User</Button></DialogTrigger>
-                <DialogContent className="bg-slate-900 border-slate-800">
+                <DialogContent className="bg-card border-border">
                   <DialogHeader><DialogTitle className="text-slate-100">Create New User</DialogTitle><DialogDescription className="text-slate-400">Add a new team member to the system</DialogDescription></DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2"><Label className="text-slate-300">Full Name *</Label><Input value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="e.g., John Doe" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -2680,7 +2807,7 @@ export default function FuelProDashboard() {
           </TabsContent>
 
           <TabsContent value="audit">
-            <Card className="bg-slate-900 border-slate-800 rounded-xl">
+            <Card className="bg-card border-border rounded-xl">
               <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><FileText className="size-4 text-amber-400" /> Audit Logs</CardTitle><CardDescription>System activity and security events</CardDescription></CardHeader>
               <CardContent>
                 <ScrollArea className="max-h-[500px]">
@@ -2704,7 +2831,7 @@ export default function FuelProDashboard() {
           </TabsContent>
 
           <TabsContent value="config">
-            <Card className="bg-slate-900 border-slate-800 rounded-xl">
+            <Card className="bg-card border-border rounded-xl">
               <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Settings className="size-4 text-amber-400" /> System Configuration</CardTitle><CardDescription>Application settings and integrations</CardDescription></CardHeader>
               <CardContent>
                 <div className="grid gap-6">
@@ -2898,7 +3025,7 @@ export default function FuelProDashboard() {
             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-200 hidden lg:flex" onClick={() => setSidebarOpen(!sidebarOpen)}><Menu className="size-5" /></Button>
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
-              <Input placeholder="Search stations, sales, suppliers..." value={globalSearch} onChange={e => handleGlobalSearch(e.target.value)} className="pl-9 w-72 bg-slate-900 border-slate-800 text-slate-200 text-sm" />
+              <Input placeholder="Search stations, sales, suppliers... ⌘K" value={globalSearch} onChange={e => handleGlobalSearch(e.target.value)} className="pl-9 w-72 bg-card border-border text-slate-200 text-sm" />
               {searchOpen && searchResults.length > 0 && (
                 <div className="absolute top-full mt-1 left-0 w-full bg-slate-900 border border-slate-800 rounded-lg shadow-xl z-50 overflow-hidden">
                   {searchResults.map((r, i) => (
@@ -2932,7 +3059,7 @@ export default function FuelProDashboard() {
                   {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center size-4 rounded-full bg-red-500 text-[10px] text-white font-bold">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 bg-slate-900 border-slate-800 p-0" align="end">
+              <PopoverContent className="w-80 bg-card border-border p-0" align="end">
                 <div className="flex items-center justify-between p-4 border-b border-slate-800">
                   <h3 className="text-sm font-semibold text-slate-100">Notifications</h3>
                   {unreadCount > 0 && <Button variant="ghost" size="sm" className="text-xs text-slate-400 h-auto p-0" onClick={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}>Mark all read</Button>}
@@ -2978,7 +3105,7 @@ export default function FuelProDashboard() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 overflow-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-auto pb-20 lg:pb-6">
           {/* Breadcrumb & Fuel Price Ticker */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div className="flex items-center gap-2 text-sm">
@@ -3021,15 +3148,31 @@ export default function FuelProDashboard() {
 
         {/* Footer */}
         <footer className="border-t border-border bg-card px-4 py-3 flex items-center justify-between mt-auto">
-          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.0.0</p>
+          <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved · v3.1.0</p>
           <p className="text-xs text-slate-600 hidden sm:block">Last refresh: {lastRefresh.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh: 60s</p>
         </footer>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border safe-area-inset-bottom">
+          <div className="flex items-center justify-around py-1.5 px-2">
+            {navigationItems.filter(n => ['dashboard', 'stations', 'sales', 'inventory', 'more'].includes(n.id) || n.id === 'dashboard').slice(0, 4).map(item => (
+              <button key={item.id} className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${activeTab === item.id ? 'text-amber-500' : 'text-muted-foreground'}`} onClick={() => { setActiveTab(item.id); setMobileSidebarOpen(false) }}>
+                {item.icon}
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </button>
+            ))}
+            <button className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${!['dashboard', 'stations', 'sales', 'inventory'].includes(activeTab) ? 'text-amber-500' : 'text-muted-foreground'}`} onClick={() => setMobileSidebarOpen(true)}>
+              <Menu className="size-4" />
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          </div>
+        </nav>
       </div>
       </div>
 
       {/* Station Edit Dialog */}
       <Dialog open={stationEditDialogOpen} onOpenChange={setStationEditDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit Station</DialogTitle><DialogDescription className="text-slate-400">Update station information</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2"><Label className="text-slate-300">Station Name *</Label><Input value={editStationForm.name} onChange={e => setEditStationForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -3048,7 +3191,7 @@ export default function FuelProDashboard() {
 
       {/* Tank Price Edit Dialog */}
       <Dialog open={tankPriceDialogOpen} onOpenChange={setTankPriceDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><DollarSign className="size-5 text-amber-400" /> Update Tank Price</DialogTitle><DialogDescription className="text-slate-400">{editTank ? `Set price for ${editTank.fuelType}` : ''}</DialogDescription></DialogHeader>
           {editTank && (
             <div className="grid gap-4 py-4">
@@ -3066,7 +3209,7 @@ export default function FuelProDashboard() {
 
       {/* Supplier Edit Dialog */}
       <Dialog open={supplierEditDialogOpen} onOpenChange={setSupplierEditDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit Supplier</DialogTitle><DialogDescription className="text-slate-400">Update supplier information</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2"><Label className="text-slate-300">Supplier Name *</Label><Input value={editSupplierForm.name} onChange={e => setEditSupplierForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -3085,7 +3228,7 @@ export default function FuelProDashboard() {
 
       {/* User Edit Dialog */}
       <Dialog open={userEditDialogOpen} onOpenChange={setUserEditDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader><DialogTitle className="text-slate-100 flex items-center gap-2"><Edit className="size-5 text-amber-400" /> Edit User</DialogTitle><DialogDescription className="text-slate-400">Update user information and role</DialogDescription></DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2"><Label className="text-slate-300">Full Name *</Label><Input value={editUserForm.name} onChange={e => setEditUserForm(p => ({ ...p, name: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
@@ -3111,7 +3254,7 @@ export default function FuelProDashboard() {
 
       {/* Expense Dialog */}
       <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+        <DialogContent className="bg-card border-border text-slate-100">
           <DialogHeader>
             <DialogTitle>Record Expense</DialogTitle>
             <DialogDescription className="text-slate-400">Add a new operational expense</DialogDescription>
