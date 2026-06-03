@@ -53,6 +53,7 @@ export async function GET() {
         id: t.id,
         fuelType: t.fuelType,
         currentStock: t.currentStock,
+        capacity: t.capacity,
         alertThreshold: t.alertThreshold,
         station: t.station,
       }))
