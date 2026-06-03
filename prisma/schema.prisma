@@ -43,6 +43,9 @@ model Station {
   deliveries  Delivery[]
   reconciliations Reconciliation[]
   expenses    Expense[]
+  invoices    Invoice[]
+  employees   Employee[]
+  documents   Document[]
 }
 
 model StationMember {
@@ -201,4 +204,81 @@ model Expense {
   station     Station  @relation(fields: [stationId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  items         String   // JSON string of line items: [{desc, qty, price, total}]
+  subtotal      Float    @default(0)
+  taxAmount     Float    @default(0)
+  totalDue      Float    @default(0)
+  status        String   @default("draft") // draft, sent, paid, cancelled
+  dueDate       DateTime?
+  issuedAt      DateTime @default(now())
+  paidAt        DateTime?
+  stationId     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  station       Station? @relation(fields: [stationId], references: [id])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  type      String   @default("customer") // customer, supplier, partner
+  company   String?
+  address   String?
+  balance   Float    @default(0)  // outstanding balance in KES
+  notes     String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Employee {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  position      String   // Station Manager, Cashier, Pump Attendant, Accountant
+  basicSalary   Float    @default(0)
+  houseAllow    Float    @default(0)
+  transportAllow Float   @default(0)
+  nhifDeduction Float    @default(0)
+  nssfDeduction Float    @default(0)
+  payeDeduction Float    @default(0)
+  otherDeductions Float  @default(0)
+  netPay        Float    @default(0)
+  stationId     String?
+  status        String   @default("active") // active, inactive, terminated
+  dateJoined    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  station       Station? @relation(fields: [stationId], references: [id])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // license, contract, compliance, receipt, other
+  fileType    String?  // pdf, jpg, png, etc
+  size        String?  // file size string
+  folder      String   @default("general") // licenses, contracts, compliance, receipts, general
+  description String?
+  url         String?  // file URL or local path
+  stationId   String?
+  uploadedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  station     Station? @relation(fields: [stationId], references: [id])
 }

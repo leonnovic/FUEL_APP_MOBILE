@@ -9,7 +9,8 @@ import {
   FileText, Users, Database, Shield, Zap, ChevronRight, Edit, Trash2,
   Play, Square, BarChart3, ArrowUpRight, ArrowDownRight,
   Gauge, Loader2, Package, Eye, Power, Copy, Sun, Moon, LogOut,
-  RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone, Receipt
+  RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone, Receipt,
+  Wallet, FolderOpen, Send, CreditCard, FileSpreadsheet, UserCircle, Cloud
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -37,7 +38,7 @@ import { useTheme } from 'next-themes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'expenses' | 'admin'
+type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'expenses' | 'invoices' | 'contacts' | 'payroll' | 'documents' | 'admin'
 
 interface NavItem {
   id: TabId
@@ -254,6 +255,92 @@ interface ExpenseAPIResponse {
   }[]
 }
 
+interface InvoiceAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    invoiceNumber: string
+    customerName: string
+    customerEmail: string | null
+    customerPhone: string | null
+    items: string // JSON
+    subtotal: number
+    taxAmount: number
+    totalDue: number
+    status: string
+    dueDate: string | null
+    issuedAt: string
+    paidAt: string | null
+    stationId: string | null
+    notes: string | null
+    station: { id: string; name: string } | null
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
+interface ContactAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    name: string
+    phone: string | null
+    email: string | null
+    type: string
+    company: string | null
+    address: string | null
+    balance: number
+    notes: string | null
+    status: string
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
+interface EmployeeAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    name: string
+    phone: string | null
+    email: string | null
+    position: string
+    basicSalary: number
+    houseAllow: number
+    transportAllow: number
+    nhifDeduction: number
+    nssfDeduction: number
+    payeDeduction: number
+    otherDeductions: number
+    netPay: number
+    stationId: string | null
+    status: string
+    dateJoined: string
+    station: { id: string; name: string } | null
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
+interface DocumentAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    name: string
+    type: string
+    fileType: string | null
+    size: string | null
+    folder: string
+    description: string | null
+    url: string | null
+    stationId: string | null
+    uploadedAt: string
+    station: { id: string; name: string } | null
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
 interface AdminData {
   users: { id: number; name: string; email: string; role: string; status: string; lastLogin: string }[]
   auditLogs: { id: number; user: string; action: string; details: string; timestamp: string; severity: string }[]
@@ -294,10 +381,14 @@ const navigationItems: NavItem[] = [
   { id: 'suppliers', label: 'Suppliers', icon: <Truck className="size-4" />, group: 'Supply Chain' },
   { id: 'coupons', label: 'Coupons', icon: <Ticket className="size-4" />, group: 'Supply Chain' },
   { id: 'expenses', label: 'Expenses', icon: <Receipt className="size-4" />, group: 'Finance' },
+  { id: 'invoices', label: 'Invoices', icon: <FileText className="size-4" />, group: 'Business' },
+  { id: 'contacts', label: 'Contacts', icon: <Users className="size-4" />, group: 'Business' },
+  { id: 'payroll', label: 'Payroll', icon: <Wallet className="size-4" />, group: 'Business' },
+  { id: 'documents', label: 'Documents', icon: <FolderOpen className="size-4" />, group: 'Business' },
   { id: 'admin', label: 'Admin', icon: <Settings className="size-4" />, group: 'System' },
 ]
 
-const navGroups = ['Overview', 'Operations', 'Finance', 'Supply Chain', 'System']
+const navGroups = ['Overview', 'Operations', 'Finance', 'Supply Chain', 'Business', 'System']
 
 // ─── Real chart data helpers (computed from sales) ───────────────────────────
 
@@ -486,6 +577,32 @@ export default function FuelProDashboard() {
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all')
   const [expenseSearch, setExpenseSearch] = useState('')
 
+  // Invoice states
+  const [invoices, setInvoices] = useState<InvoiceAPIResponse['data']>([])
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
+  const [newInvoice, setNewInvoice] = useState({ customerName: '', customerEmail: '', customerPhone: '', stationId: '', items: '[{"desc":"","qty":1,"price":0,"total":0}]', taxAmount: 0, notes: '' })
+  const [invoiceSearch, setInvoiceSearch] = useState('')
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('all')
+
+  // Contact states
+  const [contacts, setContacts] = useState<ContactAPIResponse['data']>([])
+  const [contactDialogOpen, setContactDialogOpen] = useState(false)
+  const [newContact, setNewContact] = useState({ name: '', phone: '', email: '', type: 'customer', company: '', address: '', balance: 0, notes: '' })
+  const [contactSearch, setContactSearch] = useState('')
+  const [contactTypeFilter, setContactTypeFilter] = useState('all')
+
+  // Employee/Payroll states
+  const [employees, setEmployees] = useState<EmployeeAPIResponse['data']>([])
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false)
+  const [newEmployee, setNewEmployee] = useState({ name: '', phone: '', email: '', position: 'Pump Attendant', basicSalary: 0, houseAllow: 0, transportAllow: 0, nhifDeduction: 0, nssfDeduction: 0, payeDeduction: 0, otherDeductions: 0, stationId: '' })
+  const [employeeSearch, setEmployeeSearch] = useState('')
+
+  // Document states
+  const [documents, setDocuments] = useState<DocumentAPIResponse['data']>([])
+  const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
+  const [newDocument, setNewDocument] = useState({ name: '', type: 'receipt', fileType: 'pdf', size: '', folder: 'general', description: '', stationId: '' })
+  const [documentFolderFilter, setDocumentFolderFilter] = useState('all')
+
   // Pagination
   const [salesPage, setSalesPage] = useState(1)
   const salesPageSize = 10
@@ -655,6 +772,46 @@ export default function FuelProDashboard() {
     } catch { /* silent */ }
   }, [])
 
+  const fetchInvoices = useCallback(async () => {
+    setLoading(prev => ({ ...prev, invoices: true }))
+    try {
+      const res = await fetch('/api/invoices')
+      const json = await res.json()
+      if (json.ok) setInvoices(json.data)
+    } catch { toast.error('Failed to load invoices') }
+    finally { setLoading(prev => ({ ...prev, invoices: false })) }
+  }, [])
+
+  const fetchContacts = useCallback(async () => {
+    setLoading(prev => ({ ...prev, contacts: true }))
+    try {
+      const res = await fetch('/api/contacts')
+      const json = await res.json()
+      if (json.ok) setContacts(json.data)
+    } catch { toast.error('Failed to load contacts') }
+    finally { setLoading(prev => ({ ...prev, contacts: false })) }
+  }, [])
+
+  const fetchEmployees = useCallback(async () => {
+    setLoading(prev => ({ ...prev, employees: true }))
+    try {
+      const res = await fetch('/api/employees')
+      const json = await res.json()
+      if (json.ok) setEmployees(json.data)
+    } catch { toast.error('Failed to load employees') }
+    finally { setLoading(prev => ({ ...prev, employees: false })) }
+  }, [])
+
+  const fetchDocuments = useCallback(async () => {
+    setLoading(prev => ({ ...prev, documents: true }))
+    try {
+      const res = await fetch('/api/documents')
+      const json = await res.json()
+      if (json.ok) setDocuments(json.data)
+    } catch { toast.error('Failed to load documents') }
+    finally { setLoading(prev => ({ ...prev, documents: false })) }
+  }, [])
+
   // Load data when tab changes
   useEffect(() => {
     switch (activeTab) {
@@ -670,8 +827,12 @@ export default function FuelProDashboard() {
       case 'reconciliation': fetchReconciliations(); break
       case 'deliveries': fetchDeliveries(); break
       case 'expenses': fetchExpenses(); break
+      case 'invoices': fetchInvoices(); break
+      case 'contacts': fetchContacts(); break
+      case 'payroll': fetchEmployees(); break
+      case 'documents': fetchDocuments(); break
     }
-  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights])
+  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights, fetchInvoices, fetchContacts, fetchEmployees, fetchDocuments])
 
   // Mount & auto-login check
   useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
@@ -858,6 +1019,116 @@ export default function FuelProDashboard() {
       if (json.ok) { setExpenses(prev => prev.filter(e => e.id !== expenseId)); toast.success('Expense deleted') }
       else { toast.error(json.error || 'Failed to delete') }
     } catch { toast.error('Failed to delete expense') }
+  }
+
+  // Invoice handlers
+  const handleAddInvoice = async () => {
+    if (!newInvoice.customerName) { toast.error('Customer name is required'); return }
+    try {
+      const items = JSON.parse(newInvoice.items)
+      const subtotal = items.reduce((s: number, i: { total: number }) => s + i.total, 0)
+      const totalDue = subtotal + newInvoice.taxAmount
+      const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newInvoice, subtotal, totalDue }) })
+      const json = await res.json()
+      if (json.ok) {
+        setInvoices(prev => [json.data, ...prev])
+        setInvoiceDialogOpen(false)
+        setNewInvoice({ customerName: '', customerEmail: '', customerPhone: '', stationId: '', items: '[{"desc":"","qty":1,"price":0,"total":0}]', taxAmount: 0, notes: '' })
+        toast.success(`Invoice ${json.data.invoiceNumber} created`)
+      } else { toast.error(json.error || 'Failed to create invoice') }
+    } catch { toast.error('Failed to create invoice') }
+  }
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setInvoices(prev => prev.filter(i => i.id !== invoiceId)); toast.success('Invoice deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete invoice') }
+  }
+
+  const handleUpdateInvoiceStatus = async (invoiceId: string, status: string) => {
+    try {
+      const updateData: Record<string, unknown> = { status }
+      if (status === 'paid') updateData.paidAt = new Date().toISOString()
+      const res = await fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData) })
+      const json = await res.json()
+      if (json.ok) { setInvoices(prev => prev.map(i => i.id === invoiceId ? { ...i, status, paidAt: status === 'paid' ? new Date().toISOString() : i.paidAt } : i)); toast.success(`Invoice marked as ${status}`) }
+      else { toast.error(json.error || 'Failed to update') }
+    } catch { toast.error('Failed to update invoice') }
+  }
+
+  // Contact handlers
+  const handleAddContact = async () => {
+    if (!newContact.name) { toast.error('Contact name is required'); return }
+    try {
+      const res = await fetch('/api/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newContact) })
+      const json = await res.json()
+      if (json.ok) {
+        setContacts(prev => [json.data, ...prev])
+        setContactDialogOpen(false)
+        setNewContact({ name: '', phone: '', email: '', type: 'customer', company: '', address: '', balance: 0, notes: '' })
+        toast.success(`Contact "${json.data.name}" added`)
+      } else { toast.error(json.error || 'Failed to add contact') }
+    } catch { toast.error('Failed to add contact') }
+  }
+
+  const handleDeleteContact = async (contactId: string) => {
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setContacts(prev => prev.filter(c => c.id !== contactId)); toast.success('Contact removed') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete contact') }
+  }
+
+  // Employee handlers
+  const handleAddEmployee = async () => {
+    if (!newEmployee.name) { toast.error('Employee name is required'); return }
+    try {
+      const res = await fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newEmployee, dateJoined: new Date().toISOString() }) })
+      const json = await res.json()
+      if (json.ok) {
+        setEmployees(prev => [json.data, ...prev])
+        setEmployeeDialogOpen(false)
+        setNewEmployee({ name: '', phone: '', email: '', position: 'Pump Attendant', basicSalary: 0, houseAllow: 0, transportAllow: 0, nhifDeduction: 0, nssfDeduction: 0, payeDeduction: 0, otherDeductions: 0, stationId: '' })
+        toast.success(`Employee "${json.data.name}" added`)
+      } else { toast.error(json.error || 'Failed to add employee') }
+    } catch { toast.error('Failed to add employee') }
+  }
+
+  const handleDeleteEmployee = async (employeeId: string) => {
+    try {
+      const res = await fetch(`/api/employees/${employeeId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setEmployees(prev => prev.filter(e => e.id !== employeeId)); toast.success('Employee removed') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete employee') }
+  }
+
+  // Document handlers
+  const handleAddDocument = async () => {
+    if (!newDocument.name) { toast.error('Document name is required'); return }
+    try {
+      const res = await fetch('/api/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newDocument) })
+      const json = await res.json()
+      if (json.ok) {
+        setDocuments(prev => [json.data, ...prev])
+        setDocumentDialogOpen(false)
+        setNewDocument({ name: '', type: 'receipt', fileType: 'pdf', size: '', folder: 'general', description: '', stationId: '' })
+        toast.success(`Document "${json.data.name}" added`)
+      } else { toast.error(json.error || 'Failed to add document') }
+    } catch { toast.error('Failed to add document') }
+  }
+
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      const res = await fetch(`/api/documents/${documentId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setDocuments(prev => prev.filter(d => d.id !== documentId)); toast.success('Document deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete document') }
   }
 
   const handleDeleteStation = async (stationId: string, e: React.MouseEvent) => {
@@ -2817,6 +3088,408 @@ export default function FuelProDashboard() {
     )
   }
 
+  const renderInvoices = () => {
+    if (loading.invoices) return <TableSkeletons cols={6} rows={4} />
+    const totalInvoiced = invoices.reduce((s, i) => s + i.totalDue, 0)
+    const paidInvoices = invoices.filter(i => i.status === 'paid')
+    const totalPaid = paidInvoices.reduce((s, i) => s + i.totalDue, 0)
+    const pendingInvoices = invoices.filter(i => i.status === 'sent' || i.status === 'draft')
+    const totalPending = pendingInvoices.reduce((s, i) => s + i.totalDue, 0)
+    const overdueInvoices = invoices.filter(i => i.status === 'sent' && i.dueDate && new Date(i.dueDate) < new Date())
+
+    const statusColors: Record<string, string> = {
+      draft: 'bg-slate-500/15 text-slate-400 border-0',
+      sent: 'bg-blue-500/15 text-blue-400 border-0',
+      paid: 'bg-emerald-500/15 text-emerald-400 border-0',
+      cancelled: 'bg-red-500/15 text-red-400 border-0',
+    }
+
+    const filteredInvoices = invoices.filter(i => {
+      if (invoiceStatusFilter !== 'all' && i.status !== invoiceStatusFilter) return false
+      if (invoiceSearch && !i.customerName.toLowerCase().includes(invoiceSearch.toLowerCase()) && !i.invoiceNumber.toLowerCase().includes(invoiceSearch.toLowerCase())) return false
+      return true
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Invoices</h2><p className="text-sm text-slate-400 mt-1">Create and manage invoices for fuel deliveries</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(invoices.map(i => ({ 'Invoice #': i.invoiceNumber, Customer: i.customerName, Subtotal: i.subtotal, Tax: i.taxAmount, Total: i.totalDue, Status: i.status, Issued: i.issuedAt })), 'fuelpro_invoices')}>
+              <Download className="size-4 mr-2" /> Export
+            </Button>
+            <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+              <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Create Invoice</Button></DialogTrigger>
+              <DialogContent className="bg-card border-border max-w-lg">
+                <DialogHeader><DialogTitle className="text-slate-100">Create Invoice</DialogTitle><DialogDescription className="text-slate-400">Generate a new invoice for a customer</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label className="text-slate-300">Customer Name</Label><Input value={newInvoice.customerName} onChange={e => setNewInvoice(p => ({ ...p, customerName: e.target.value }))} placeholder="e.g. ABC Transport Ltd" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Email</Label><Input value={newInvoice.customerEmail} onChange={e => setNewInvoice(p => ({ ...p, customerEmail: e.target.value }))} placeholder="email@company.com" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Phone</Label><Input value={newInvoice.customerPhone} onChange={e => setNewInvoice(p => ({ ...p, customerPhone: e.target.value }))} placeholder="0712345678" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Station (optional)</Label><Select value={newInvoice.stationId} onValueChange={v => setNewInvoice(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none">No station</SelectItem>{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Line Items (JSON)</Label><textarea value={newInvoice.items} onChange={e => setNewInvoice(p => ({ ...p, items: e.target.value }))} rows={4} className="bg-slate-800 border border-slate-700 text-slate-100 rounded-md px-3 py-2 text-sm font-mono" placeholder='[{"desc":"Super Petrol","qty":100,"price":199.63,"total":19963}]' /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Tax Amount (KES)</Label><Input type="number" value={newInvoice.taxAmount || ''} onChange={e => setNewInvoice(p => ({ ...p, taxAmount: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Notes</Label><Input value={newInvoice.notes} onChange={e => setNewInvoice(p => ({ ...p, notes: e.target.value }))} placeholder="Payment terms..." className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                </div>
+                <DialogFooter><Button variant="outline" onClick={() => setInvoiceDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddInvoice} className="bg-amber-600 hover:bg-amber-700 text-white">Create Invoice</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><FileText className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalInvoiced)}</p><p className="text-xs text-slate-400">Total Invoiced</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><CheckCircle2 className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalPaid)}</p><p className="text-xs text-slate-400">Paid ({paidInvoices.length})</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><Clock className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalPending)}</p><p className="text-xs text-slate-400">Pending ({pendingInvoices.length})</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-red-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><AlertTriangle className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{overdueInvoices.length}</p><p className="text-xs text-slate-400">Overdue</p></div></div></CardContent></Card>
+        </div>
+
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100">All Invoices</CardTitle>
+            <CardDescription>Manage invoices and track payments</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search invoices..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={invoiceSearch} onChange={e => setInvoiceSearch(e.target.value)} /></div>
+              <Select value={invoiceStatusFilter} onValueChange={setInvoiceStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40 bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filteredInvoices.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><FileText className="size-7 text-slate-500" /></div><p className="text-slate-400">No invoices found</p><p className="text-sm text-slate-500 mt-1">Create an invoice to get started</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Invoice #</TableHead><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400">Total</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400">Issued</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredInvoices.map(i => (
+                      <TableRow key={i.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-amber-400 font-mono font-medium">{i.invoiceNumber}</TableCell>
+                        <TableCell className="text-slate-200 font-medium">{i.customerName}</TableCell>
+                        <TableCell className="text-slate-200 tabular-nums font-medium">{formatCurrency(i.totalDue)}</TableCell>
+                        <TableCell><Badge variant="secondary" className={statusColors[i.status] || statusColors.draft}>{i.status.charAt(0).toUpperCase() + i.status.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-400 text-xs">{formatTimeAgo(i.issuedAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {i.status === 'draft' && <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-8 px-2" onClick={() => handleUpdateInvoiceStatus(i.id, 'sent')} title="Mark as sent"><Send className="size-3.5" /></Button>}
+                            {i.status === 'sent' && <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-8 px-2" onClick={() => handleUpdateInvoiceStatus(i.id, 'paid')} title="Mark as paid"><CheckCircle2 className="size-3.5" /></Button>}
+                            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteInvoice(i.id)}><Trash2 className="size-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderContacts = () => {
+    if (loading.contacts) return <TableSkeletons cols={6} rows={4} />
+    const totalCustomers = contacts.filter(c => c.type === 'customer')
+    const totalSuppliers = contacts.filter(c => c.type === 'supplier')
+    const totalBalance = contacts.reduce((s, c) => s + c.balance, 0)
+
+    const typeColors: Record<string, string> = {
+      customer: 'bg-emerald-500/15 text-emerald-400 border-0',
+      supplier: 'bg-blue-500/15 text-blue-400 border-0',
+      partner: 'bg-purple-500/15 text-purple-400 border-0',
+    }
+
+    const filteredContacts = contacts.filter(c => {
+      if (contactTypeFilter !== 'all' && c.type !== contactTypeFilter) return false
+      if (contactSearch && !c.name.toLowerCase().includes(contactSearch.toLowerCase()) && !(c.company || '').toLowerCase().includes(contactSearch.toLowerCase())) return false
+      return true
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Contacts</h2><p className="text-sm text-slate-400 mt-1">Manage customers, suppliers, and partners</p></div>
+          <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+            <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Contact</Button></DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader><DialogTitle className="text-slate-100">Add Contact</DialogTitle><DialogDescription className="text-slate-400">Add a new customer, supplier, or partner</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2"><Label className="text-slate-300">Name</Label><Input value={newContact.name} onChange={e => setNewContact(p => ({ ...p, name: e.target.value }))} placeholder="Full name" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2"><Label className="text-slate-300">Phone</Label><Input value={newContact.phone} onChange={e => setNewContact(p => ({ ...p, phone: e.target.value }))} placeholder="0712345678" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Email</Label><Input value={newContact.email} onChange={e => setNewContact(p => ({ ...p, email: e.target.value }))} placeholder="email@company.com" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2"><Label className="text-slate-300">Type</Label><Select value={newContact.type} onValueChange={v => setNewContact(p => ({ ...p, type: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="customer">Customer</SelectItem><SelectItem value="supplier">Supplier</SelectItem><SelectItem value="partner">Partner</SelectItem></SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Company</Label><Input value={newContact.company} onChange={e => setNewContact(p => ({ ...p, company: e.target.value }))} placeholder="Company name" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <div className="grid gap-2"><Label className="text-slate-300">Address</Label><Input value={newContact.address} onChange={e => setNewContact(p => ({ ...p, address: e.target.value }))} placeholder="Physical address" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                <div className="grid gap-2"><Label className="text-slate-300">Outstanding Balance (KES)</Label><Input type="number" value={newContact.balance || ''} onChange={e => setNewContact(p => ({ ...p, balance: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              </div>
+              <DialogFooter><Button variant="outline" onClick={() => setContactDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddContact} className="bg-amber-600 hover:bg-amber-700 text-white">Add Contact</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><Users className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100">{totalCustomers.length}</p><p className="text-xs text-slate-400">Customers</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-blue-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-blue-500/15"><Truck className="size-5 text-blue-400" /></div><div><p className="text-2xl font-bold text-slate-100">{totalSuppliers.length}</p><p className="text-xs text-slate-400">Suppliers</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><DollarSign className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalBalance)}</p><p className="text-xs text-slate-400">Outstanding Balance</p></div></div></CardContent></Card>
+        </div>
+
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100">All Contacts</CardTitle>
+            <CardDescription>Customer, supplier, and partner directory</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search contacts..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={contactSearch} onChange={e => setContactSearch(e.target.value)} /></div>
+              <Select value={contactTypeFilter} onValueChange={setContactTypeFilter}>
+                <SelectTrigger className="w-full sm:w-40 bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="supplier">Supplier</SelectItem>
+                  <SelectItem value="partner">Partner</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filteredContacts.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Users className="size-7 text-slate-500" /></div><p className="text-slate-400">No contacts found</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Name</TableHead><TableHead className="text-slate-400">Type</TableHead><TableHead className="text-slate-400">Company</TableHead><TableHead className="text-slate-400">Contact</TableHead><TableHead className="text-slate-400 text-right">Balance</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredContacts.map(c => (
+                      <TableRow key={c.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-slate-200 font-medium">{c.name}</TableCell>
+                        <TableCell><Badge variant="secondary" className={typeColors[c.type] || typeColors.customer}>{c.type.charAt(0).toUpperCase() + c.type.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-300">{c.company || '-'}</TableCell>
+                        <TableCell><div className="text-sm text-slate-300">{c.phone || '-'}</div><div className="text-xs text-slate-500">{c.email || ''}</div></TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{c.balance > 0 ? <span className="text-red-400">{formatCurrency(c.balance)}</span> : <span className="text-emerald-400">KES 0</span>}</TableCell>
+                        <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteContact(c.id)}><Trash2 className="size-3.5" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderPayroll = () => {
+    if (loading.employees) return <TableSkeletons cols={6} rows={4} />
+    const totalPayroll = employees.filter(e => e.status === 'active').reduce((s, e) => s + e.netPay, 0)
+    const avgSalary = employees.filter(e => e.status === 'active').length > 0 ? totalPayroll / employees.filter(e => e.status === 'active').length : 0
+    const totalDeductions = employees.filter(e => e.status === 'active').reduce((s, e) => s + e.nhifDeduction + e.nssfDeduction + e.payeDeduction + e.otherDeductions, 0)
+
+    const positionColors: Record<string, string> = {
+      'Station Manager': 'bg-amber-500/15 text-amber-400 border-0',
+      'Cashier': 'bg-emerald-500/15 text-emerald-400 border-0',
+      'Pump Attendant': 'bg-sky-500/15 text-sky-400 border-0',
+      'Accountant': 'bg-purple-500/15 text-purple-400 border-0',
+    }
+
+    const filteredEmployees = employeeSearch
+      ? employees.filter(e => e.name.toLowerCase().includes(employeeSearch.toLowerCase()) || e.position.toLowerCase().includes(employeeSearch.toLowerCase()))
+      : employees
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Payroll</h2><p className="text-sm text-slate-400 mt-1">Employee management and salary processing with KRA deductions</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(employees.map(e => ({ Name: e.name, Position: e.position, 'Basic Salary': e.basicSalary, 'House Allow': e.houseAllow, 'Transport Allow': e.transportAllow, NHIF: e.nhifDeduction, NSSF: e.nssfDeduction, PAYE: e.payeDeduction, 'Other Deductions': e.otherDeductions, 'Net Pay': e.netPay, Station: e.station?.name || 'N/A', Status: e.status })), 'fuelpro_payroll')}>
+              <Download className="size-4 mr-2" /> Export
+            </Button>
+            <Dialog open={employeeDialogOpen} onOpenChange={setEmployeeDialogOpen}>
+              <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Employee</Button></DialogTrigger>
+              <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader><DialogTitle className="text-slate-100">Add Employee</DialogTitle><DialogDescription className="text-slate-400">Add a new employee with salary and deduction details</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label className="text-slate-300">Full Name</Label><Input value={newEmployee.name} onChange={e => setNewEmployee(p => ({ ...p, name: e.target.value }))} placeholder="e.g. John Kamau" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Phone</Label><Input value={newEmployee.phone} onChange={e => setNewEmployee(p => ({ ...p, phone: e.target.value }))} placeholder="0712345678" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Email</Label><Input value={newEmployee.email} onChange={e => setNewEmployee(p => ({ ...p, email: e.target.value }))} placeholder="email@fuelpro.co.ke" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Position</Label><Select value={newEmployee.position} onValueChange={v => setNewEmployee(p => ({ ...p, position: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="Station Manager">Station Manager</SelectItem><SelectItem value="Cashier">Cashier</SelectItem><SelectItem value="Pump Attendant">Pump Attendant</SelectItem><SelectItem value="Accountant">Accountant</SelectItem></SelectContent></Select></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newEmployee.stationId} onValueChange={v => setNewEmployee(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none">No station</SelectItem>{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                  </div>
+                  <Separator className="bg-slate-700" />
+                  <p className="text-sm font-medium text-slate-300">Salary & Deductions (KES)</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Basic Salary</Label><Input type="number" value={newEmployee.basicSalary || ''} onChange={e => setNewEmployee(p => ({ ...p, basicSalary: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">House Allow.</Label><Input type="number" value={newEmployee.houseAllow || ''} onChange={e => setNewEmployee(p => ({ ...p, houseAllow: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Transport</Label><Input type="number" value={newEmployee.transportAllow || ''} onChange={e => setNewEmployee(p => ({ ...p, transportAllow: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300 text-red-400">NHIF</Label><Input type="number" value={newEmployee.nhifDeduction || ''} onChange={e => setNewEmployee(p => ({ ...p, nhifDeduction: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300 text-red-400">NSSF</Label><Input type="number" value={newEmployee.nssfDeduction || ''} onChange={e => setNewEmployee(p => ({ ...p, nssfDeduction: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300 text-red-400">PAYE</Label><Input type="number" value={newEmployee.payeDeduction || ''} onChange={e => setNewEmployee(p => ({ ...p, payeDeduction: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300 text-red-400">Other</Label><Input type="number" value={newEmployee.otherDeductions || ''} onChange={e => setNewEmployee(p => ({ ...p, otherDeductions: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+                    <p className="text-sm text-slate-400">Net Pay: <span className="text-lg font-bold text-emerald-400 tabular-nums">{formatCurrency(newEmployee.basicSalary + newEmployee.houseAllow + newEmployee.transportAllow - newEmployee.nhifDeduction - newEmployee.nssfDeduction - newEmployee.payeDeduction - newEmployee.otherDeductions)}</span></p>
+                  </div>
+                </div>
+                <DialogFooter><Button variant="outline" onClick={() => setEmployeeDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddEmployee} className="bg-amber-600 hover:bg-amber-700 text-white">Add Employee</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Wallet className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalPayroll)}</p><p className="text-xs text-slate-400">Total Monthly Payroll</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><Users className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(avgSalary)}</p><p className="text-xs text-slate-400">Avg Net Salary</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-red-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><DollarSign className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalDeductions)}</p><p className="text-xs text-slate-400">Total Deductions</p></div></div></CardContent></Card>
+        </div>
+
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100">Employee Roster</CardTitle>
+            <CardDescription>Manage employees and track salary details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search employees..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={employeeSearch} onChange={e => setEmployeeSearch(e.target.value)} /></div></div>
+            {filteredEmployees.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Users className="size-7 text-slate-500" /></div><p className="text-slate-400">No employees found</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Name</TableHead><TableHead className="text-slate-400">Position</TableHead><TableHead className="text-slate-400">Gross</TableHead><TableHead className="text-slate-400">Deductions</TableHead><TableHead className="text-slate-400 text-right">Net Pay</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredEmployees.map(e => {
+                      const gross = e.basicSalary + e.houseAllow + e.transportAllow
+                      const deductions = e.nhifDeduction + e.nssfDeduction + e.payeDeduction + e.otherDeductions
+                      return (
+                        <TableRow key={e.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                          <TableCell><div className="text-slate-200 font-medium">{e.name}</div><div className="text-xs text-slate-500">{e.station?.name || 'No station'} · {e.status === 'active' ? '🟢' : '🔴'}</div></TableCell>
+                          <TableCell><Badge variant="secondary" className={positionColors[e.position] || 'bg-slate-500/15 text-slate-400 border-0'}>{e.position}</Badge></TableCell>
+                          <TableCell className="text-slate-300 tabular-nums">{formatCurrency(gross)}</TableCell>
+                          <TableCell className="text-red-400 tabular-nums">-{formatCurrency(deductions)}</TableCell>
+                          <TableCell className="text-right text-emerald-400 font-bold tabular-nums">{formatCurrency(e.netPay)}</TableCell>
+                          <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteEmployee(e.id)}><Trash2 className="size-3.5" /></Button></TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderDocuments = () => {
+    if (loading.documents) return <TableSkeletons cols={5} rows={4} />
+    const folderColors: Record<string, string> = {
+      licenses: 'bg-amber-500/15 text-amber-400 border-0',
+      contracts: 'bg-blue-500/15 text-blue-400 border-0',
+      compliance: 'bg-emerald-500/15 text-emerald-400 border-0',
+      receipts: 'bg-purple-500/15 text-purple-400 border-0',
+      general: 'bg-slate-500/15 text-slate-400 border-0',
+    }
+    const typeIcons: Record<string, string> = { pdf: '📄', jpg: '🖼️', png: '🖼️', xlsx: '📊', docx: '📝' }
+
+    const filteredDocs = documents.filter(d => {
+      if (documentFolderFilter !== 'all' && d.folder !== documentFolderFilter) return false
+      return true
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Documents</h2><p className="text-sm text-slate-400 mt-1">Manage licenses, contracts, and compliance documents</p></div>
+          <Dialog open={documentDialogOpen} onOpenChange={setDocumentDialogOpen}>
+            <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Document</Button></DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader><DialogTitle className="text-slate-100">Add Document</DialogTitle><DialogDescription className="text-slate-400">Register a new document in the system</DialogDescription></DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2"><Label className="text-slate-300">Document Name</Label><Input value={newDocument.name} onChange={e => setNewDocument(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Fuel License 2025" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2"><Label className="text-slate-300">Type</Label><Select value={newDocument.type} onValueChange={v => setNewDocument(p => ({ ...p, type: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="license">License</SelectItem><SelectItem value="contract">Contract</SelectItem><SelectItem value="compliance">Compliance</SelectItem><SelectItem value="receipt">Receipt</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">File Type</Label><Select value={newDocument.fileType} onValueChange={v => setNewDocument(p => ({ ...p, fileType: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="pdf">PDF</SelectItem><SelectItem value="jpg">JPG</SelectItem><SelectItem value="png">PNG</SelectItem><SelectItem value="xlsx">XLSX</SelectItem><SelectItem value="docx">DOCX</SelectItem></SelectContent></Select></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2"><Label className="text-slate-300">Folder</Label><Select value={newDocument.folder} onValueChange={v => setNewDocument(p => ({ ...p, folder: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="general">General</SelectItem><SelectItem value="licenses">Licenses</SelectItem><SelectItem value="contracts">Contracts</SelectItem><SelectItem value="compliance">Compliance</SelectItem><SelectItem value="receipts">Receipts</SelectItem></SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Size</Label><Input value={newDocument.size} onChange={e => setNewDocument(p => ({ ...p, size: e.target.value }))} placeholder="e.g. 245 KB" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <div className="grid gap-2"><Label className="text-slate-300">Station (optional)</Label><Select value={newDocument.stationId} onValueChange={v => setNewDocument(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none">No station</SelectItem>{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label className="text-slate-300">Description</Label><Input value={newDocument.description} onChange={e => setNewDocument(p => ({ ...p, description: e.target.value }))} placeholder="Brief description" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              </div>
+              <DialogFooter><Button variant="outline" onClick={() => setDocumentDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddDocument} className="bg-amber-600 hover:bg-amber-700 text-white">Add Document</Button></DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {['licenses', 'contracts', 'compliance', 'receipts', 'general'].map(folder => {
+            const count = documents.filter(d => d.folder === folder).length
+            return (
+              <Card key={folder} className={`bg-card border-border rounded-xl cursor-pointer hover:ring-2 hover:ring-amber-500/30 transition-all ${documentFolderFilter === folder ? 'ring-2 ring-amber-500/50' : ''}`} onClick={() => setDocumentFolderFilter(documentFolderFilter === folder ? 'all' : folder)}>
+                <CardContent className="pt-4 pb-3 text-center">
+                  <p className="text-2xl font-bold text-slate-100">{count}</p>
+                  <p className="text-xs text-slate-400 capitalize">{folder}</p>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-slate-100">Document Library</CardTitle>
+            <CardDescription>All registered documents and files</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {filteredDocs.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><FolderOpen className="size-7 text-slate-500" /></div><p className="text-slate-400">No documents found</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Document</TableHead><TableHead className="text-slate-400">Folder</TableHead><TableHead className="text-slate-400">Type</TableHead><TableHead className="text-slate-400">Size</TableHead><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredDocs.map(d => (
+                      <TableRow key={d.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell><div className="flex items-center gap-2"><span className="text-lg">{typeIcons[d.fileType || ''] || '📄'}</span><div><p className="text-slate-200 font-medium">{d.name}</p><p className="text-xs text-slate-500">{d.description || 'No description'}</p></div></div></TableCell>
+                        <TableCell><Badge variant="secondary" className={folderColors[d.folder] || folderColors.general}>{d.folder.charAt(0).toUpperCase() + d.folder.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-300 uppercase text-xs">{d.fileType || '-'}</TableCell>
+                        <TableCell className="text-slate-400">{d.size || '-'}</TableCell>
+                        <TableCell className="text-slate-400">{d.station?.name || '-'}</TableCell>
+                        <TableCell className="text-right"><Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteDocument(d.id)}><Trash2 className="size-3.5" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const renderAdmin = () => {
     if (loading.admin) return <TableSkeletons cols={5} rows={4} />
     if (!adminData) return null
@@ -3025,118 +3698,135 @@ export default function FuelProDashboard() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center p-4 overflow-hidden relative">
         {/* Animated background elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 size-96 rounded-full bg-amber-500/5 blur-3xl animate-pulse" />
-          <div className="absolute -bottom-40 -left-40 size-96 rounded-full bg-emerald-500/5 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[600px] rounded-full bg-amber-500/3 blur-3xl" />
+          <div className="absolute top-20 left-10 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-3xl" />
         </div>
 
-        {/* Floating fuel icons */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-          {[...Array(8)].map((_, i) => (
-            <div key={i} className="absolute animate-float" style={{
-              left: `${10 + i * 12}%`,
-              top: `${15 + (i % 3) * 25}%`,
-              animationDelay: `${i * 0.7}s`,
-              animationDuration: `${6 + i * 0.5}s`
-            }}>
-              <Droplets className="size-4 text-amber-500/30" />
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
+          {/* Left side - Feature highlights (desktop only) */}
+          <div className="hidden lg:flex flex-col justify-center space-y-6">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-14 h-14 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <span className="text-4xl">⛽</span>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white font-serif tracking-tight">FuelPro</h1>
+                <p className="text-sm text-amber-400 font-medium">Professional Fuel Management</p>
+              </div>
             </div>
-          ))}
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="relative z-10 w-full max-w-md px-4"
-        >
-          <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-800/50 shadow-2xl shadow-black/50 rounded-2xl">
-            <CardContent className="pt-8 pb-6 px-8">
-              {/* Logo & Branding */}
-              <div className="text-center mb-8">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                  className="inline-flex items-center justify-center size-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/20 mb-4"
-                >
-                  <Fuel className="size-8 text-amber-500" />
-                </motion.div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">FuelPro</h1>
-                <p className="text-sm text-slate-400 mt-1">Station Management Dashboard</p>
-                <div className="flex items-center justify-center gap-2 mt-3">
-                  <Badge variant="secondary" className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]">
-                    <Sparkles className="size-3 mr-1" /> v3.0
-                  </Badge>
-                  <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">
-                    <Shield className="size-3 mr-1" /> Secure
-                  </Badge>
+            <h2 className="text-xl text-gray-200 leading-relaxed">Welcome to your comprehensive fuel management solution for unlimited stations</h2>
+            <div className="space-y-3">
+              {[
+                { icon: <Cloud className="size-4 text-blue-400" />, title: 'Cloud Sync', desc: 'Your data securely synced across all devices in real-time', color: 'text-blue-400' },
+                { icon: <Lock className="size-4 text-green-400" />, title: 'Secure Authentication', desc: 'Password-based login with encrypted local storage', color: 'text-green-400' },
+                { icon: <Zap className="size-4 text-amber-400" />, title: 'Real-Time Updates', desc: 'Track sales, deliveries, and payments as they happen', color: 'text-amber-400' },
+                { icon: <Building2 className="size-4 text-purple-400" />, title: 'Multi-Station', desc: 'Manage unlimited stations with independent data', color: 'text-purple-400' },
+                { icon: <ShieldCheck className="size-4 text-emerald-400" />, title: 'EPRA & KRA Compliant', desc: 'Built-in compliance with Kenyan regulations', color: 'text-emerald-400' },
+              ].map((f, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group">
+                  <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">{f.icon}</div>
+                  <div><p className="text-white font-medium text-sm">{f.title}</p><p className="text-gray-400 text-xs mt-0.5">{f.desc}</p></div>
                 </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {['Fuel Monitoring', 'Invoice System', 'M-PESA Analytics', 'Payroll System', 'EPRA Compliance'].map(tag => (
+                <span key={tag} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 text-gray-300 border border-white/10">{tag}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Right side - Login form */}
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          >
+            <div className="w-full bg-white/10 backdrop-blur-xl rounded-3xl p-6 md:p-8 shadow-2xl border border-white/20">
+              <div className="text-center mb-6">
+                {/* Mobile-only logo */}
+                <div className="lg:hidden flex items-center justify-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center"><span className="text-2xl">⛽</span></div>
+                  <div className="text-left"><h1 className="text-lg font-bold text-white font-serif">FuelPro</h1><p className="text-[10px] text-amber-400">Professional Fuel Management</p></div>
+                </div>
+                <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Fuel className="size-7 text-white" />
+                </div>
+                <h3 className="text-lg font-bold text-white font-serif">Sign In</h3>
+                <p className="text-gray-400 text-xs mt-1">Enter your credentials to continue</p>
               </div>
 
-              {/* Login Form */}
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-slate-300 text-sm font-medium">Email Address</Label>
+              {/* Quick Start button */}
+              <Button
+                type="button"
+                onClick={() => { setLoginForm({ email: 'admin@fuelpro.ke', password: 'demo' }); setTimeout(() => { const form = document.querySelector('form') as HTMLFormElement; if (form) form.requestSubmit() }, 100) }}
+                className="w-full mb-3 flex items-center justify-center gap-3 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black rounded-xl font-bold text-sm transition-colors shadow-lg"
+              >
+                <Zap className="size-4" /> Continue instantly — start in 1 second
+              </Button>
+
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10" /></div>
+                <div className="relative flex justify-center"><span className="px-3 bg-transparent text-[10px] text-gray-500 uppercase tracking-wider">Or with email</span></div>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Email Address</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
                     <Input
                       type="email"
-                      placeholder="admin@fuelpro.ke"
+                      placeholder="you@company.com"
                       value={loginForm.email}
                       onChange={e => setLoginForm(p => ({ ...p, email: e.target.value }))}
-                      className="pl-10 h-11 bg-slate-800/80 border-slate-700/50 text-slate-100 placeholder:text-slate-600 focus:border-amber-500/50 focus:ring-amber-500/20 rounded-lg"
+                      className="pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-slate-300 text-sm font-medium">Password</Label>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-300">Password</label>
+                    <button type="button" className="text-[11px] text-amber-400 hover:text-amber-300 transition-colors">Forgot Password?</button>
+                  </div>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
                     <Input
                       type="password"
                       placeholder="Enter your password"
                       value={loginForm.password}
                       onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))}
-                      className="pl-10 h-11 bg-slate-800/80 border-slate-700/50 text-slate-100 placeholder:text-slate-600 focus:border-amber-500/50 focus:ring-amber-500/20 rounded-lg"
+                      className="pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                     />
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
-                    <input type="checkbox" className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-500/20" defaultChecked />
-                    Remember me
-                  </label>
-                  <button type="button" className="text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors">Forgot password?</button>
-                </div>
-
                 <Button
                   type="submit"
-                  className="w-full h-11 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold rounded-lg shadow-lg shadow-amber-500/20 transition-all duration-200 hover:shadow-amber-500/30"
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold py-3.5 min-h-[44px] px-6 rounded-xl transition-all shadow-lg shadow-amber-500/20"
                   disabled={loginLoading}
                 >
                   {loginLoading ? <Loader2 className="size-5 animate-spin" /> : <>
-                    Sign In <ChevronRight className="size-4 ml-1" />
+                    <ChevronRight className="size-4" /> Sign In
                   </>}
                 </Button>
               </form>
 
-              {/* Demo credentials hint */}
-              <div className="mt-6 p-3 rounded-lg bg-slate-800/40 border border-slate-700/30">
-                <p className="text-xs text-slate-500 text-center">Demo: Use any email & password to sign in</p>
+              <div className="mt-5 pt-4 border-t border-white/10 text-center">
+                <p className="text-xs text-gray-500">Demo: Use any email & password</p>
               </div>
 
-              {/* Footer */}
-              <div className="mt-6 pt-4 border-t border-slate-800/50 text-center">
-                <p className="text-xs text-slate-600">© 2026 FuelPro Station Manager · All rights reserved</p>
+              <div className="mt-4 flex items-center justify-center gap-4 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><ShieldCheck className="size-3 text-green-500" /> Secure</span>
+                <span className="flex items-center gap-1"><Lock className="size-3 text-green-500" /> Encrypted</span>
+                <span className="flex items-center gap-1"><Zap className="size-3 text-green-500" /> Fast</span>
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+            </div>
+          </motion.div>
+        </div>
       </div>
     )
   }
@@ -3157,6 +3847,10 @@ export default function FuelProDashboard() {
       case 'coupons': return renderCoupons()
       case 'reports': return renderReports()
       case 'expenses': return renderExpenses()
+      case 'invoices': return renderInvoices()
+      case 'contacts': return renderContacts()
+      case 'payroll': return renderPayroll()
+      case 'documents': return renderDocuments()
       case 'admin': return renderAdmin()
       default: return renderDashboard()
     }

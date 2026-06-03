@@ -579,3 +579,127 @@ Current Project Status:
 - Station detail dialog shows visual tank gauges with gradient fills
 - Both dashboard charts use theme-aware colors for dark/light mode compatibility
 - All CRUD operations connected to real APIs
+
+---
+Task ID: 3
+Agent: Backend Agent
+Task: Add Invoice, Contact, Employee, Document models to Prisma + API routes
+
+Work Log:
+- Added 4 new models to prisma/schema.prisma: Invoice, Contact, Employee, Document
+- Added reverse relations to Station model: invoices Invoice[], employees Employee[], documents Document[]
+- Ran bun run db:push to sync schema with SQLite database
+- Created /api/invoices route (GET: list with station relation, POST: create with auto-generated invoiceNumber INV-XXXXX)
+- Created /api/invoices/[id] route (PUT: update with status/items/totals, DELETE: remove)
+- Created /api/contacts route (GET: list ordered by name, POST: create with validation)
+- Created /api/contacts/[id] route (PUT: update name/phone/email/type/balance/status, DELETE: remove)
+- Created /api/employees route (GET: list with station relation, POST: create with auto-calculated netPay = basicSalary + houseAllow + transportAllow - nhifDeduction - nssfDeduction - payeDeduction - otherDeductions)
+- Created /api/employees/[id] route (PUT: update with netPay recalculation when salary fields change, DELETE: remove)
+- Created /api/documents route (GET: list with station relation, POST: create with validation)
+- Created /api/documents/[id] route (PUT: update, DELETE: remove)
+- All API routes follow existing code style (db import, NextResponse, try/catch, console.error logging)
+- Lint passes clean (0 errors, 2 pre-existing warnings in upload directory)
+- Dev server running with no errors
+
+Stage Summary:
+- Added 4 new Prisma models (Invoice, Contact, Employee, Document) with proper relations
+- Created 8 API route files covering full CRUD for all 4 models
+- Invoice creation auto-generates invoice numbers (INV-00001, INV-00002, etc.)
+- Employee creation and update auto-calculates netPay from salary/deduction fields
+- All routes include station relation where applicable (Invoice, Employee, Document)
+- Contacts are standalone (no station relation) ordered alphabetically
+- Zero lint errors, zero dev server errors
+
+---
+Task ID: 7-a
+Agent: Frontend Agent
+Task: Add Invoices, Contacts, Payroll, Documents tabs to page.tsx
+
+Work Log:
+- Updated TabId type to include 'invoices', 'contacts', 'payroll', 'documents'
+- Added new lucide-react icons: Wallet, FolderOpen, Send, CreditCard, FileSpreadsheet, UserCircle
+- Added 4 new navigation items (Invoices, Contacts, Payroll, Documents) in 'Business' group after expenses
+- Added 'Business' to navGroups array before 'System'
+- Added 4 new API response type interfaces: InvoiceAPIResponse, ContactAPIResponse, EmployeeAPIResponse, DocumentAPIResponse
+- Added new state variables for all 4 features: data arrays, dialog open states, form states, search/filter states
+- Added 4 fetch functions: fetchInvoices, fetchContacts, fetchEmployees, fetchDocuments with loading states
+- Updated useEffect tab switch with 4 new cases and added new fetch functions to dependency array
+- Added action handlers: handleAddInvoice, handleDeleteInvoice, handleUpdateInvoiceStatus, handleAddContact, handleDeleteContact, handleAddEmployee, handleDeleteEmployee, handleAddDocument, handleDeleteDocument
+- Added renderInvoices function with KPI cards, status filters, search, create dialog, status update actions
+- Added renderContacts function with customer/supplier/partner counts, type filters, create dialog, balance tracking
+- Added renderPayroll function with salary/deduction KPIs, position badges, create dialog with net pay calculator
+- Added renderDocuments function with folder filter cards, type icons, create dialog, folder-based browsing
+- Updated renderContent switch with 4 new cases for invoices, contacts, payroll, documents
+- Ran prisma db:push to ensure database schema is in sync
+- Lint passes clean (0 errors, 2 pre-existing warnings)
+
+Stage Summary:
+- Added 4 new tabs (Invoices, Contacts, Payroll, Documents) with full CRUD UI
+- All tabs follow existing code patterns (dark theme, amber accents, Card/Table layouts)
+- Invoices tab: KPI cards (Total/Paid/Pending/Overdue), status filter, create dialog with JSON line items
+- Contacts tab: Customer/Supplier/Partner counts, type filter, balance tracking
+- Payroll tab: KRA deductions (NHIF/NSSF/PAYE), net pay calculator, position badges, CSV export
+- Documents tab: Folder-based browsing with clickable folder cards, file type icons, create dialog
+- Navigation now has 6 groups: Overview, Operations, Finance, Supply Chain, Business, System
+- Zero lint errors
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Extract features from reference zip and Vercel site, implement enhanced versions (Invoices, Contacts, Payroll, Documents, Login Enhancement)
+
+Work Log:
+- Read worklog.md and assessed project status (v3.2.0, 13 tabs)
+- Extracted uploaded zip file "Kimi_Agent_FUEL APP # 101 (12).zip" and analyzed reference code
+- Used web-reader to fetch https://fuel-app-mobile.vercel.app/ and analyzed login page features
+- Identified missing features from reference: Invoice System, Contact Management, Payroll/Employees, Document Management, Enhanced Login
+- Added 4 new Prisma models: Invoice, Contact, Employee, Document with Station relations
+- Pushed schema changes with db:push and regenerated Prisma client
+- Created 8 new API route files:
+  - /api/invoices (GET, POST) + /api/invoices/[id] (PUT, DELETE)
+  - /api/contacts (GET, POST) + /api/contacts/[id] (PUT, DELETE)
+  - /api/employees (GET, POST) + /api/employees/[id] (PUT, DELETE)
+  - /api/documents (GET, POST) + /api/documents/[id] (PUT, DELETE)
+- Added Invoice auto-numbering (INV-XXXXX format)
+- Added Employee netPay auto-calculation (basicSalary + allowances - deductions)
+- Added 4 new tabs to navigation (Invoices, Contacts, Payroll, Documents in "Business" group)
+- Implemented Invoices tab: KPI cards (Total/Paid/Pending/Overdue), status filter, search, create dialog, send/pay actions, CSV export
+- Implemented Contacts tab: Customer/Supplier/Partner directory, type filter, balance tracking, create dialog
+- Implemented Payroll tab: KRA deductions (NHIF/NSSF/PAYE), net pay calculator, position badges, CSV export
+- Implemented Documents tab: Folder-based browsing with clickable cards, file type icons, create dialog
+- Enhanced login page to match reference site:
+  - Split-screen layout with feature highlights (Cloud Sync, Secure Auth, Real-Time Updates, Multi-Station, EPRA & KRA Compliant)
+  - "Continue instantly — start in 1 second" Quick Start button
+  - Feature tags (Fuel Monitoring, Invoice System, M-PESA Analytics, Payroll System, EPRA Compliance)
+  - Mobile-responsive with compact logo on small screens
+  - Security badges (Secure, Encrypted, Fast)
+- All 17 tabs verified via agent-browser QA with zero errors
+- Lint passes clean (0 errors)
+
+Stage Summary:
+- Added 4 new business tabs (Invoices, Contacts, Payroll, Documents)
+- Total tabs now: 17 (Dashboard, Stations, Inventory, Sales, Shifts, Deliveries, Reconciliation, Compliance, Reports, Expenses, Suppliers, Coupons, Invoices, Contacts, Payroll, Documents, Admin)
+- 4 new Prisma models (Invoice, Contact, Employee, Document) with 8 new API routes
+- Enhanced login page with professional split-screen design matching reference site
+- Quick Start button for instant login
+- All CRUD operations working with real API endpoints
+- Zero console errors, zero page errors, lint passes clean
+
+Current Project Status:
+- Application at v3.3.0 with 17 tabs all using real data
+- Invoices tab provides full invoice lifecycle management with status tracking
+- Contacts tab manages customers, suppliers, and partners with balance tracking
+- Payroll tab handles employee salaries with KRA-compliant deductions (NHIF/NSSF/PAYE)
+- Documents tab provides organized document management with folder-based browsing
+- Login page now has professional split-screen design with feature highlights and Quick Start
+- All tabs verified working via agent-browser QA
+
+Unresolved Issues / Risks:
+- Login uses demo auth (any credentials accepted) - needs real backend auth
+- EPRA compliance prices still partially hardcoded
+- M-Pesa STK Push is simulated (needs real Daraja API integration)
+- PDF export uses browser print (could use dedicated library like jsPDF)
+- Invoice line items use JSON text input (could use dynamic form with add/remove rows)
+- Consider adding role-based access control
+- Consider adding real-time WebSocket for tank alerts
+- Consider adding fuel debt management with payment reminder PDF generation
