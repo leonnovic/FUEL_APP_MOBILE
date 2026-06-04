@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { MessageSquare, X, Send, Bot, User, Sparkles, Loader2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { useFuelStore } from '@/store/fuel-store';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -15,7 +16,7 @@ interface Message {
   timestamp: Date;
 }
 
-// Pre-built responses based on fuel management queries
+// Pre-built responses based on fuel management queries (used as fallback)
 function generateResponse(query: string): string {
   const q = query.toLowerCase();
   const store = useFuelStore.getState();
@@ -81,6 +82,59 @@ function generateResponse(query: string): string {
   return `I understand you're asking about "${query}". Here's a quick summary of your station:\n\n• Revenue: Ksh ${totalRevenue.toLocaleString()}\n• Fuel Sold: ${totalFuel.toLocaleString()} L\n• Expenses: Ksh ${totalExpenses.toLocaleString()}\n• Debt Owed: Ksh ${totalDebt.toLocaleString()}\n\nTry asking about specific topics like "revenue", "fuel", "expenses", "debt", "team", or "tank levels" for detailed insights!`;
 }
 
+// Build station context string from the store for the API
+function buildStationContext(): string {
+  const store = useFuelStore.getState();
+  const salesArr = Object.values(store.salesHistory);
+  const totalRevenue = salesArr.reduce((s, sale) => s + sale.totalSales, 0);
+  const totalFuel = salesArr.reduce((s, sale) => s + sale.pmsSalesL + sale.agoSalesL, 0);
+  const totalExpenses = store.expenses.reduce((s, e) => s + e.amount, 0);
+  const clientsArr = Object.values(store.clients);
+  const totalDebt = clientsArr.reduce((s, c) => s + c.balanceDue, 0);
+  const netProfit = totalRevenue - totalExpenses;
+  const activeStaff = store.employees.filter(e => e.status === 'active');
+  const monthlyPayroll = activeStaff.reduce((s, e) => s + e.salary, 0);
+
+  const pmsSold = salesArr.reduce((s, sale) => s + sale.pmsSalesL, 0);
+  const agoSold = salesArr.reduce((s, sale) => s + sale.agoSalesL, 0);
+
+  const contextParts: string[] = [
+    `Station: ${store.companyData.name}`,
+    `Total Revenue: Ksh ${totalRevenue.toLocaleString()}`,
+    `Net Profit: Ksh ${netProfit.toLocaleString()}`,
+    `Total Expenses: Ksh ${totalExpenses.toLocaleString()}`,
+    `Total Debt Owed by Clients: Ksh ${totalDebt.toLocaleString()}`,
+    `PMS Price: Ksh ${store.pmsPrice}/L | AGO Price: Ksh ${store.agoPrice}/L`,
+    `PMS Sold: ${pmsSold.toLocaleString()} L | AGO Sold: ${agoSold.toLocaleString()} L`,
+    `Total Fuel Sold: ${totalFuel.toLocaleString()} L`,
+    `Active Staff: ${activeStaff.length} | Monthly Payroll: Ksh ${monthlyPayroll.toLocaleString()}`,
+    `Active Clients: ${clientsArr.length}`,
+  ];
+
+  if (store.fuelTypes.length > 0) {
+    const tankInfo = store.fuelTypes.map(f =>
+      `${f.name}: ${f.currentLevel.toLocaleString()}/${f.tankCapacity.toLocaleString()}L (${f.tankCapacity > 0 ? ((f.currentLevel / f.tankCapacity) * 100).toFixed(0) : 'N/A'}%)`
+    ).join(', ');
+    contextParts.push(`Tank Levels: ${tankInfo}`);
+  }
+
+  if (clientsArr.length > 0) {
+    const clientDebts = clientsArr.map(c => `${c.name}: Ksh ${c.balanceDue.toLocaleString()}`).join(', ');
+    contextParts.push(`Client Balances: ${clientDebts}`);
+  }
+
+  if (store.expenses.length > 0) {
+    const byCategory: Record<string, number> = {};
+    store.expenses.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + e.amount; });
+    const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
+    if (topCategory) {
+      contextParts.push(`Top Expense Category: ${topCategory[0]} (Ksh ${topCategory[1].toLocaleString()})`);
+    }
+  }
+
+  return contextParts.join('\n');
+}
+
 export function AIChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -93,6 +147,7 @@ export function AIChatbot() {
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -102,8 +157,8 @@ export function AIChatbot() {
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isTyping) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -113,22 +168,63 @@ export function AIChatbot() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const queryText = input.trim();
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const response = generateResponse(userMessage.content);
+    try {
+      // Build context from current store state
+      const context = buildStationContext();
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: queryText,
+          context,
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data.response) {
+        throw new Error('Empty response from API');
+      }
+
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response,
+        content: data.response,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.warn('[AI Chatbot] API call failed, falling back to local response:', error);
+
+      // Fallback to the hardcoded generateResponse function
+      const fallbackResponse = generateResponse(queryText);
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: fallbackResponse,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Show a subtle toast notification about the fallback
+      toast.warning('Using offline mode', {
+        description: 'AI service unavailable. Showing local insights.',
+        duration: 3000,
+      });
+    } finally {
       setIsTyping(false);
-    }, 800 + Math.random() * 700);
-  };
+    }
+  }, [input, isTyping, sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -167,7 +263,16 @@ export function AIChatbot() {
                 <Sparkles className="size-4 text-amber-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-white">FuelPro AI</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-white">FuelPro AI</h3>
+                  <Badge
+                    variant="outline"
+                    className="h-4 px-1.5 text-[8px] font-medium border-amber-500/40 text-amber-400 bg-amber-500/10 gap-0.5"
+                  >
+                    <Zap className="size-2.5" />
+                    AI Powered
+                  </Badge>
+                </div>
                 <div className="flex items-center gap-1">
                   <span className="size-1.5 rounded-full bg-green-500 animate-pulse" />
                   <span className="text-[10px] text-green-400">Online</span>

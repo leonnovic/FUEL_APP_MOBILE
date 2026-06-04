@@ -55,8 +55,8 @@ const tabBadges: Record<string, { count?: number; alert?: boolean }> = {
 };
 
 // Separator positions — indices AFTER which a dot separator appears
-// Group 1: Core (0-7), Group 2: Management (8-14), Group 3: Operations (15-22), Group 4: Admin (23-30)
-const separatorAfter = new Set([7, 14, 22, 30]);
+// Group 1: Core (0-7), Group 2: Management (8-14), Group 3: Operations (15-23), Group 4: Admin (24-32)
+const separatorAfter = new Set([7, 14, 23, 32]);
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -81,6 +81,7 @@ const tabs = [
   { id: 'quality', label: 'Quality', icon: Star },
   { id: 'credit', label: 'Credit', icon: Wallet },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+  { id: 'station-perf', label: 'Station Perf', icon: BarChart3 },
   { id: 'integration', label: 'Integration', icon: Plug },
   { id: 'regional', label: 'Regional', icon: Globe },
   { id: 'fuel-types', label: 'Fuel Types', icon: Layers },
@@ -90,6 +91,7 @@ const tabs = [
   { id: 'maintenance', label: 'Maintenance', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Price Board', icon: Monitor },
+  { id: 'price-predict', label: 'Price Predict', icon: TrendingUp },
   { id: 'fuel-orders', label: 'Orders', icon: ClipboardList },
   { id: 'profit-calc', label: 'Profit Calc', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useSyncExternalStore } from 'react';
 import {
   Fuel,
   Shield,
@@ -138,9 +138,18 @@ function seedDemoData() {
   });
 }
 
-// Animated background particles - uses deterministic seed to avoid hydration mismatch
+// Animated background particles - client-only to avoid hydration mismatch
 function BackgroundParticles() {
-  // Deterministic pseudo-random generator - same output on server and client
+  // useSyncExternalStore avoids hydration mismatch: returns false on server, true on client
+  const mounted = useSyncExternalStore(
+    () => () => {}, // subscribe (noop)
+    () => true,     // getSnapshot (client)
+    () => false     // getServerSnapshot
+  );
+
+  if (!mounted) return null;
+
+  // Deterministic pseudo-random generator
   const seededRandom = (seed: number) => {
     const x = Math.sin(seed * 9301 + 49297) * 49297;
     return x - Math.floor(x);
@@ -164,8 +173,8 @@ function BackgroundParticles() {
           style={{
             left: `${p.x}%`,
             top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
             animation: `fadeIn 2s ease-out ${p.delay}s both, pulse-subtle ${p.duration}s ease-in-out ${p.delay}s infinite`,
           }}
         />

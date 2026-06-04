@@ -1,49 +1,66 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, type ComponentType } from 'react';
+import dynamic from 'next/dynamic';
 import { LoginScreen } from '@/components/auth/login-screen';
 import { Header } from '@/components/layout/header';
 import { TabNavigation } from '@/components/layout/tab-navigation';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { SetupWizard } from '@/components/layout/setup-wizard';
-import { Dashboard } from '@/components/fuel/dashboard';
-import { SalesTracking } from '@/components/fuel/sales-tracking';
-import { PointOfSale } from '@/components/fuel/point-of-sale';
-import { DeliveryTracker } from '@/components/fuel/delivery-tracker';
-import { InvoiceSystem } from '@/components/fuel/invoice-system';
-import { DebtReminder } from '@/components/fuel/debt-reminder';
-import { ExpenseTracker } from '@/components/fuel/expense-tracker';
-import { ShiftManagement } from '@/components/fuel/shift-management';
-import { InventoryManagement } from '@/components/fuel/inventory-management';
-import { SupplierManagement } from '@/components/fuel/supplier-management';
-import { MaintenanceTracker } from '@/components/fuel/maintenance-tracker';
-import { ReportsCenter } from '@/components/fuel/reports-center';
-import { TeamManager } from '@/components/fuel/team-manager';
-import { PriceBoard } from '@/components/fuel/price-board';
-import { AIChatbot } from '@/components/fuel/ai-chatbot';
-import { LiveTransactions } from '@/components/fuel/live-transactions';
-import { AuditTrail } from '@/components/fuel/audit-trail';
-import { CommunicationHub } from '@/components/fuel/communication-hub';
-import { QualityTesting } from '@/components/fuel/quality-testing';
-import { CreditManagement } from '@/components/fuel/credit-management';
-import { DataManager } from '@/components/fuel/data-manager';
-import { AdvancedAnalytics } from '@/components/fuel/advanced-analytics';
-import { FuelTypesManager } from '@/components/fuel/fuel-types-manager';
-import { CustomerLoyalty } from '@/components/fuel/customer-loyalty';
-import { MpesaAnalytics } from '@/components/fuel/mpesa-analytics';
-import { FuelOffloading } from '@/components/fuel/fuel-offloading';
-import { NewsFeed } from '@/components/fuel/news-feed';
-import { FuelSalesReport } from '@/components/fuel/fuel-sales-report';
-import { IntegrationHub } from '@/components/fuel/integration-hub';
-import { RegionalCompliance } from '@/components/fuel/regional-compliance';
-import { DocumentManager } from '@/components/fuel/document-manager';
-import { PayrollSystem } from '@/components/fuel/payroll-system';
-import { SettingsPage } from '@/components/fuel/settings-page';
-import { FuelOrderRequest } from '@/components/fuel/fuel-order-request';
-import { ProfitCalculator } from '@/components/fuel/profit-calculator';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
+
+// Loading fallback component
+function TabLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="size-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+        <p className="text-sm text-slate-400">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+// Dynamic imports - load components on demand to reduce initial compilation memory
+const Dashboard = dynamic(() => import('@/components/fuel/dashboard').then(m => ({ default: m.Dashboard })), { loading: TabLoader });
+const SalesTracking = dynamic(() => import('@/components/fuel/sales-tracking').then(m => ({ default: m.SalesTracking })), { loading: TabLoader });
+const PointOfSale = dynamic(() => import('@/components/fuel/point-of-sale').then(m => ({ default: m.PointOfSale })), { loading: TabLoader });
+const DeliveryTracker = dynamic(() => import('@/components/fuel/delivery-tracker').then(m => ({ default: m.DeliveryTracker })), { loading: TabLoader });
+const InvoiceSystem = dynamic(() => import('@/components/fuel/invoice-system').then(m => ({ default: m.InvoiceSystem })), { loading: TabLoader });
+const DebtReminder = dynamic(() => import('@/components/fuel/debt-reminder').then(m => ({ default: m.DebtReminder })), { loading: TabLoader });
+const ExpenseTracker = dynamic(() => import('@/components/fuel/expense-tracker').then(m => ({ default: m.ExpenseTracker })), { loading: TabLoader });
+const ShiftManagement = dynamic(() => import('@/components/fuel/shift-management').then(m => ({ default: m.ShiftManagement })), { loading: TabLoader });
+const InventoryManagement = dynamic(() => import('@/components/fuel/inventory-management').then(m => ({ default: m.InventoryManagement })), { loading: TabLoader });
+const SupplierManagement = dynamic(() => import('@/components/fuel/supplier-management').then(m => ({ default: m.SupplierManagement })), { loading: TabLoader });
+const MaintenanceTracker = dynamic(() => import('@/components/fuel/maintenance-tracker').then(m => ({ default: m.MaintenanceTracker })), { loading: TabLoader });
+const ReportsCenter = dynamic(() => import('@/components/fuel/reports-center').then(m => ({ default: m.ReportsCenter })), { loading: TabLoader });
+const TeamManager = dynamic(() => import('@/components/fuel/team-manager').then(m => ({ default: m.TeamManager })), { loading: TabLoader });
+const PriceBoard = dynamic(() => import('@/components/fuel/price-board').then(m => ({ default: m.PriceBoard })), { loading: TabLoader });
+const AIChatbot = dynamic(() => import('@/components/fuel/ai-chatbot').then(m => ({ default: m.AIChatbot })), { ssr: false });
+const LiveTransactions = dynamic(() => import('@/components/fuel/live-transactions').then(m => ({ default: m.LiveTransactions })), { loading: TabLoader });
+const AuditTrail = dynamic(() => import('@/components/fuel/audit-trail').then(m => ({ default: m.AuditTrail })), { loading: TabLoader });
+const CommunicationHub = dynamic(() => import('@/components/fuel/communication-hub').then(m => ({ default: m.CommunicationHub })), { loading: TabLoader });
+const QualityTesting = dynamic(() => import('@/components/fuel/quality-testing').then(m => ({ default: m.QualityTesting })), { loading: TabLoader });
+const CreditManagement = dynamic(() => import('@/components/fuel/credit-management').then(m => ({ default: m.CreditManagement })), { loading: TabLoader });
+const DataManager = dynamic(() => import('@/components/fuel/data-manager').then(m => ({ default: m.DataManager })), { loading: TabLoader });
+const AdvancedAnalytics = dynamic(() => import('@/components/fuel/advanced-analytics').then(m => ({ default: m.AdvancedAnalytics })), { loading: TabLoader });
+const FuelTypesManager = dynamic(() => import('@/components/fuel/fuel-types-manager').then(m => ({ default: m.FuelTypesManager })), { loading: TabLoader });
+const CustomerLoyalty = dynamic(() => import('@/components/fuel/customer-loyalty').then(m => ({ default: m.CustomerLoyalty })), { loading: TabLoader });
+const MpesaAnalytics = dynamic(() => import('@/components/fuel/mpesa-analytics').then(m => ({ default: m.MpesaAnalytics })), { loading: TabLoader });
+const FuelOffloading = dynamic(() => import('@/components/fuel/fuel-offloading').then(m => ({ default: m.FuelOffloading })), { loading: TabLoader });
+const NewsFeed = dynamic(() => import('@/components/fuel/news-feed').then(m => ({ default: m.NewsFeed })), { loading: TabLoader });
+const FuelSalesReport = dynamic(() => import('@/components/fuel/fuel-sales-report').then(m => ({ default: m.FuelSalesReport })), { loading: TabLoader });
+const IntegrationHub = dynamic(() => import('@/components/fuel/integration-hub').then(m => ({ default: m.IntegrationHub })), { loading: TabLoader });
+const RegionalCompliance = dynamic(() => import('@/components/fuel/regional-compliance').then(m => ({ default: m.RegionalCompliance })), { loading: TabLoader });
+const DocumentManager = dynamic(() => import('@/components/fuel/document-manager').then(m => ({ default: m.DocumentManager })), { loading: TabLoader });
+const PayrollSystem = dynamic(() => import('@/components/fuel/payroll-system').then(m => ({ default: m.PayrollSystem })), { loading: TabLoader });
+const SettingsPage = dynamic(() => import('@/components/fuel/settings-page').then(m => ({ default: m.SettingsPage })), { loading: TabLoader });
+const FuelOrderRequest = dynamic(() => import('@/components/fuel/fuel-order-request').then(m => ({ default: m.FuelOrderRequest })), { loading: TabLoader });
+const ProfitCalculator = dynamic(() => import('@/components/fuel/profit-calculator').then(m => ({ default: m.ProfitCalculator })), { loading: TabLoader });
+const StationPerformance = dynamic(() => import('@/components/fuel/station-performance').then(m => ({ default: m.StationPerformance })), { loading: TabLoader });
+const FuelPricePredictor = dynamic(() => import('@/components/fuel/fuel-price-predictor').then(m => ({ default: m.FuelPricePredictor })), { loading: TabLoader });
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -155,6 +172,10 @@ export default function Home() {
         return <FuelOrderRequest />;
       case 'profit-calc':
         return <ProfitCalculator />;
+      case 'station-perf':
+        return <StationPerformance />;
+      case 'price-predict':
+        return <FuelPricePredictor />;
       default:
         return <Dashboard />;
     }

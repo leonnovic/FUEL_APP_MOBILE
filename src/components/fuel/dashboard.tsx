@@ -509,7 +509,7 @@ export function Dashboard() {
       {/* ══════════════════════════════════════════════════════════════════════
           1. WELCOME HEADER
          ══════════════════════════════════════════════════════════════════════ */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/50 p-6">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/50 p-6 shimmer-line">
         {/* Subtle decorative gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-green-500/5 pointer-events-none" />
         <div className="relative z-10">
@@ -564,7 +564,7 @@ export function Dashboard() {
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Weather Widget */}
-        <Card className="bg-gradient-to-br from-sky-900/80 via-slate-800/60 to-slate-900/80 border-slate-700/50 text-white backdrop-blur-sm lg:col-span-1">
+        <Card className="bg-gradient-to-br from-sky-900/80 via-slate-800/60 to-slate-900/80 border-slate-700/50 text-white backdrop-blur-sm lg:col-span-1 weather-gradient-bg">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -684,7 +684,7 @@ export function Dashboard() {
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger-children">
         {/* Total Revenue */}
-        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-green-500/30">
+        <Card className="fuel-card gradient-border bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-green-500/30">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
@@ -704,7 +704,7 @@ export function Dashboard() {
         </Card>
 
         {/* Net Profit */}
-        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-emerald-500/30">
+        <Card className="fuel-card gradient-border bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-emerald-500/30">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
@@ -721,7 +721,7 @@ export function Dashboard() {
         </Card>
 
         {/* Fuel Sold */}
-        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-amber-500/30">
+        <Card className="fuel-card gradient-border bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-amber-500/30">
           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
@@ -741,7 +741,7 @@ export function Dashboard() {
         </Card>
 
         {/* Balance Due */}
-        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-red-500/30">
+        <Card className="fuel-card gradient-border bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-red-500/30">
           <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
@@ -907,9 +907,9 @@ export function Dashboard() {
           SECTION DIVIDER: Fuel & Pricing
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Fuel &amp; Pricing</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
       </div>
 
       {/* ── Fuel Prices + Tax Cards ─────────────────────────────────────── */}
@@ -985,15 +985,15 @@ export function Dashboard() {
           SECTION DIVIDER: Analytics
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Analytics</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
       </div>
 
       {/* ── Charts Row ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Sales Trend */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white lg:col-span-2">
+        <Card className="inner-glow bg-slate-800/60 border-slate-700/50 text-white lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Sales Trend (7 Days)</CardTitle>
             <CardDescription className="text-slate-400 text-xs">PMS vs AGO daily revenue</CardDescription>
@@ -1014,7 +1014,7 @@ export function Dashboard() {
         </Card>
 
         {/* Fuel Distribution Pie */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+        <Card className="inner-glow bg-slate-800/60 border-slate-700/50 text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Fuel Distribution</CardTitle>
             <CardDescription className="text-slate-400 text-xs">PMS vs AGO litres</CardDescription>
@@ -1045,7 +1045,7 @@ export function Dashboard() {
       </div>
 
       {/* ── Expense Breakdown ───────────────────────────────────────────── */}
-      <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+      <Card className="inner-glow bg-slate-800/60 border-slate-700/50 text-white">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Expense Breakdown</CardTitle>
           <CardDescription className="text-slate-400 text-xs">By category</CardDescription>
@@ -1071,9 +1071,9 @@ export function Dashboard() {
           SECTION DIVIDER: Activity & Operations
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Activity &amp; Operations</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
       </div>
 
       {/* ── Recent Activity + Delivery Schedule ──────────────────────────── */}
@@ -1093,7 +1093,7 @@ export function Dashboard() {
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
                 {activityFeed.map((act) => (
-                  <div key={act.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-slate-700/30 transition-colors">
+                  <div key={act.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-slate-700/30 transition-colors animate-slide-in" style={{ animationDelay: `${activityFeed.indexOf(act) * 60}ms` }}>
                     <div className={`size-7 rounded-full flex items-center justify-center flex-shrink-0 ${act.color}`}>
                       {act.icon}
                     </div>
@@ -1189,9 +1189,9 @@ export function Dashboard() {
           SECTION DIVIDER: Quick Actions
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Quick Actions</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
       </div>
 
       {/* ── Quick Actions (Enhanced) ───────────────────────────────────── */}
@@ -1200,42 +1200,42 @@ export function Dashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
             <button
               onClick={() => dispatchTab('pos')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-500/20 hover:from-blue-500/25 hover:to-blue-600/10 hover:border-blue-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-500/20 hover:from-blue-500/25 hover:to-blue-600/10 hover:border-blue-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <ShoppingCart className="size-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
               <span className="text-[10px] font-medium text-blue-300 group-hover:text-blue-200 transition-colors">Point of Sale</span>
             </button>
             <button
               onClick={() => dispatchTab('sales')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-green-500/15 to-green-600/5 border border-green-500/20 hover:from-green-500/25 hover:to-green-600/10 hover:border-green-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-green-500/15 to-green-600/5 border border-green-500/20 hover:from-green-500/25 hover:to-green-600/10 hover:border-green-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <BarChart3 className="size-5 text-green-400 group-hover:text-green-300 transition-colors" />
               <span className="text-[10px] font-medium text-green-300 group-hover:text-green-200 transition-colors">Sales Tracking</span>
             </button>
             <button
               onClick={() => dispatchTab('delivery')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/5 border border-amber-500/20 hover:from-amber-500/25 hover:to-amber-600/10 hover:border-amber-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-600/5 border border-amber-500/20 hover:from-amber-500/25 hover:to-amber-600/10 hover:border-amber-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <Truck className="size-5 text-amber-400 group-hover:text-amber-300 transition-colors" />
               <span className="text-[10px] font-medium text-amber-300 group-hover:text-amber-200 transition-colors">Delivery</span>
             </button>
             <button
               onClick={() => dispatchTab('invoice')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/20 hover:from-purple-500/25 hover:to-purple-600/10 hover:border-purple-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/20 hover:from-purple-500/25 hover:to-purple-600/10 hover:border-purple-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <FileText className="size-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
               <span className="text-[10px] font-medium text-purple-300 group-hover:text-purple-200 transition-colors">Invoice</span>
             </button>
             <button
               onClick={() => dispatchTab('mpesa')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/20 hover:from-emerald-500/25 hover:to-emerald-600/10 hover:border-emerald-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/20 hover:from-emerald-500/25 hover:to-emerald-600/10 hover:border-emerald-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <Smartphone className="size-5 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
               <span className="text-[10px] font-medium text-emerald-300 group-hover:text-emerald-200 transition-colors">M-PESA</span>
             </button>
             <button
               onClick={() => dispatchTab('reports')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-600/5 border border-rose-500/20 hover:from-rose-500/25 hover:to-rose-600/10 hover:border-rose-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-600/5 border border-rose-500/20 hover:from-rose-500/25 hover:to-rose-600/10 hover:border-rose-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <CreditCard className="size-5 text-rose-400 group-hover:text-rose-300 transition-colors" />
               <span className="text-[10px] font-medium text-rose-300 group-hover:text-rose-200 transition-colors">Reports</span>
@@ -1243,7 +1243,7 @@ export function Dashboard() {
             {/* NEW: New Sale */}
             <button
               onClick={() => dispatchTab('pos')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 hover:from-cyan-500/25 hover:to-cyan-600/10 hover:border-cyan-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 hover:from-cyan-500/25 hover:to-cyan-600/10 hover:border-cyan-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <PlusCircle className="size-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
               <span className="text-[10px] font-medium text-cyan-300 group-hover:text-cyan-200 transition-colors">New Sale</span>
@@ -1251,7 +1251,7 @@ export function Dashboard() {
             {/* NEW: Add Expense */}
             <button
               onClick={() => dispatchTab('expenses')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-600/5 border border-orange-500/20 hover:from-orange-500/25 hover:to-orange-600/10 hover:border-orange-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-600/5 border border-orange-500/20 hover:from-orange-500/25 hover:to-orange-600/10 hover:border-orange-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <Wallet className="size-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
               <span className="text-[10px] font-medium text-orange-300 group-hover:text-orange-200 transition-colors">Add Expense</span>
@@ -1259,7 +1259,7 @@ export function Dashboard() {
             {/* NEW: Fuel Orders */}
             <button
               onClick={() => dispatchTab('fuel-orders')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-teal-500/15 to-teal-600/5 border border-teal-500/20 hover:from-teal-500/25 hover:to-teal-600/10 hover:border-teal-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-teal-500/15 to-teal-600/5 border border-teal-500/20 hover:from-teal-500/25 hover:to-teal-600/10 hover:border-teal-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <Truck className="size-5 text-teal-400 group-hover:text-teal-300 transition-colors" />
               <span className="text-[10px] font-medium text-teal-300 group-hover:text-teal-200 transition-colors">Fuel Orders</span>
@@ -1267,7 +1267,7 @@ export function Dashboard() {
             {/* NEW: Profit Calculator */}
             <button
               onClick={() => dispatchTab('profit-calc')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-lime-500/15 to-lime-600/5 border border-lime-500/20 hover:from-lime-500/25 hover:to-lime-600/10 hover:border-lime-500/40 hover:scale-105 transition-all duration-200"
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-lime-500/15 to-lime-600/5 border border-lime-500/20 hover:from-lime-500/25 hover:to-lime-600/10 hover:border-lime-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
             >
               <BarChart3 className="size-5 text-lime-400 group-hover:text-lime-300 transition-colors" />
               <span className="text-[10px] font-medium text-lime-300 group-hover:text-lime-200 transition-colors">Profit Calc</span>
@@ -1280,9 +1280,9 @@ export function Dashboard() {
           SECTION DIVIDER: Station Status
          ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
         <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Station Status</span>
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-700/50 to-transparent" />
+        <div className="gradient-divider flex-1" />
       </div>
 
       {/* ── Tank Levels + Pump Status ───────────────────────────────────── */}
@@ -1299,6 +1299,7 @@ export function Dashboard() {
                 <div className="flex items-center gap-2">
                   <Droplets className="size-4 text-green-400" />
                   <span className="text-sm font-medium text-slate-200">PMS Tank</span>
+                  {pmsTankPct < 25 && <AlertTriangle className="size-3.5 text-red-400 animate-pulse" />}
                 </div>
                 <span className="text-xs text-slate-400">
                   {pmsFuel ? `${pmsFuel.currentLevel.toLocaleString()} / ${pmsFuel.tankCapacity.toLocaleString()} L` : 'N/A'}
@@ -1306,16 +1307,16 @@ export function Dashboard() {
               </div>
               <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all"
+                  className={`h-full rounded-full transition-all progress-animated ${pmsTankPct < 25 ? 'tank-critical' : ''}`}
                   style={{
                     width: `${pmsTankPct}%`,
-                    background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+                    background: pmsTankPct < 25 ? 'linear-gradient(90deg, #dc2626, #ef4444)' : 'linear-gradient(90deg, #16a34a, #22c55e)',
                   }}
                 />
               </div>
               <div className="flex justify-between mt-1 text-[10px] text-slate-500">
                 <span>Empty</span>
-                <span>{pmsTankPct}%</span>
+                <span className={pmsTankPct < 25 ? 'text-red-400 font-semibold' : ''}>{pmsTankPct}%</span>
                 <span>Full</span>
               </div>
             </div>
@@ -1326,6 +1327,7 @@ export function Dashboard() {
                 <div className="flex items-center gap-2">
                   <Droplets className="size-4 text-amber-400" />
                   <span className="text-sm font-medium text-slate-200">AGO Tank</span>
+                  {agoTankPct < 25 && <AlertTriangle className="size-3.5 text-red-400 animate-pulse" />}
                 </div>
                 <span className="text-xs text-slate-400">
                   {agoFuel ? `${agoFuel.currentLevel.toLocaleString()} / ${agoFuel.tankCapacity.toLocaleString()} L` : 'N/A'}
@@ -1333,16 +1335,16 @@ export function Dashboard() {
               </div>
               <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all"
+                  className={`h-full rounded-full transition-all progress-animated ${agoTankPct < 25 ? 'tank-critical' : ''}`}
                   style={{
                     width: `${agoTankPct}%`,
-                    background: 'linear-gradient(90deg, #d97706, #f59e0b)',
+                    background: agoTankPct < 25 ? 'linear-gradient(90deg, #dc2626, #ef4444)' : 'linear-gradient(90deg, #d97706, #f59e0b)',
                   }}
                 />
               </div>
               <div className="flex justify-between mt-1 text-[10px] text-slate-500">
                 <span>Empty</span>
-                <span>{agoTankPct}%</span>
+                <span className={agoTankPct < 25 ? 'text-red-400 font-semibold' : ''}>{agoTankPct}%</span>
                 <span>Full</span>
               </div>
             </div>
