@@ -1,0 +1,6 @@
+the "Combined Stations View" combines all the stations the user has access to.
+also: each station has access to data only granted to that station and when user switch to another station they cannot access data in relation to the other station unless "Combined View" which combines all stations data that the user has access to. while in "Combined View", for that brief period the station name in dubbed "Combined View".
+also:
+fix this in "Founder Access", they are not working: "Analytics", "Security & 2FA".
+also:
+always ensure precise location allover the website and intergrate every aspect in the website. 

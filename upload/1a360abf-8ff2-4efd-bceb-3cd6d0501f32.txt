@@ -1,0 +1,141 @@
+Here is a **complete, copy-paste-ready Master Prompt & Specification Blueprint** for your `FUEL PRO` admin page. You can feed this directly to an AI coding assistant, hand it to your dev team, or use it as a product requirements document (PRD).
+
+---
+
+# 📜 MASTER PROMPT: FUEL PRO ADMIN PANEL SPECIFICATION
+**Copy everything below this line for AI/Dev handoff:**
+
+```
+ACT AS: Senior Full-Stack Architect & Security Engineer
+PROJECT: FUEL PRO Website Admin Panel
+CONTEXT: The admin page has FULL CONTROL over the live FUEL PRO website. It must remain strictly accessible ONLY to the site owner and authorized development team members. The goal is to expand capabilities while enforcing zero-trust access, auditability, and deployment-safe operations.
+
+DELIVERABLES REQUIRED:
+1. Secure access architecture & RBAC implementation plan
+2. Feature expansion blueprint (categorized, phased, with technical notes)
+3. Security, compliance, and operational recommendations
+4. Deployment-safe workflow & rollback strategy
+5. Stack-agnostic implementation guidelines (adapt to WordPress/Laravel/Node/Django/Custom as needed)
+
+CONSTRAINTS:
+- NO public access to admin routes
+- NO shared credentials
+- ALL destructive/privileged actions require MFA + audit logging
+- Features must support staging-first deployment and one-click rollback
+- Performance impact on public site must be isolated/async where possible
+
+OUTPUT FORMAT:
+- Structured markdown
+- Clear implementation phases
+- Security guardrails per feature
+- Ready-to-execute dev checklist
+```
+
+---
+
+## 🔐 ACCESS CONTROL SPECIFICATION
+| Layer | Requirement | Implementation Notes |
+|-------|-------------|----------------------|
+| **Authentication** | Mandatory MFA, 12+ char passwords, 15-min idle timeout | TOTP/Hardware keys preferred. Enforce via middleware & session store. |
+| **Network Isolation** | Zero-Trust Gateway OR IP/VPN restriction | Use Cloudflare Access, Tailscale, or AWS Verified Access. Fallback: firewall IP allowlist + geo-block. |
+| **Route Obscurity** | Custom admin path (e.g., `/fp-ops-7x9`) | Rename default paths. Pair with WAF rule: block `/admin`, `/wp-admin`, `/dashboard` unless authenticated via ZT gateway. |
+| **Authorization (RBAC)** | Owner, Dev Lead, Developer, Auditor roles | Matrix: `view`, `edit`, `deploy`, `user_mgmt`, `full`. Principle of least privilege enforced at API & UI level. |
+| **Just-in-Time Access** | Temporary elevated permissions | Request → Owner approval → 2hr expiry → auto-revoke + log. |
+| **Account Hygiene** | 1 account per person, no sharing | SCIM/SAML optional. Auto-deprovision on team offboarding. |
+
+---
+
+## 🧩 FEATURE EXPANSION BLUEPRINT
+
+### 🔹 Phase 1: Foundation & Safety (Weeks 1-3)
+| Feature | Purpose | Tech Notes |
+|---------|---------|------------|
+| Immutable Audit Log | Track every admin action (who, what, when, before/after) | Append-only DB table or external log sink (e.g., Datadog, AWS CloudTrail). Hash-chain for tamper-evidence. |
+| Backup & Restore Manager | Automated incremental + full backups; test restore sandbox | Schedule via cron. Store encrypted offsite. Provide one-click staging restore before live. |
+| Feature Flags/Toggles | Enable/disable features without deploys | Use LaunchDarkly, Unleash, or custom DB-driven toggle table. Evaluated at runtime. |
+| Cache & CDN Purger | Clear route-specific or global cache safely | Async queue worker. Dry-run preview before execution. |
+
+### 🔹 Phase 2: Productivity & Control (Weeks 4-6)
+| Feature | Purpose | Tech Notes |
+|---------|---------|------------|
+| Content Versioning & Rollback | Save drafts, track edits, revert to previous states | Store diffs in JSON or use DB audit tables. Preview before apply. |
+| Bulk Operations Manager | Upload, edit, tag, or delete in batches | Chunked processing, progress UI, rate-limited async workers. |
+| Redirect & SEO Manager | 301/302 rules, meta tags, schema, OG controls | Validate loops/conflicts. Sync with sitemap.xml auto-generator. |
+| Team Notes & Tagging | Internal comments on pages, orders, tickets | Threaded UI, @mentions, permission-scoped visibility. |
+
+### 🔹 Phase 3: DevOps & Automation (Weeks 7-9)
+| Feature | Purpose | Tech Notes |
+|---------|---------|------------|
+| Staging ↔ Production Sync | Controlled push/pull with diff preview | Compare configs/content. Warn on destructive overrides. |
+| Webhook & API Manager | Generate keys, monitor delivery, set retries | Rotate keys safely. Log payloads (mask PII). Dead-letter queue for failures. |
+| Error & Log Viewer | Filter by route, user, severity, time | Integrate with app logger. Stack traces + request context. |
+| Impersonation Mode (Logged) | "View as" specific user role for QA | Strictly audited. Auto-exit timer. Blocks sensitive actions while active. |
+
+### 🔹 Phase 4: Advanced & AI-Assist (Weeks 10-12)
+| Feature | Purpose | Tech Notes |
+|---------|---------|------------|
+| Custom Report Builder | Filter, aggregate, export, schedule reports | Query builder UI. Cache heavy aggregations. |
+| AI Content & SEO Assist | Alt-text, meta suggestions, anomaly detection in logs | Optional. Run via secure API. Human-in-the-loop approval required. |
+| Compliance Toolkit | GDPR/CCPA data export, consent logs, deletion workflows | Pseudonymize logs. Right-to-erasure automation. |
+
+---
+
+## 🛡️ SECURITY & OPERATIONAL RECOMMENDATIONS
+
+### 🔒 Defense-in-Depth Strategy
+1. **Never expose admin endpoints to public internet** without ZTNA/VPN/WAF interception.
+2. **Store secrets externally**: Use AWS Secrets Manager, HashiCorp Vault, or GitHub Secrets. Never hardcode.
+3. **Enforce CSRF + XSS protection**: SameSite cookies, CSP headers, output encoding, framework-level CSRF tokens.
+4. **Rate limit & bot protection**: Apply to login, password reset, and sensitive admin routes. Use CAPTCHA or behavioral analysis.
+5. **Regular access audits**: Quarterly review. Revoke unused accounts. Enforce MFA re-verification every 90 days.
+
+### ⚙️ Development & Deployment Workflow
+- **GitOps for code**: Admin UI & backend versioned. PR reviews required. No direct live edits.
+- **Staging-first rule**: All admin changes tested in isolated env mirroring prod DB structure.
+- **Soft-delete + retention window**: 30-day trash for pages/users/media before permanent removal.
+- **Async for heavy tasks**: Bulk imports, backups, cache clears, and reports run via queue workers (Redis/RabbitMQ).
+- **Health checks & auto-recovery**: Monitor admin API uptime. Auto-restart degraded services. Alert on DB connection spikes.
+
+### 📊 Monitoring & Alerting
+- Failed login threshold → lock + notify
+- New admin account creation → require owner approval
+- Backup failure or restore mismatch → Slack/Email alert
+- High error rate on public routes → admin dashboard flag
+- Dependency/CVE scanner → weekly report + patch scheduling
+
+---
+
+## ✅ IMPLEMENTATION CHECKLIST (DEV TEAM READY)
+
+- [ ] Define RBAC matrix & map to API/UI permissions
+- [ ] Implement MFA enforcement & session management middleware
+- [ ] Set up Zero-Trust/VPN gateway for admin route
+- [ ] Build immutable audit log table + export pipeline
+- [ ] Deploy automated backup system with staging restore test
+- [ ] Create feature flag system with rollback fallback
+- [ ] Add cache purger with dry-run & async queue
+- [ ] Implement content versioning + diff viewer
+- [ ] Build bulk operations UI with progress & rate limits
+- [ ] Configure redirect/SEO manager with conflict detection
+- [ ] Set up webhook/API key manager with rotation & masking
+- [ ] Enable impersonation mode with strict audit logging
+- [ ] Integrate error/log viewer with filtering & export
+- [ ] Schedule quarterly access reviews & MFA re-verification
+- [ ] Document rollback procedures & incident response playbooks
+
+---
+
+### 📥 HOW TO USE THIS PROMPT
+1. **For AI Coding Assistants**: Paste the entire `MASTER PROMPT` block. The AI will output architecture diagrams, middleware code, RBAC schemas, and deployment scripts tailored to your stack.
+2. **For Dev Teams**: Share as a PRD. Assign phases to sprints. Use the checklist for QA sign-off.
+3. **For Security Audits**: Hand to a penetration tester or compliance officer. All guardrails and audit requirements are explicit.
+
+---
+
+🔹 **Reply with your tech stack** (e.g., `Next.js + Supabase`, `Laravel + MySQL`, `WordPress + Cloudflare`, `Django + PostgreSQL`, etc.) and I will generate:
+- Exact middleware code for access control
+- RBAC permission tables & UI routing logic
+- Audit log schema & queue worker setup
+- Deployment scripts & WAF rules tailored to FUEL PRO
+
+"ADD ALL FEATURES"

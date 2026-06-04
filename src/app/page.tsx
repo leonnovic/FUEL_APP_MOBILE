@@ -12,6 +12,15 @@ import { PointOfSale } from '@/components/fuel/point-of-sale';
 import { DeliveryTracker } from '@/components/fuel/delivery-tracker';
 import { InvoiceSystem } from '@/components/fuel/invoice-system';
 import { DebtReminder } from '@/components/fuel/debt-reminder';
+import { ExpenseTracker } from '@/components/fuel/expense-tracker';
+import { ShiftManagement } from '@/components/fuel/shift-management';
+import { InventoryManagement } from '@/components/fuel/inventory-management';
+import { SupplierManagement } from '@/components/fuel/supplier-management';
+import { MaintenanceTracker } from '@/components/fuel/maintenance-tracker';
+import { ReportsCenter } from '@/components/fuel/reports-center';
+import { TeamManager } from '@/components/fuel/team-manager';
+import { PriceBoard } from '@/components/fuel/price-board';
+import { AIChatbot } from '@/components/fuel/ai-chatbot';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
@@ -88,7 +97,7 @@ export default function Home() {
       case 'debt':
         return <DebtReminder />;
       case 'reports':
-        return <PlaceholderTab name="Reports Center" />;
+        return <ReportsCenter />;
       case 'mpesa':
         return <PlaceholderTab name="M-PESA Analytics" />;
       case 'payroll':
@@ -97,20 +106,20 @@ export default function Home() {
         return <PlaceholderTab name="Data Manager" />;
       case 'news':
         return <PlaceholderTab name="News Feed" />;
-      case 'livetransaction':
+      case 'live':
         return <PlaceholderTab name="Live Transactions" />;
-      case 'fuelsalesreport':
+      case 'fuel-sales':
         return <PlaceholderTab name="Fuel Sales Report" />;
       case 'communication':
         return <PlaceholderTab name="Communication" />;
       case 'inventory':
-        return <PlaceholderTab name="Inventory Management" />;
+        return <InventoryManagement />;
       case 'customers':
         return <PlaceholderTab name="Customer Loyalty" />;
       case 'audit':
         return <PlaceholderTab name="Audit Trail" />;
       case 'shifts':
-        return <PlaceholderTab name="Shift Management" />;
+        return <ShiftManagement />;
       case 'quality':
         return <PlaceholderTab name="Fuel Quality Testing" />;
       case 'credit':
@@ -121,20 +130,20 @@ export default function Home() {
         return <PlaceholderTab name="Integration Hub" />;
       case 'regional':
         return <PlaceholderTab name="Regional Compliance" />;
-      case 'fueltypes':
+      case 'fuel-types':
         return <PlaceholderTab name="Fuel Types Manager" />;
       case 'team':
-        return <PlaceholderTab name="Team Manager" />;
+        return <TeamManager />;
       case 'documents':
         return <PlaceholderTab name="Document Manager" />;
       case 'suppliers':
-        return <PlaceholderTab name="Supplier Management" />;
+        return <SupplierManagement />;
       case 'maintenance':
-        return <PlaceholderTab name="Maintenance Tracker" />;
+        return <MaintenanceTracker />;
       case 'expenses':
-        return <PlaceholderTab name="Expense Tracker" />;
-      case 'priceboard':
-        return <PlaceholderTab name="Price Board" />;
+        return <ExpenseTracker />;
+      case 'price-board':
+        return <PriceBoard />;
       default:
         return <Dashboard />;
     }
@@ -166,21 +175,26 @@ export default function Home() {
       {/* Mobile Tab Label */}
       <div className="md:hidden px-3 pt-2">
         <div className={`rounded-xl px-4 py-2.5 shadow-sm border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700/50 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
-          <h2 className="text-base font-bold capitalize">{activeTab.replace(/([A-Z])/g, ' $1').trim()}</h2>
+          <h2 className="text-base font-bold capitalize">{activeTab.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}</h2>
         </div>
       </div>
 
       {/* Main Content */}
       <main className="flex-1 p-3 md:p-6 pb-24 md:pb-6">
         <div className="max-w-7xl mx-auto">
-          <div className={`rounded-2xl shadow-lg min-h-[calc(100vh-220px)] md:min-h-[600px] overflow-hidden ${theme === 'dark' ? '' : 'bg-white'}`}>
-            {renderTabContent()}
+          <div className={`rounded-2xl shadow-lg min-h-[calc(100vh-220px)] md:min-h-[600px] overflow-auto ${theme === 'dark' ? '' : 'bg-white'}`}>
+            <div className="p-3 md:p-6">
+              {renderTabContent()}
+            </div>
           </div>
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* AI Chatbot */}
+      <AIChatbot />
 
       {/* Footer */}
       <footer className={`hidden md:block border-t py-3 text-center text-xs ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-gray-200 text-gray-400'}`}>

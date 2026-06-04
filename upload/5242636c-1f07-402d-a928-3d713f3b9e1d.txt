@@ -1,0 +1,78 @@
+# Actual Revenue Inflows vs. Borrowing/Debt Transactions
+## PUBLICAN ENERGY M-PESA Merchant Account Analysis
+
+Based on my review of all provided M-PESA statements, here is the classification of transaction types:
+
+---
+
+## ✅ ACTUAL INFLOWS (Genuine Revenue - NOT Borrowing/Debt)
+
+### Primary Revenue Transaction Types:
+| Transaction Type | Details Pattern | Description |
+|-----------------|----------------|-------------|
+| **Customer Merchant Payment** | `Merchant Payment from [phone]- [Customer Name]` | Direct customer payments for goods/services |
+| **Customer Merchant Payment** | `Merchant Payment Online from [phone]- [Customer Name]` | Online/digital customer payments |
+| **Customer Merchant Payment** | `Small Business Pay Merchant from [phone]- [Customer Name]` | Small business customer payments |
+| **Organization To Organization Transfer** | `Business Buy Goods by [Till] - [Service] via API...` | B2B customer purchases (e.g., Bonga Everywhere, CO-OP TO TILL) |
+
+### Key Characteristics of Genuine Inflows:
+- ✅ "Paid In" column shows positive amounts
+- ✅ Counterparty is a customer (individual or business)
+- ✅ Description includes customer name/phone
+- ✅ No mention of "Boost," "Overdraft," "Loan," or "OD"
+- ✅ Transaction Type = "Customer Merchant Payment" or legitimate B2B transfer
+
+---
+
+## ❌ TRANSACTIONS TO EXCLUDE (Borrowing/Debt or Non-Revenue)
+
+### Overdraft/Loan-Related (NOT Revenue):
+| Transaction Type | Details Pattern | Why Exclude |
+|-----------------|----------------|-------------|
+| OD Payment Transfer | `Loan Disbursement from 804080- Boost ya Biashara` | **Borrowed funds** - must be repaid |
+| OD Payment Transfer | `Biashara Overdraft Repayment` | **Debt repayment** - cash outflow |
+| OD Payment Transfer | `Merchant Pay Utility With Biashara Overdraft...` | Using borrowed money to pay bills |
+| OD Payment Transfer | `Merchant to Utility Payment Charge to M-PESA` | Fee for overdraft usage |
+
+### Other Non-Revenue Items:
+| Transaction Type | Details Pattern | Why Exclude |
+|-----------------|----------------|-------------|
+| Merchant Customer Payment | `Merchant Customer Payment to [phone]- [Name]` | **Outflow** - paying customers/refunds |
+| Pay merchant Charge | `Pay merchant Charge` | **Fee expense** - M-PESA service charges |
+| Merchant to Merchant Payment Charge | `Merchant to Merchant Payment Charge to M-PESA` | **Fee expense** for inter-merchant transfers |
+| Organization To Organization Transfer | `Merchant Pay Utility to 522522-KCB Paybill...` | **Bill payment outflow** |
+
+---
+
+## 📊 Quick Reference: How to Identify Genuine Inflows
+
+When reviewing statements, look for these **GREEN FLAGS**:
+```
+✅ Transaction Type: "Customer Merchant Payment"
+✅ Details start with: "Merchant Payment from..." or "Merchant Payment Online from..."
+✅ "Paid In" has a value; "Withdrawn" = 0.00
+✅ Other Party: "578590-PUBLICAN ENERGY" (your till receiving money)
+✅ No keywords: "Boost", "Overdraft", "Loan", "OD", "Repayment"
+```
+
+**RED FLAGS** (exclude these):
+```
+❌ Transaction Type: "OD Payment Transfer"
+❌ Details contain: "Boost ya Biashara", "Loan Disbursement", "Overdraft Repayment"
+❌ Details contain: "Merchant Pay Utility With Biashara Overdraft"
+❌ Transaction Type: "Merchant Customer Payment" (this is money going OUT)
+❌ Details contain: "Pay merchant Charge" (this is a fee)
+```
+
+---
+
+## 💡 Practical Tip for Accounting
+
+When compiling revenue reports:
+1. **Filter** for `Transaction Type = "Customer Merchant Payment"`
+2. **Sum** the "Paid In" column for these rows only
+3. **Exclude** all rows with "OD Payment Transfer" or "Boost ya Biashara"
+4. **Separately track** "Pay merchant Charge" as operating expenses
+5. **Reconcile** "Biashara Overdraft Repayment" against loan liability accounts
+
+This ensures your revenue figures reflect actual sales, not borrowed funds that create future repayment obligations.

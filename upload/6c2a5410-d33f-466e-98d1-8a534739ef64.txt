@@ -1,0 +1,5 @@
+make sure everything in the website works and make sure everything works by adding features you deem is required. go through the whole website, every inch and every detail.
+
+note: don't limit the "fuel pro" website 8 Countries: Kenya, Uganda, Tanzania, Nigeria, South Africa, Ghana, Rwanda, Ethiopia. add all countries"never limit to few countries" in the world each with their own banks, mobile money providers, and additional methods.
+
+in sign in, let me be able to reset my password if i don't remember the password or if incorrect.

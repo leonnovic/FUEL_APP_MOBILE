@@ -1,0 +1,57 @@
+Based on the **PUBLICAN ENERGY M-PESA Statement** (Shortcode: 578590), here are the transaction types that represent **actual inflows NOT subject to borrowing/debt**:
+
+---
+
+### ✅ GENUINE REVENUE INFLOWS (Exclude from Debt/Borrowing)
+
+| Transaction Type | Category | Amount (KES) | Why It's Not Debt |
+|-----------------|----------|-------------|------------------|
+| **Customer Merchant Payment** | Buy Goods | **98,721.00** | Direct payments from customers purchasing fuel/energy products. No repayment obligation. |
+| **Small Business Pay Merchant** | Buy Goods | *(included above)* | Same as above - legitimate sales revenue. |
+| **Merchant Payment Online** | Buy Goods | *(included above)* | Digital customer payments for goods/services. |
+
+🔹 **All entries with details like:**  
+`"Merchant Payment from 07XX***XXX - [Customer Name]"`  
+→ These are **operating revenue**, not loans.
+
+---
+
+### ❌ INFLOWS THAT ARE BORROWING/DEBT (EXCLUDE from Revenue)
+
+| Transaction Type | Details | Amount (KES) | Why It's Debt |
+|-----------------|---------|-------------|---------------|
+| **Loan Disbursement from 804080- Boost ya Biashara** | TI65P5A84D, TI68MIL0VQ | **194.68** | Overdraft advances from Safaricom Biashara Boost facility. **Must be repaid with fees/interest.** |
+| **OD Payment Transfer** (Loan-related) | Any "Loan Disbursement" detail | Included above | Classified as financing activity, not operating income. |
+
+🔸 These appear under **"Other: Paid In"** in your summary and should be **excluded** from sales/revenue calculations.
+
+---
+
+### ⚠️ Special Note: "OD Payment Transfer" with Customer Payments
+
+Some transactions show:
+- **Details**: `"Merchant Payment received from [Customer]"`  
+- **Type**: `OD Payment Transfer`  
+- **Amount**: e.g., 200.00, 100.00, 300.00 KES  
+
+🔍 **Analysis**: While the *source* is a genuine customer payment, the *routing* goes through the overdraft system.  
+✅ **Recommendation**: For conservative accounting, **include the principal amount as revenue** but **track separately** as these may incur OD fees (visible as small "Pay merchant Charge" or "Merchant to Merchant Payment Charge" outflows).
+
+---
+
+### 📊 Clean Revenue Summary for Accounting
+
+| Category | Amount (KES) | Treatment |
+|----------|-------------|-----------|
+| **Buy Goods: Paid In** | **98,721.00** | ✅ Record as **Operating Revenue** |
+| Other: Paid In | 194.68 | ❌ Exclude (Loan Disbursements) |
+| **Total Actual Non-Debt Inflows** | **98,721.00** | ✅ Use for sales vs. expenses analysis |
+
+---
+
+### 💡 Practical Tip for Your Fuel Station Accounting:
+When reconciling daily sales:
+1. Filter transactions where **Transaction Type = "Customer Merchant Payment"**  
+2. Sum the **"Paid in"** column for those rows only  
+3. Ignore any row containing **"Boost ya Biashara"**, **"Loan Disbursement"**, or **"OD Payment Transfer"** with loan details  
+4. Record the 194.68 KES separately under **Financing Activities → Loan Proceeds** (liability increase)
