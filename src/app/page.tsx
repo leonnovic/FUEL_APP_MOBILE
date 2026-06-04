@@ -21,24 +21,26 @@ import { ReportsCenter } from '@/components/fuel/reports-center';
 import { TeamManager } from '@/components/fuel/team-manager';
 import { PriceBoard } from '@/components/fuel/price-board';
 import { AIChatbot } from '@/components/fuel/ai-chatbot';
+import { LiveTransactions } from '@/components/fuel/live-transactions';
+import { AuditTrail } from '@/components/fuel/audit-trail';
+import { CommunicationHub } from '@/components/fuel/communication-hub';
+import { QualityTesting } from '@/components/fuel/quality-testing';
+import { CreditManagement } from '@/components/fuel/credit-management';
+import { DataManager } from '@/components/fuel/data-manager';
+import { AdvancedAnalytics } from '@/components/fuel/advanced-analytics';
+import { FuelTypesManager } from '@/components/fuel/fuel-types-manager';
+import { CustomerLoyalty } from '@/components/fuel/customer-loyalty';
+import { MpesaAnalytics } from '@/components/fuel/mpesa-analytics';
+import { FuelOffloading } from '@/components/fuel/fuel-offloading';
+import { NewsFeed } from '@/components/fuel/news-feed';
+import { FuelSalesReport } from '@/components/fuel/fuel-sales-report';
+import { IntegrationHub } from '@/components/fuel/integration-hub';
+import { RegionalCompliance } from '@/components/fuel/regional-compliance';
+import { DocumentManager } from '@/components/fuel/document-manager';
+import { PayrollSystem } from '@/components/fuel/payroll-system';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
-
-// Lazy-loaded placeholder for tabs not yet built
-function PlaceholderTab({ name }: { name: string }) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-2xl flex items-center justify-center">
-          <span className="text-2xl">🚀</span>
-        </div>
-        <h3 className="text-lg font-semibold text-white">{name}</h3>
-        <p className="text-slate-400 text-sm mt-1">Module loaded and ready</p>
-      </div>
-    </div>
-  );
-}
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -91,7 +93,7 @@ export default function Home() {
       case 'delivery':
         return <DeliveryTracker />;
       case 'offloading':
-        return <PlaceholderTab name="Fuel Offloading" />;
+        return <FuelOffloading />;
       case 'invoice':
         return <InvoiceSystem />;
       case 'debt':
@@ -99,43 +101,43 @@ export default function Home() {
       case 'reports':
         return <ReportsCenter />;
       case 'mpesa':
-        return <PlaceholderTab name="M-PESA Analytics" />;
+        return <MpesaAnalytics />;
       case 'payroll':
-        return <PlaceholderTab name="Payroll System" />;
+        return <PayrollSystem />;
       case 'data':
-        return <PlaceholderTab name="Data Manager" />;
+        return <DataManager />;
       case 'news':
-        return <PlaceholderTab name="News Feed" />;
+        return <NewsFeed />;
       case 'live':
-        return <PlaceholderTab name="Live Transactions" />;
+        return <LiveTransactions />;
       case 'fuel-sales':
-        return <PlaceholderTab name="Fuel Sales Report" />;
+        return <FuelSalesReport />;
       case 'communication':
-        return <PlaceholderTab name="Communication" />;
+        return <CommunicationHub />;
       case 'inventory':
         return <InventoryManagement />;
       case 'customers':
-        return <PlaceholderTab name="Customer Loyalty" />;
+        return <CustomerLoyalty />;
       case 'audit':
-        return <PlaceholderTab name="Audit Trail" />;
+        return <AuditTrail />;
       case 'shifts':
         return <ShiftManagement />;
       case 'quality':
-        return <PlaceholderTab name="Fuel Quality Testing" />;
+        return <QualityTesting />;
       case 'credit':
-        return <PlaceholderTab name="Credit Management" />;
+        return <CreditManagement />;
       case 'analytics':
-        return <PlaceholderTab name="Advanced Analytics" />;
+        return <AdvancedAnalytics />;
       case 'integration':
-        return <PlaceholderTab name="Integration Hub" />;
+        return <IntegrationHub />;
       case 'regional':
-        return <PlaceholderTab name="Regional Compliance" />;
+        return <RegionalCompliance />;
       case 'fuel-types':
-        return <PlaceholderTab name="Fuel Types Manager" />;
+        return <FuelTypesManager />;
       case 'team':
         return <TeamManager />;
       case 'documents':
-        return <PlaceholderTab name="Document Manager" />;
+        return <DocumentManager />;
       case 'suppliers':
         return <SupplierManagement />;
       case 'maintenance':

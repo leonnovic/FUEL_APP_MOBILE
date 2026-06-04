@@ -139,15 +139,21 @@ function seedDemoData() {
   });
 }
 
-// Animated background particles
+// Animated background particles - uses deterministic seed to avoid hydration mismatch
 function BackgroundParticles() {
+  // Deterministic pseudo-random generator - same output on server and client
+  const seededRandom = (seed: number) => {
+    const x = Math.sin(seed * 9301 + 49297) * 49297;
+    return x - Math.floor(x);
+  };
+
   const particles = Array.from({ length: 20 }, (_, i) => ({
     id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: Math.random() * 80 + 20,
-    duration: Math.random() * 20 + 15,
-    delay: Math.random() * 5,
+    x: seededRandom(i * 7 + 1) * 100,
+    y: seededRandom(i * 13 + 3) * 100,
+    size: seededRandom(i * 17 + 5) * 80 + 20,
+    duration: seededRandom(i * 23 + 7) * 20 + 15,
+    delay: seededRandom(i * 29 + 11) * 5,
   }));
 
   return (
