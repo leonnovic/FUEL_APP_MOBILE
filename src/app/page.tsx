@@ -38,6 +38,7 @@ import { IntegrationHub } from '@/components/fuel/integration-hub';
 import { RegionalCompliance } from '@/components/fuel/regional-compliance';
 import { DocumentManager } from '@/components/fuel/document-manager';
 import { PayrollSystem } from '@/components/fuel/payroll-system';
+import { SettingsPage } from '@/components/fuel/settings-page';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
@@ -146,6 +147,8 @@ export default function Home() {
         return <ExpenseTracker />;
       case 'price-board':
         return <PriceBoard />;
+      case 'settings':
+        return <SettingsPage />;
       default:
         return <Dashboard />;
     }
@@ -167,25 +170,31 @@ export default function Home() {
       <Header
         onShowStations={() => setShowStations(!showStations)}
         onShowCombined={() => {}}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
+
+      {/* Gradient separator line below header */}
+      <div className="h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
 
       {/* Desktop Tab Navigation */}
       <div className="hidden md:block">
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
 
-      {/* Mobile Tab Label */}
+      {/* Mobile Tab Label with accent bar */}
       <div className="md:hidden px-3 pt-2">
-        <div className={`rounded-xl px-4 py-2.5 shadow-sm border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700/50 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+        <div className={`rounded-xl px-4 py-2.5 shadow-sm border flex items-center gap-3 ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700/50 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+          <div className="w-1 h-6 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 shrink-0" />
           <h2 className="text-base font-bold capitalize">{activeTab.replace(/-/g, ' ').replace(/([A-Z])/g, ' $1').trim()}</h2>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content with fade-in animation on tab switch */}
       <main className="flex-1 p-3 md:p-6 pb-24 md:pb-6">
         <div className="max-w-7xl mx-auto">
           <div className={`rounded-2xl shadow-lg min-h-[calc(100vh-220px)] md:min-h-[600px] overflow-auto ${theme === 'dark' ? '' : 'bg-white'}`}>
-            <div className="p-3 md:p-6">
+            <div className="p-3 md:p-6 animate-fade-in" key={activeTab}>
               {renderTabContent()}
             </div>
           </div>
@@ -198,14 +207,17 @@ export default function Home() {
       {/* AI Chatbot */}
       <AIChatbot />
 
-      {/* Footer */}
-      <footer className={`hidden md:block border-t py-3 text-center text-xs ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-500' : 'bg-white border-gray-200 text-gray-400'}`}>
+      {/* Footer with gradient separator */}
+      <footer className={`hidden md:block border-t py-3 text-center text-xs ${theme === 'dark' ? 'bg-slate-900 text-slate-500' : 'bg-white text-gray-400'}`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-slate-700/50 to-transparent mb-3" />
         <div className="flex items-center justify-center gap-4">
-          <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-green-500" /> Secure</span>
-          <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-blue-500" /> Encrypted</span>
-          <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-500" /> Any Device</span>
-          <span>·</span>
-          <span>FuelPro © {new Date().getFullYear()}</span>
+          <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-500" /> Secure</span>
+          <span className="text-slate-700/30">|</span>
+          <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-blue-500" /> Encrypted</span>
+          <span className="text-slate-700/30">|</span>
+          <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-amber-500" /> Any Device</span>
+          <span className="text-slate-700/30">|</span>
+          <span className="text-slate-600">FuelPro © {new Date().getFullYear()}</span>
         </div>
       </footer>
     </div>

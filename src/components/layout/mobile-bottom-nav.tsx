@@ -43,6 +43,14 @@ interface MobileBottomNavProps {
   onTabChange: (tab: string) => void;
 }
 
+// Badges for bottom nav items
+const navBadges: Record<string, { count?: number; alert?: boolean }> = {
+  mpesa: { count: 3 },
+  maintenance: { alert: true },
+  live: { alert: true },
+  credit: { count: 2 },
+};
+
 const mainTabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'sales', label: 'Sales', icon: DollarSign },
@@ -61,7 +69,7 @@ const moreTabs = [
   { id: 'news', label: 'News', icon: Newspaper },
   { id: 'live', label: 'Live', icon: Radio },
   { id: 'fuel-sales', label: 'Fuel Sales', icon: Fuel },
-  { id: 'communication', label: 'Communication', icon: MessageSquare },
+  { id: 'communication', label: 'Chat', icon: MessageSquare },
   { id: 'inventory', label: 'Inventory', icon: Package },
   { id: 'customers', label: 'Customers', icon: UserCircle },
   { id: 'audit', label: 'Audit', icon: ClipboardCheck },
@@ -73,11 +81,11 @@ const moreTabs = [
   { id: 'regional', label: 'Regional', icon: Globe },
   { id: 'fuel-types', label: 'Fuel Types', icon: Layers },
   { id: 'team', label: 'Team', icon: UsersRound },
-  { id: 'documents', label: 'Documents', icon: FileStack },
+  { id: 'documents', label: 'Docs', icon: FileStack },
   { id: 'suppliers', label: 'Suppliers', icon: Warehouse },
-  { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+  { id: 'maintenance', label: 'Maintain', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
-  { id: 'price-board', label: 'Price Board', icon: Monitor },
+  { id: 'price-board', label: 'Prices', icon: Monitor },
 ];
 
 export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
@@ -94,13 +102,29 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
   return (
     <>
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-700/50 md:hidden safe-area-bottom"
+        className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-700/50 md:hidden"
         role="tablist"
         aria-label="Main navigation"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="flex items-center justify-around h-14 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-around h-14 relative">
+          {/* Active indicator pill that slides */}
+          <div
+            className="absolute top-0 h-0.5 bg-amber-400 rounded-full transition-all duration-300 ease-out"
+            style={{
+              width: '32px',
+              left: activeTab === 'dashboard' ? 'calc(10% - 16px)' :
+                     activeTab === 'sales' ? 'calc(30% - 16px)' :
+                     activeTab === 'pos' ? 'calc(50% - 16px)' :
+                     activeTab === 'reports' ? 'calc(70% - 16px)' :
+                     'calc(90% - 16px)',
+              opacity: mainTabs.some(t => t.id === activeTab) || isActiveInMore ? 1 : 0,
+            }}
+          />
+
           {mainTabs.map((tab) => {
             const isActive = activeTab === tab.id;
+            const badge = navBadges[tab.id];
             return (
               <button
                 key={tab.id}
@@ -109,12 +133,27 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
                 onClick={() => handleTabChange(tab.id)}
                 className={`
                   flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-w-[56px]
-                  transition-colors
+                  transition-all duration-200 relative
                   ${isActive ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'}
                 `}
               >
-                <tab.icon className="size-5" />
+                <div className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'scale-100'}`}>
+                  <tab.icon className="size-5" />
+                </div>
                 <span className="text-[10px] font-medium">{tab.label}</span>
+                {/* Glow effect on active */}
+                {isActive && (
+                  <span className="absolute inset-0 rounded-xl bg-amber-400/5 pointer-events-none" />
+                )}
+                {/* Badge */}
+                {badge?.count && (
+                  <span className="absolute top-0.5 right-2 inline-flex items-center justify-center min-w-[14px] h-3.5 px-0.5 text-[8px] font-bold rounded-full bg-amber-500 text-black">
+                    {badge.count}
+                  </span>
+                )}
+                {badge?.alert && !badge?.count && (
+                  <span className="absolute top-0.5 right-2 size-2 rounded-full bg-red-500 animate-pulse-subtle" />
+                )}
               </button>
             );
           })}
@@ -127,39 +166,56 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
                 aria-selected={isActiveInMore}
                 className={`
                   flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-w-[56px]
-                  transition-colors
+                  transition-all duration-200 relative
                   ${isActiveInMore ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'}
                 `}
               >
-                <MoreHorizontal className="size-5" />
+                <div className={`transition-transform duration-200 ${isActiveInMore ? 'scale-110' : 'scale-100'}`}>
+                  <MoreHorizontal className="size-5" />
+                </div>
                 <span className="text-[10px] font-medium">More</span>
+                {isActiveInMore && (
+                  <span className="absolute inset-0 rounded-xl bg-amber-400/5 pointer-events-none" />
+                )}
               </button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="bg-slate-900 border-slate-700 text-white rounded-t-xl h-[70vh]">
+            <SheetContent side="bottom" className="bg-slate-900 border-slate-700 text-white rounded-t-2xl h-[75vh]">
               <SheetHeader>
-                <SheetTitle className="text-white text-center">All Modules</SheetTitle>
+                <SheetTitle className="text-white text-center text-lg">All Modules</SheetTitle>
               </SheetHeader>
-              <ScrollArea className="h-[calc(70vh-80px)] mt-4">
-                <div className="grid grid-cols-4 gap-3 px-4 pb-8">
+              <ScrollArea className="h-[calc(75vh-80px)] mt-4">
+                <div className="grid grid-cols-3 gap-2.5 px-4 pb-10">
                   {moreTabs.map((tab) => {
                     const isActive = activeTab === tab.id;
+                    const badge = navBadges[tab.id];
                     return (
                       <button
                         key={tab.id}
                         onClick={() => handleTabChange(tab.id)}
                         className={`
                           flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl
-                          transition-colors min-h-[72px]
+                          transition-all duration-200 min-h-[76px] relative
                           ${isActive
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                            : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-transparent'
+                            ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-lg shadow-amber-500/5'
+                            : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-transparent hover:border-white/10'
                           }
                         `}
                       >
-                        <tab.icon className="size-5" />
-                        <span className="text-[10px] font-medium leading-tight text-center">
+                        <div className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'scale-100'}`}>
+                          <tab.icon className="size-5" />
+                        </div>
+                        <span className="text-[10px] font-medium leading-tight text-center line-clamp-2">
                           {tab.label}
                         </span>
+                        {/* Badge in grid */}
+                        {badge?.count && (
+                          <span className="absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-[14px] h-3.5 px-0.5 text-[8px] font-bold rounded-full bg-amber-500 text-black">
+                            {badge.count}
+                          </span>
+                        )}
+                        {badge?.alert && !badge?.count && (
+                          <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-red-500 animate-pulse-subtle" />
+                        )}
                       </button>
                     );
                   })}
@@ -170,8 +226,8 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
         </div>
       </nav>
 
-      {/* Spacer for bottom nav */}
-      <div className="h-14 md:hidden" />
+      {/* Spacer for bottom nav with safe area */}
+      <div className="md:hidden" style={{ height: 'calc(56px + env(safe-area-inset-bottom, 0px))' }} />
     </>
   );
 }

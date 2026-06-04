@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Fuel,
   Shield,
@@ -89,7 +88,7 @@ function seedDemoData() {
     transport: 'Fuel transport',
     misc: 'Office supplies',
   };
-  expCategories.forEach((cat, i) => {
+  expCategories.forEach((cat) => {
     store.addExpense({
       date: today,
       category: cat,
@@ -159,21 +158,15 @@ function BackgroundParticles() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {particles.map((p) => (
-        <motion.div
+        <div
           key={p.id}
           className="absolute rounded-full bg-white/5"
-          style={{ left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size }}
-          animate={{
-            x: [0, 30, -20, 0],
-            y: [0, -40, 20, 0],
-            scale: [1, 1.1, 0.9, 1],
-            opacity: [0.3, 0.6, 0.3],
-          }}
-          transition={{
-            duration: p.duration,
-            delay: p.delay,
-            repeat: Infinity,
-            ease: 'easeInOut',
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: p.size,
+            height: p.size,
+            animation: `fadeIn 2s ease-out ${p.delay}s both, pulse-subtle ${p.duration}s ease-in-out ${p.delay}s infinite`,
           }}
         />
       ))}
@@ -193,6 +186,23 @@ const features = [
 // Module tags
 const modules = ['Fuel Monitoring', 'Invoice System', 'M-PESA Analytics', 'Payroll System'];
 
+// Password strength calculator
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  if (!password) return { score: 0, label: '', color: '' };
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 10) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { score: 1, label: 'Weak', color: 'bg-red-500' };
+  if (score <= 2) return { score: 2, label: 'Fair', color: 'bg-orange-500' };
+  if (score <= 3) return { score: 3, label: 'Medium', color: 'bg-amber-500' };
+  if (score <= 4) return { score: 4, label: 'Strong', color: 'bg-emerald-500' };
+  return { score: 5, label: 'Very Strong', color: 'bg-emerald-400' };
+}
+
 // Registration dialog
 function RegisterDialog({
   open,
@@ -210,6 +220,8 @@ function RegisterDialog({
   const register = useAuthStore((s) => s.register);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
+
+  const strength = getPasswordStrength(password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +247,7 @@ function RegisterDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="John Doe"
               required
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
             />
           </div>
           <div className="space-y-2">
@@ -246,7 +258,7 @@ function RegisterDialog({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="john@example.com"
               required
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
             />
           </div>
           <div className="space-y-2">
@@ -255,7 +267,7 @@ function RegisterDialog({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+254 7XX XXX XXX"
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
             />
           </div>
           <div className="space-y-2">
@@ -267,22 +279,45 @@ function RegisterDialog({
               placeholder="Create a strong password"
               required
               minLength={6}
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
             />
+            {/* Password strength indicator */}
+            {password && (
+              <div className="space-y-1.5 animate-fade-in">
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((level) => (
+                    <div
+                      key={level}
+                      className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                        level <= strength.score ? strength.color : 'bg-slate-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className={`text-[10px] font-medium ${
+                  strength.score <= 1 ? 'text-red-400' :
+                  strength.score <= 2 ? 'text-orange-400' :
+                  strength.score <= 3 ? 'text-amber-400' :
+                  'text-emerald-400'
+                }`}>
+                  {strength.label}
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-white transition-all duration-200 hover:scale-105"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              className="bg-amber-500 hover:bg-amber-600 text-black font-semibold transition-all duration-200 hover:scale-105"
             >
               {isLoading ? <Loader2 className="animate-spin mr-2 size-4" /> : null}
               Create Account
@@ -340,7 +375,7 @@ function FounderDialog({
               onChange={(e) => setCode(e.target.value)}
               placeholder="Enter founder access code"
               required
-              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
             />
           </div>
           <DialogFooter>
@@ -348,13 +383,13 @@ function FounderDialog({
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-white transition-all duration-200 hover:scale-105"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              className="bg-amber-500 hover:bg-amber-600 text-black font-semibold transition-all duration-200 hover:scale-105"
             >
               Unlock Access
             </Button>
@@ -436,73 +471,61 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 relative flex flex-col items-center justify-center p-4 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 relative flex flex-col items-center justify-center p-4 overflow-hidden noise-overlay">
       <BackgroundParticles />
 
       <div className="relative z-10 w-full max-w-5xl">
-        {/* Branding */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-8"
-        >
-          <h1 className="text-4xl md:text-5xl font-bold text-white flex items-center justify-center gap-3">
+        {/* Branding - with gradient text and CSS animation */}
+        <div className="text-center mb-8 animate-slide-up">
+          <h1 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-3">
             <Fuel className="size-10 md:size-12 text-amber-400" />
-            FuelPro
+            <span className="gradient-text">FuelPro</span>
           </h1>
-          <p className="text-slate-300 mt-2 text-lg">Professional Fuel Management</p>
-        </motion.div>
+          <p className="text-slate-300 mt-2 text-lg animate-fade-in" style={{ animationDelay: '0.15s' }}>
+            Professional Fuel Management
+          </p>
+        </div>
 
-        {/* Feature cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="hidden md:grid grid-cols-5 gap-3 mb-6"
-        >
+        {/* Feature cards - staggered entrance with CSS animations */}
+        <div className="hidden md:grid grid-cols-5 gap-3 mb-6">
           {features.map((f, i) => (
-            <motion.div
+            <div
               key={f.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + i * 0.1 }}
+              className="animate-slide-up"
+              style={{ animationDelay: `${0.2 + i * 0.1}s` }}
             >
-              <Card className="bg-white/5 border-white/10 backdrop-blur-sm text-center py-3 px-2 gap-2 hover:bg-white/10 transition-colors">
+              <Card className="bg-white/5 border-white/10 backdrop-blur-sm text-center py-3 px-2 gap-2 hover:bg-white/10 transition-all duration-200 hover:scale-105 hover:border-white/20 cursor-default">
                 <CardContent className="p-0">
                   <f.icon className="size-6 text-amber-400 mx-auto mb-1" />
                   <p className="text-white text-xs font-semibold">{f.title}</p>
                   <p className="text-slate-400 text-[10px]">{f.desc}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
 
         {/* Module tags */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="flex flex-wrap justify-center gap-2 mb-8"
+        <div
+          className="flex flex-wrap justify-center gap-2 mb-8 animate-fade-in"
+          style={{ animationDelay: '0.7s' }}
         >
           {modules.map((mod) => (
             <span
               key={mod}
-              className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-slate-300 border border-white/10"
+              className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-slate-300 border border-white/10 hover:bg-white/15 hover:border-white/20 transition-all duration-200"
             >
               {mod}
             </span>
           ))}
-        </motion.div>
+        </div>
 
-        {/* Sign In Card */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+        {/* Sign In Card - Glassmorphism with backdrop-blur-xl */}
+        <div
+          className="animate-slide-up"
+          style={{ animationDelay: '0.5s' }}
         >
-          <Card className="bg-white/10 backdrop-blur-md border-white/20 max-w-md mx-auto">
+          <Card className="bg-white/5 backdrop-blur-xl border-white/15 max-w-md mx-auto shadow-2xl shadow-black/20">
             <CardHeader className="text-center pb-0">
               <CardTitle className="text-white text-xl">Welcome to FuelPro</CardTitle>
               <CardDescription className="text-slate-300">
@@ -513,7 +536,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               {/* Continue instantly button */}
               <Button
                 onClick={handleDemoLogin}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base transition-all duration-200 hover:scale-105 active:scale-100"
                 size="lg"
               >
                 <Zap className="size-5 mr-2" />
@@ -555,48 +578,34 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
               {/* Sign in form */}
               <form onSubmit={handleSignIn} className="space-y-3">
-                <AnimatePresence mode="wait">
-                  {authMode === 'email' ? (
-                    <motion.div
-                      key="email"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
-                      className="space-y-2"
-                    >
-                      <Label className="text-slate-300 text-xs">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-                        <Input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="you@example.com"
-                          className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10"
-                        />
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="username"
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      className="space-y-2"
-                    >
-                      <Label className="text-slate-300 text-xs">Username</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-                        <Input
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          placeholder="your_username"
-                          className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {authMode === 'email' ? (
+                  <div className="space-y-2 animate-fade-in">
+                    <Label className="text-slate-300 text-xs">Email Address</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                      <Input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 animate-fade-in">
+                    <Label className="text-slate-300 text-xs">Username</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                      <Input
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="your_username"
+                        className="pl-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-slate-300 text-xs">Password</Label>
@@ -607,7 +616,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
-                      className="pl-10 pr-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10"
+                      className="pl-10 pr-10 bg-white/5 border-white/20 text-white placeholder:text-slate-500 h-10 transition-all duration-200 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20"
                     />
                     <button
                       type="button"
@@ -620,7 +629,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 </div>
 
                 {authStore.error && (
-                  <p className="text-sm text-red-400 text-center">{authStore.error}</p>
+                  <p className="text-sm text-red-400 text-center animate-fade-in">{authStore.error}</p>
                 )}
 
                 <div className="flex justify-end">
@@ -635,7 +644,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 <Button
                   type="submit"
                   disabled={authStore.isLoading}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold h-10"
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold h-10 transition-all duration-200 hover:scale-105 active:scale-100"
                 >
                   {authStore.isLoading ? (
                     <Loader2 className="animate-spin mr-2 size-4" />
@@ -671,14 +680,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Footer trust badges */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="text-center mt-8 flex items-center justify-center gap-4 text-slate-500 text-xs"
+        <div
+          className="text-center mt-8 flex items-center justify-center gap-4 text-slate-500 text-xs animate-fade-in"
+          style={{ animationDelay: '1s' }}
         >
           <span className="flex items-center gap-1">
             <Check className="size-3 text-emerald-500" /> Secure
@@ -691,7 +698,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           <span className="flex items-center gap-1">
             <Check className="size-3 text-emerald-500" /> Any Device
           </span>
-        </motion.div>
+        </div>
       </div>
 
       {/* Dialogs */}
