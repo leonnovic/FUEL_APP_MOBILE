@@ -100,6 +100,11 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
   // Check if the active tab is in the "more" list
   const isActiveInMore = moreTabs.some((t) => t.id === activeTab);
 
+  // Count tabs with notifications/updates for the "More" badge
+  const moreBadgeCount = Object.entries(navBadges).filter(([key]) =>
+    moreTabs.some((t) => t.id === key)
+  ).length;
+
   const handleTabChange = (tabId: string) => {
     onTabChange(tabId);
     setMoreOpen(false);
@@ -139,10 +144,14 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
                 onClick={() => handleTabChange(tab.id)}
                 className={`
                   flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-w-[56px]
-                  transition-all duration-200 relative
+                  transition-all duration-200 relative haptic-tap
                   ${isActive ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'}
                 `}
               >
+                {/* Active amber dot indicator */}
+                {isActive && (
+                  <span className="absolute -top-1 size-1.5 rounded-full bg-amber-400 animate-active-dot" />
+                )}
                 <div className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'scale-100'}`}>
                   <tab.icon className="size-5" />
                 </div>
@@ -172,16 +181,26 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
                 aria-selected={isActiveInMore}
                 className={`
                   flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 min-w-[56px]
-                  transition-all duration-200 relative
+                  transition-all duration-200 relative haptic-tap
                   ${isActiveInMore ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'}
                 `}
               >
+                {/* Active amber dot indicator */}
+                {isActiveInMore && (
+                  <span className="absolute -top-1 size-1.5 rounded-full bg-amber-400 animate-active-dot" />
+                )}
                 <div className={`transition-transform duration-200 ${isActiveInMore ? 'scale-110' : 'scale-100'}`}>
                   <MoreHorizontal className="size-5" />
                 </div>
                 <span className="text-[10px] font-medium">More</span>
                 {isActiveInMore && (
                   <span className="absolute inset-0 rounded-xl bg-amber-400/5 pointer-events-none" />
+                )}
+                {/* Badge showing count of tabs with notifications */}
+                {moreBadgeCount > 0 && !isActiveInMore && (
+                  <span className="absolute top-0.5 right-2 inline-flex items-center justify-center min-w-[14px] h-3.5 px-0.5 text-[8px] font-bold rounded-full bg-amber-500 text-black">
+                    {moreBadgeCount}
+                  </span>
                 )}
               </button>
             </SheetTrigger>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useSyncExternalStore } from 'react';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
   Fuel,
   Shield,
@@ -194,6 +194,73 @@ const features = [
 
 // Module tags
 const modules = ['Fuel Monitoring', 'Invoice System', 'M-PESA Analytics', 'Payroll System'];
+
+// Stats counter data
+const stats = [
+  { value: 50, suffix: '+', label: 'Stations' },
+  { value: 10, suffix: 'K+', label: 'Users' },
+  { value: 1, suffix: 'M+', label: 'Transactions' },
+  { value: 99.9, suffix: '%', label: 'Uptime' },
+];
+
+// Animated counter hook
+function useCountUp(target: number, duration: number = 2000, startOnMount: boolean = true) {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    if (!startOnMount || started) return;
+    const timer = setTimeout(() => setStarted(true), 1200);
+    return () => clearTimeout(timer);
+  }, [startOnMount, started]);
+
+  useEffect(() => {
+    if (!started) return;
+    const startTime = Date.now();
+    const isDecimal = target % 1 !== 0;
+    const step = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const current = eased * target;
+      setCount(isDecimal ? parseFloat(current.toFixed(1)) : Math.floor(current));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [started, target, duration]);
+
+  return count;
+}
+
+// Stats counter row component
+function StatsCounter() {
+  return (
+    <div
+      className="flex justify-center gap-6 md:gap-10 mb-8 animate-fade-in"
+      style={{ animationDelay: '0.9s' }}
+    >
+      {stats.map((stat, i) => (
+        <StatItem key={stat.label} stat={stat} delay={i * 200} />
+      ))}
+    </div>
+  );
+}
+
+function StatItem({ stat, delay }: { stat: typeof stats[number]; delay: number }) {
+  const count = useCountUp(stat.value, 2000);
+  const displayValue = stat.value % 1 !== 0 ? count.toFixed(1) : count;
+  return (
+    <div
+      className="text-center animate-number-slide"
+      style={{ animationDelay: `${1.2 + delay / 1000}s` }}
+    >
+      <div className="text-xl md:text-2xl font-bold gradient-text-amber">
+        {displayValue}{stat.suffix}
+      </div>
+      <div className="text-[10px] md:text-xs text-slate-400 mt-0.5">{stat.label}</div>
+    </div>
+  );
+}
 
 // Password strength calculator
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
@@ -417,34 +484,38 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [founderOpen, setFounderOpen] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const authStore = useAuthStore();
   const { addStation } = useStationStore();
 
   // Continue instantly - demo login
   const handleDemoLogin = useCallback(() => {
-    const demoUser = {
-      id: 'demo-user-1',
-      email: 'demo@fuelpro.app',
-      name: 'Demo User',
-      role: 'owner' as const,
-      phone: '+254 700 000 000',
-    };
+    setShowSuccess(true);
+    setTimeout(() => {
+      const demoUser = {
+        id: 'demo-user-1',
+        email: 'demo@fuelpro.app',
+        name: 'Demo User',
+        role: 'owner' as const,
+        phone: '+254 700 000 000',
+      };
 
-    // Create a demo station if none exists
-    addStation({
-      name: 'FuelPro Demo Station',
-      location: 'Nairobi, Kenya',
-      country: 'Kenya',
-      currency: 'KES',
-      ownerId: demoUser.id,
-    });
+      // Create a demo station if none exists
+      addStation({
+        name: 'FuelPro Demo Station',
+        location: 'Nairobi, Kenya',
+        country: 'Kenya',
+        currency: 'KES',
+        ownerId: demoUser.id,
+      });
 
-    // Seed demo data
-    seedDemoData();
+      // Seed demo data
+      seedDemoData();
 
-    authStore.setUser(demoUser);
-    onLogin();
+      authStore.setUser(demoUser);
+      onLogin();
+    }, 900);
   }, [authStore, addStation, onLogin]);
 
   // Sign in with credentials
@@ -487,12 +558,14 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         {/* Branding - with gradient text and CSS animation */}
         <div className="text-center mb-8 animate-slide-up">
           <h1 className="text-4xl md:text-5xl font-bold flex items-center justify-center gap-3">
-            <Fuel className="size-10 md:size-12 text-amber-400" />
+            <Fuel className="size-10 md:size-12 text-amber-400 animate-float" />
             <span className="gradient-text">FuelPro</span>
           </h1>
-          <p className="text-slate-300 mt-2 text-lg animate-fade-in" style={{ animationDelay: '0.15s' }}>
-            Professional Fuel Management
-          </p>
+          <div className="mt-2 text-lg" style={{ display: 'flex', justifyContent: 'center' }}>
+            <span className="typewriter-text text-slate-300">
+              Professional Fuel Management
+            </span>
+          </div>
         </div>
 
         {/* Feature cards - staggered entrance with CSS animations */}
@@ -503,7 +576,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               className="animate-slide-up"
               style={{ animationDelay: `${0.2 + i * 0.1}s` }}
             >
-              <Card className="bg-white/5 border-white/10 backdrop-blur-sm text-center py-3 px-2 gap-2 hover:bg-white/10 transition-all duration-200 hover:scale-105 hover:border-white/20 cursor-default">
+              <Card className="bg-white/5 border-white/10 backdrop-blur-sm text-center py-3 px-2 gap-2 hover:bg-white/10 transition-all duration-200 hover:scale-105 hover:border-white/20 cursor-default hover:amber-glow">
                 <CardContent className="p-0">
                   <f.icon className="size-6 text-amber-400 mx-auto mb-1" />
                   <p className="text-white text-xs font-semibold">{f.title}</p>
@@ -516,7 +589,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
         {/* Module tags */}
         <div
-          className="flex flex-wrap justify-center gap-2 mb-8 animate-fade-in"
+          className="flex flex-wrap justify-center gap-2 mb-4 animate-fade-in"
           style={{ animationDelay: '0.7s' }}
         >
           {modules.map((mod) => (
@@ -529,12 +602,15 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           ))}
         </div>
 
+        {/* Stats Counter */}
+        <StatsCounter />
+
         {/* Sign In Card - Glassmorphism with backdrop-blur-xl */}
         <div
           className="animate-slide-up"
           style={{ animationDelay: '0.5s' }}
         >
-          <Card className="bg-white/5 backdrop-blur-xl border-white/15 max-w-md mx-auto shadow-2xl shadow-black/20">
+          <Card className="gradient-border bg-white/5 backdrop-blur-xl border-white/15 max-w-md mx-auto shadow-2xl shadow-black/20">
             <CardHeader className="text-center pb-0">
               <CardTitle className="text-white text-xl">Welcome to FuelPro</CardTitle>
               <CardDescription className="text-slate-300">
@@ -542,15 +618,40 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Continue instantly button */}
-              <Button
-                onClick={handleDemoLogin}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base transition-all duration-200 hover:scale-105 active:scale-100"
-                size="lg"
-              >
-                <Zap className="size-5 mr-2" />
-                Continue instantly — start in 1 second
-              </Button>
+              {/* Continue instantly button / Success animation */}
+              {showSuccess ? (
+                <div className="w-full flex items-center justify-center py-3">
+                  <div className="animate-success-icon flex items-center justify-center">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                      <circle
+                        cx="24" cy="24" r="22"
+                        stroke="oklch(0.72 0.2 145)" strokeWidth="2"
+                        className="animate-success-circle"
+                        fill="oklch(0.72 0.2 145 / 10%)"
+                      />
+                      <path
+                        d="M15 24l6 6 12-12"
+                        stroke="oklch(0.72 0.2 145)" strokeWidth="2.5"
+                        strokeLinecap="round" strokeLinejoin="round"
+                        className="animate-success-icon"
+                        style={{ animationDelay: '0.3s' }}
+                      />
+                    </svg>
+                  </div>
+                  <span className="ml-3 text-emerald-400 font-semibold animate-fade-in" style={{ animationDelay: '0.4s' }}>
+                    Welcome aboard!
+                  </span>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleDemoLogin}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base transition-all duration-200 hover:scale-105 active:scale-100"
+                  size="lg"
+                >
+                  <Zap className="size-5 mr-2" />
+                  Continue instantly — start in 1 second
+                </Button>
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

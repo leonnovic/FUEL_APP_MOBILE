@@ -38,6 +38,7 @@ import {
   Calculator,
   ClipboardList,
   Settings,
+  MapPin,
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
@@ -92,6 +93,8 @@ const tabs = [
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Price Board', icon: Monitor },
   { id: 'price-predict', label: 'Price Predict', icon: TrendingUp },
+  { id: 'station-locator', label: 'Stations', icon: MapPin },
+  { id: 'fleet', label: 'Fleet', icon: Truck },
   { id: 'fuel-orders', label: 'Orders', icon: ClipboardList },
   { id: 'profit-calc', label: 'Profit Calc', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings },

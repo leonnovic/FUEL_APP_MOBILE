@@ -61,6 +61,8 @@ const FuelOrderRequest = dynamic(() => import('@/components/fuel/fuel-order-requ
 const ProfitCalculator = dynamic(() => import('@/components/fuel/profit-calculator').then(m => ({ default: m.ProfitCalculator })), { loading: TabLoader });
 const StationPerformance = dynamic(() => import('@/components/fuel/station-performance').then(m => ({ default: m.StationPerformance })), { loading: TabLoader });
 const FuelPricePredictor = dynamic(() => import('@/components/fuel/fuel-price-predictor').then(m => ({ default: m.FuelPricePredictor })), { loading: TabLoader });
+const StationLocator = dynamic(() => import('@/components/fuel/station-locator').then(m => ({ default: m.StationLocator })), { loading: TabLoader });
+const FleetManager = dynamic(() => import('@/components/fuel/fleet-manager').then(m => ({ default: m.FleetManager })), { loading: TabLoader });
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -176,6 +178,10 @@ export default function Home() {
         return <StationPerformance />;
       case 'price-predict':
         return <FuelPricePredictor />;
+      case 'station-locator':
+        return <StationLocator />;
+      case 'fleet':
+        return <FleetManager />;
       default:
         return <Dashboard />;
     }

@@ -269,6 +269,7 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [notifFilter, setNotifFilter] = useState<string>('all');
+  const [currentTime, setCurrentTime] = useState('');
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -309,6 +310,17 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
     },
     [onTabChange]
   );
+
+  // Update current time every minute
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Keyboard shortcut for search (Ctrl+K)
   useEffect(() => {
@@ -428,20 +440,26 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
                 </SelectContent>
               </Select>
               {/* Live status indicator */}
-              <div className="flex items-center gap-1.5" title="System Online">
-                <span className="relative flex size-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full size-2 bg-green-500" />
-                </span>
-                <span className="text-[10px] text-green-400 font-medium hidden lg:inline">ONLINE</span>
+              <div className="flex items-center gap-1.5" title="Station Live">
+                <span className="relative flex size-2 animate-live-pulse rounded-full bg-green-500" />
+                <span className="text-[10px] text-green-400 font-bold tracking-wider hidden lg:inline">LIVE</span>
               </div>
+
+              {/* Current time display */}
+              {currentTime && (
+                <div className="hidden lg:flex items-center gap-1 text-xs text-slate-400">
+                  <Clock className="size-3" />
+                  <span className="font-mono tabular-nums">{currentTime}</span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Breadcrumb: current tab name */}
-          <div className="hidden md:flex items-center gap-1 text-sm text-slate-400">
-            <ChevronRight className="size-3.5" />
-            <span className="text-white font-medium">{currentTabLabel}</span>
+          {/* Breadcrumb trail */}
+          <div className="hidden md:flex items-center gap-1.5 text-sm">
+            <span className="text-slate-500">FuelPro</span>
+            <ChevronRight className="size-3.5 text-slate-600" />
+            <span className="text-white font-medium bg-white/5 px-2 py-0.5 rounded text-xs">{currentTabLabel}</span>
           </div>
 
           {/* Mobile station indicator with live dot */}
@@ -490,7 +508,7 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
           >
             <Bell className="size-4" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-amber-500 text-[10px] font-bold text-black rounded-full px-1">
+              <span key={unreadCount} className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-amber-500 text-[10px] font-bold text-black rounded-full px-1 animate-badge-bounce">
                 {unreadCount}
               </span>
             )}
@@ -510,11 +528,9 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center gap-2 h-8 px-2 hover:bg-white/10">
-                <Avatar className="size-7">
-                  <AvatarFallback className="bg-amber-500/20 text-amber-400 text-xs font-semibold">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="size-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-black text-xs font-bold shadow-sm shadow-amber-500/20">
+                  {initials}
+                </div>
                 <span className="hidden md:inline text-sm text-slate-300 max-w-[120px] truncate">
                   {user?.name ?? 'User'}
                 </span>
