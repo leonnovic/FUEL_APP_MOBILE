@@ -1,0 +1,269 @@
+// FuelPro - Fuel Management System
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("staff") // owner, manager, staff
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stations     StationBinding[]
+  auditLogs    AuditLog[]
+  documents    Document[]
+  ownedStations Station[]            @relation("StationOwner")
+}
+
+// ─── Station ─────────────────────────────────────────────────────────────────
+model Station {
+  id        String   @id @default(cuid())
+  name      String
+  location  String
+  country   String   @default("Kenya")
+  currency  String   @default("KSH")
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner        User              @relation("StationOwner", fields: [ownerId], references: [id])
+  bindings     StationBinding[]
+  sales        Sale[]
+  deliveries   Delivery[]
+  invoices     Invoice[]
+  clients      Client[]
+  employees    Employee[]
+  expenses     Expense[]
+  shifts       Shift[]
+  fuelTypes    FuelType[]
+  suppliers    Supplier[]
+  maintenance  Maintenance[]
+  auditLogs    AuditLog[]
+  documents    Document[]
+}
+
+// ─── StationBinding (many-to-many User <-> Station) ─────────────────────────
+model StationBinding {
+  id        String   @id @default(cuid())
+  userId    String
+  stationId String
+  role      String   @default("staff") // owner, manager, attendant
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  station Station  @relation(fields: [stationId], references: [id])
+
+  @@unique([userId, stationId])
+}
+
+// ─── Sale ────────────────────────────────────────────────────────────────────
+model Sale {
+  id                 String   @id @default(cuid())
+  stationId          String
+  date               DateTime
+  pmsOpeningReading  Float    @default(0)
+  pmsClosingReading  Float    @default(0)
+  agoOpeningReading  Float    @default(0)
+  agoClosingReading  Float    @default(0)
+  pmsPrice           Float    @default(0)
+  agoPrice           Float    @default(0)
+  pmsSalesKsh        Float    @default(0)
+  agoSalesKsh        Float    @default(0)
+  pmsSalesL          Float    @default(0)
+  agoSalesL          Float    @default(0)
+  totalSales         Float    @default(0)
+  expenses           Float    @default(0)
+  createdAt          DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Delivery ───────────────────────────────────────────────────────────────
+model Delivery {
+  id            String   @id @default(cuid())
+  stationId     String
+  date          DateTime
+  supplier      String
+  product       String   // PMS, AGO, etc.
+  quantity      Float    @default(0)
+  unitPrice     Float    @default(0)
+  totalAmount   Float    @default(0)
+  balanceDue    Float    @default(0)
+  invoiceNumber String?
+  driverName    String?
+  vehicleNumber String?
+  status        String   @default("pending") // pending, delivered, cancelled
+  createdAt     DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Invoice ────────────────────────────────────────────────────────────────
+model Invoice {
+  id           String   @id @default(cuid())
+  stationId    String
+  clientName   String
+  clientPhone  String?
+  items        String   // JSON string: [{name, quantity, unitPrice, total}]
+  totalAmount  Float    @default(0)
+  status       String   @default("pending") // pending, paid, overdue, cancelled
+  dueDate      DateTime?
+  invoiceNumber String  @unique
+  createdAt    DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Client ─────────────────────────────────────────────────────────────────
+model Client {
+  id          String   @id @default(cuid())
+  stationId   String
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  creditLimit Float    @default(0)
+  balanceDue  Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Employee ───────────────────────────────────────────────────────────────
+model Employee {
+  id        String   @id @default(cuid())
+  stationId String
+  name      String
+  phone     String?
+  role      String   // manager, attendant, accountant, etc.
+  salary    Float    @default(0)
+  hireDate  DateTime?
+  status    String   @default("active") // active, inactive, terminated
+  nationalId String?
+  createdAt DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Expense ────────────────────────────────────────────────────────────────
+model Expense {
+  id          String   @id @default(cuid())
+  stationId   String
+  date        DateTime
+  category    String   // fuel, maintenance, salary, utilities, misc
+  description String?
+  amount      Float    @default(0)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Shift ──────────────────────────────────────────────────────────────────
+model Shift {
+  id            String   @id @default(cuid())
+  stationId     String
+  date          DateTime
+  attendantName String
+  startTime     DateTime?
+  endTime       DateTime?
+  pmsOpening    Float    @default(0)
+  pmsClosing    Float    @default(0)
+  agoOpening    Float    @default(0)
+  agoClosing    Float    @default(0)
+  totalSales    Float    @default(0)
+  cashDeclared  Float    @default(0)
+  variance      Float    @default(0)
+  status        String   @default("open") // open, closed, verified
+  createdAt     DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── FuelType ───────────────────────────────────────────────────────────────
+model FuelType {
+  id           String   @id @default(cuid())
+  stationId    String
+  name         String   // PMS, AGO, DPK, etc.
+  category     String   @default("fuel") // fuel, lubricant, gas
+  price        Float    @default(0)
+  tankCapacity Float    @default(0)
+  currentLevel Float    @default(0)
+  createdAt    DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Supplier ───────────────────────────────────────────────────────────────
+model Supplier {
+  id        String   @id @default(cuid())
+  stationId String
+  name      String
+  phone     String?
+  email     String?
+  product   String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── Maintenance ────────────────────────────────────────────────────────────
+model Maintenance {
+  id            String    @id @default(cuid())
+  stationId     String
+  equipment     String
+  description   String?
+  status        String    @default("scheduled") // scheduled, in-progress, completed, cancelled
+  priority      String    @default("medium") // low, medium, high, critical
+  scheduledDate DateTime?
+  completedDate DateTime?
+  cost          Float     @default(0)
+  assignedTo    String?
+  createdAt     DateTime  @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── AuditLog ───────────────────────────────────────────────────────────────
+model AuditLog {
+  id         String   @id @default(cuid())
+  stationId  String
+  userId     String?
+  action     String   // create, update, delete, login, etc.
+  entityType String   // Sale, Delivery, Invoice, etc.
+  entityId   String?
+  details    String?  // JSON string for structured details
+  createdAt  DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+}
+
+// ─── Document ───────────────────────────────────────────────────────────────
+model Document {
+  id         String   @id @default(cuid())
+  stationId  String
+  name       String
+  type       String   // invoice, receipt, report, contract, etc.
+  category   String?  // financial, operational, legal, etc.
+  size       Int      @default(0)
+  url        String
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+  user    User?    @relation(fields: [uploadedBy], references: [id])
+}
