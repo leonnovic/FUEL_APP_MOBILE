@@ -1,7 +1,7 @@
 // FuelPro - Fuel Management System Type Definitions
 
 // ─── User ────────────────────────────────────────────────────────────────────
-export type UserRole = 'owner' | 'manager' | 'staff';
+export type UserRole = 'founder' | 'owner' | 'manager' | 'staff' | 'auditor' | 'guest';
 
 export interface User {
   id: string;
@@ -15,13 +15,19 @@ export interface User {
   updatedAt: string;
 }
 
+export type UserTier = 'free' | 'pro' | 'enterprise';
+
 export interface UserPublic {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  tier?: UserTier;
   phone?: string;
   avatarUrl?: string;
+  permissions?: Permission[];
+  assignedStations?: string[];
+  token?: string;
 }
 
 // ─── Station ─────────────────────────────────────────────────────────────────
@@ -399,3 +405,89 @@ export interface RegisterData {
 
 // ─── Theme ──────────────────────────────────────────────────────────────────
 export type Theme = 'light' | 'dark';
+
+// ─── RBAC Types ──────────────────────────────────────────────────────────────
+export type ActionType = 'create' | 'read' | 'update' | 'delete' | 'export' | 'approve';
+export type DataType = 'station' | 'sale' | 'inventory' | 'employee' | 'invoice' | 'expense' | 'audit_log' | 'user' | 'report' | 'settings';
+export type TeamScope = 'global' | 'station' | 'team' | 'personal';
+export type UserRoleExtended = 'founder' | 'owner' | 'manager' | 'staff' | 'auditor' | 'guest';
+
+export interface Permission {
+  id: string;
+  userId: string;
+  action: ActionType;
+  dataType: DataType;
+  teamScope: TeamScope;
+  stationId?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string;
+  role: string;
+}
+
+export interface Session {
+  id: string;
+  userId: string;
+  token: string;
+  deviceInfo?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+// Extended UserPublic with RBAC fields
+export interface UserPublicExtended extends UserPublic {
+  role: UserRoleExtended;
+  tier: UserTier;
+  permissions: Permission[];
+  assignedStations: string[];
+  token: string;
+}
+
+// ─── Audit Log SOC-2 Types ──────────────────────────────────────────────────
+export interface AuditLogSoc2 {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userRole: string;
+  sessionId?: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  snapshotBefore?: string;
+  snapshotAfter?: string;
+  payloadHash?: string;
+  ipAddress: string;
+  userAgent: string;
+  stationId?: string;
+  teamId?: string;
+  timestamp: string;
+  logSignature?: string;
+  previousLogHash?: string;
+  logHash?: string;
+  reason?: string;
+  createdAt: string;
+}
+
+// ─── App Version ────────────────────────────────────────────────────────────
+export interface AppVersion {
+  id: string;
+  version: string;
+  buildNumber: number;
+  releaseNotes?: string;
+  isActive: boolean;
+  createdAt: string;
+}

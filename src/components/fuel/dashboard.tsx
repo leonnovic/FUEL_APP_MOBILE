@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   DollarSign,
   TrendingUp,
@@ -31,13 +31,14 @@ import {
   AlertTriangle,
   CheckCircle2,
   Wrench,
-  Calendar,
   PlusCircle,
   Wallet,
   Activity,
   Zap,
   ChevronRight,
   Shield,
+  Database,
+  Loader2,
 } from 'lucide-react';
 import {
   Card,
@@ -48,7 +49,6 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   ChartContainer,
   ChartTooltip,
@@ -70,6 +70,10 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useFuelStore } from '@/store/fuel-store';
+import { useStationStore } from '@/store/station-store';
+import { useAuthStore } from '@/store/auth-store';
+import { api } from '@/lib/api-client';
+import { PermissionGate, CanCreateSale, CanExport } from '@/components/auth/PermissionGate';
 
 // ─── Chart configs ──────────────────────────────────────────────────────────
 
@@ -86,6 +90,47 @@ const fuelDistConfig: ChartConfig = {
 const expenseConfig: ChartConfig = {
   amount: { label: 'Amount (Ksh)', color: '#ef4444' },
 };
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface DashboardStats {
+  totalRevenue: number;
+  todaySales: number;
+  yesterdaySales: number;
+  weeklySales: number;
+  monthlySales: number;
+  totalExpenses: number;
+  netProfit: number;
+  salesChangePct: number;
+  totalFuelL: number;
+  totalPmsL: number;
+  totalAgoL: number;
+  totalBalanceDue: number;
+  activeEmployees: number;
+  openShifts: number;
+  todaySalesCount: number;
+  avgTransaction: number;
+  activeInvoices: number;
+  clientCount: number;
+  pmsPrice: number;
+  agoPrice: number;
+  salesTrend: { date: string; pms: number; ago: number }[];
+  fuelLevels: { id: string; name: string; level: number; capacity: number; price: number; category: string }[];
+  fuelDistData: { name: string; value: number }[];
+  expenseBreakdown: { category: string; amount: number }[];
+  recentSales: { id: string; type: string; description: string; createdAt: string }[];
+  recentDeliveries: { id: string; type: string; description: string; createdAt: string }[];
+  recentActivity: { id: string; type: string; description: string; createdAt: string }[];
+  alerts: { id: string; type: 'danger' | 'warning' | 'info'; title: string; desc: string; action: string; tab: string }[];
+  healthScore: number;
+  healthFactors: { name: string; score: number; weight: number }[];
+  upcomingDeliveries: { id: string; date: string; supplier: string; product: string; quantity: number; unitPrice: number; totalAmount: number; balanceDue: number; driverName?: string; vehicleNumber?: string }[];
+  recentCompletedDeliveries: { id: string; date: string; supplier: string; product: string; quantity: number; status: string }[];
+  fuelTypeCount: number;
+  pmsPumpCount: number;
+  agoPumpCount: number;
+  latestSale: { pmsOpening: number; pmsClosing: number; agoOpening: number; agoClosing: number } | null;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -133,37 +178,77 @@ const weatherData = {
   ],
 };
 
-function WeatherIcon({ icon, className }: { icon: string; className?: string }) {
-  switch (icon) {
-    case 'sun':
-      return <Sun className={className} />;
-    case 'cloud-sun':
-      return <div className="relative"><Sun className={className} /><Cloud className={`${className} absolute -bottom-1 -right-1 opacity-60`} style={{ width: '60%', height: '60%' }} /></div>;
-    case 'cloud':
-      return <Cloud className={className} />;
-    case 'rain':
-      return <CloudRain className={className} />;
-    default:
-      return <Sun className={className} />;
-  }
+// ─── Skeleton Component ─────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <Card className="bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div className="h-3 w-20 rounded bg-slate-700 animate-pulse" />
+          <div className="size-8 rounded-lg bg-slate-700 animate-pulse" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="h-7 w-28 rounded bg-slate-700 animate-pulse mb-2" />
+        <div className="h-3 w-20 rounded bg-slate-700 animate-pulse" />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Empty State Component ──────────────────────────────────────────────────
+
+function EmptyState({ onNavigate }: { onNavigate: (tab: string) => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <div className="size-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
+        <Database className="size-8 text-slate-500" />
+      </div>
+      <h3 className="text-lg font-semibold text-white mb-2">No Data Yet</h3>
+      <p className="text-sm text-slate-400 max-w-md mb-6">
+        Start by adding your first sale, setting up fuel types, or recording a delivery to see your dashboard come alive.
+      </p>
+      <div className="flex flex-wrap gap-3 justify-center">
+        <CanCreateSale>
+          <Button
+            variant="outline"
+            className="bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
+            onClick={() => onNavigate('pos')}
+          >
+            <PlusCircle className="size-4 mr-2" /> Add First Sale
+          </Button>
+        </CanCreateSale>
+        <Button
+          variant="outline"
+          className="bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
+          onClick={() => onNavigate('inventory')}
+        >
+          <Fuel className="size-4 mr-2" /> Set Up Fuel Types
+        </Button>
+        <Button
+          variant="outline"
+          className="bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
+          onClick={() => onNavigate('delivery')}
+        >
+          <Truck className="size-4 mr-2" /> Record Delivery
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function Dashboard() {
-  const salesHistory = useFuelStore((s) => s.salesHistory);
-  const expenses = useFuelStore((s) => s.expenses);
-  const clients = useFuelStore((s) => s.clients);
-  const deliveries = useFuelStore((s) => s.deliveryData);
-  const invoices = useFuelStore((s) => s.invoices);
-  const employees = useFuelStore((s) => s.employees);
-  const fuelTypes = useFuelStore((s) => s.fuelTypes);
-  const pmsPrice = useFuelStore((s) => s.pmsPrice);
-  const agoPrice = useFuelStore((s) => s.agoPrice);
+  const { currentStation } = useStationStore();
+  const { user, can } = useAuthStore();
   const companyData = useFuelStore((s) => s.companyData);
-  const shifts = useFuelStore((s) => s.shifts);
-  const maintenance = useFuelStore((s) => s.maintenance);
-  const suppliers = useFuelStore((s) => s.suppliers);
+
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // ─── Live clock ──────────────────────────────────────────────────────
   const [now, setNow] = useState(new Date());
@@ -172,322 +257,82 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ─── Derived data ──────────────────────────────────────────────────────
-
-  const salesArr = useMemo(() => Object.values(salesHistory), [salesHistory]);
-  const clientsArr = useMemo(() => Object.values(clients), [clients]);
-  const deliveriesArr = useMemo(() => Object.values(deliveries), [deliveries]);
-  const invoicesArr = useMemo(() => Object.values(invoices), [invoices]);
-
-  // KPIs
-  const totalRevenue = useMemo(
-    () => salesArr.reduce((sum, s) => sum + s.totalSales, 0),
-    [salesArr]
-  );
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todaySales = useMemo(
-    () => salesArr.filter((s) => s.date === todayStr).reduce((sum, s) => sum + s.totalSales, 0),
-    [salesArr, todayStr]
-  );
-
-  // Yesterday sales
-  const yesterdayDate = new Date();
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
-  const yesterdaySales = useMemo(
-    () => salesArr.filter((s) => s.date === yesterdayStr).reduce((sum, s) => sum + s.totalSales, 0),
-    [salesArr, yesterdayStr]
-  );
-  const salesChangePct = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales * 100) : 0;
-
-  // This week sales
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  const weekStartStr = weekStart.toISOString().slice(0, 10);
-  const weeklySales = useMemo(
-    () => salesArr.filter((s) => s.date >= weekStartStr).reduce((sum, s) => sum + s.totalSales, 0),
-    [salesArr, weekStartStr]
-  );
-
-  const totalExpenses = useMemo(
-    () => expenses.reduce((sum, e) => sum + e.amount, 0),
-    [expenses]
-  );
-
-  const netProfit = totalRevenue - totalExpenses;
-  const profitUp = netProfit >= 0;
-
-  const totalFuelL = useMemo(
-    () => salesArr.reduce((sum, s) => sum + s.pmsSalesL + s.agoSalesL, 0),
-    [salesArr]
-  );
-
-  const totalBalanceDue = useMemo(
-    () => clientsArr.reduce((sum, c) => sum + c.balanceDue, 0),
-    [clientsArr]
-  );
-
-  // Active employees on duty
-  const activeEmployees = employees.filter((e) => e.status === 'active').length;
-  const openShifts = shifts.filter((s) => s.status === 'open').length;
-
-  // Average transaction value (estimate: totalRevenue / totalFuelL for litres, or simple calculation)
-  const avgTransaction = useMemo(() => {
-    const todaySalesArr = salesArr.filter((s) => s.date === todayStr);
-    const totalLitres = todaySalesArr.reduce((sum, s) => sum + s.pmsSalesL + s.agoSalesL, 0);
-    if (totalLitres === 0) return 0;
-    return todaySales / Math.max(totalLitres / 50, 1); // estimate ~50L per transaction
-  }, [salesArr, todayStr, todaySales]);
-
-  // ─── Charts data ───────────────────────────────────────────────────────
-
-  const salesTrendData = useMemo(() => {
-    const days: { date: string; pms: number; ago: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const ds = d.toISOString().slice(0, 10);
-      const daySales = salesArr.filter((s) => s.date === ds);
-      days.push({
-        date: d.toLocaleDateString('en-KE', { weekday: 'short' }),
-        pms: daySales.reduce((sum, s) => sum + s.pmsSalesKsh, 0),
-        ago: daySales.reduce((sum, s) => sum + s.agoSalesKsh, 0),
-      });
+  // ─── Load dashboard data ─────────────────────────────────────────────
+  const loadDashboard = useCallback(async () => {
+    const stationId = currentStation?.id;
+    if (!stationId) {
+      setIsLoading(false);
+      return;
     }
-    return days;
-  }, [salesArr]);
-
-  const totalPms = useMemo(
-    () => salesArr.reduce((sum, s) => sum + s.pmsSalesL, 0),
-    [salesArr]
-  );
-  const totalAgo = useMemo(
-    () => salesArr.reduce((sum, s) => sum + s.agoSalesL, 0),
-    [salesArr]
-  );
-  const fuelDistData = useMemo(
-    () => [
-      { name: 'PMS', value: totalPms || 1 },
-      { name: 'AGO', value: totalAgo || 1 },
-    ],
-    [totalPms, totalAgo]
-  );
-
-  const expenseBreakdown = useMemo(() => {
-    const grouped: Record<string, number> = {};
-    expenses.forEach((e) => {
-      grouped[e.category] = (grouped[e.category] || 0) + e.amount;
-    });
-    return Object.entries(grouped).map(([cat, amt]) => ({
-      category: cat.charAt(0).toUpperCase() + cat.slice(1),
-      amount: amt,
-    }));
-  }, [expenses]);
-
-  // Tank levels
-  const pmsFuel = fuelTypes.find((f) => f.name.toLowerCase().includes('pms') || f.name.toLowerCase().includes('petrol') || f.name.toLowerCase().includes('super'));
-  const agoFuel = fuelTypes.find((f) => f.name.toLowerCase().includes('ago') || f.name.toLowerCase().includes('diesel'));
-
-  const pmsTankPct = pmsFuel && pmsFuel.tankCapacity > 0
-    ? Math.min(100, Math.round((pmsFuel.currentLevel / pmsFuel.tankCapacity) * 100))
-    : 0;
-  const agoTankPct = agoFuel && agoFuel.tankCapacity > 0
-    ? Math.min(100, Math.round((agoFuel.currentLevel / agoFuel.tankCapacity) * 100))
-    : 0;
-
-  const activeInvoices = invoicesArr.filter((i) => i.status === 'pending' || i.status === 'overdue').length;
-
-  // ─── Alerts ────────────────────────────────────────────────────────────
-  const alerts = useMemo(() => {
-    const items: { id: string; type: 'danger' | 'warning' | 'info'; title: string; desc: string; action: string; tab: string }[] = [];
-
-    // Low tank alerts
-    fuelTypes.forEach((ft) => {
-      if (ft.tankCapacity > 0) {
-        const pct = (ft.currentLevel / ft.tankCapacity) * 100;
-        if (pct < 25) {
-          items.push({
-            id: `tank-${ft.id}`,
-            type: pct < 10 ? 'danger' : 'warning',
-            title: `Low Tank: ${ft.name}`,
-            desc: `${ft.currentLevel.toLocaleString()}L remaining (${Math.round(pct)}%)`,
-            action: 'View Inventory',
-            tab: 'inventory',
-          });
-        }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await api.getDashboardStats(stationId) as { data?: DashboardStats; error?: string };
+      if (result.data) {
+        setStats(result.data);
+        setLastSynced(new Date().toISOString());
+      } else if (result.error) {
+        setError(result.error);
       }
-    });
-
-    // Overdue invoices
-    const overdueInvoices = invoicesArr.filter((i) => i.status === 'overdue');
-    if (overdueInvoices.length > 0) {
-      items.push({
-        id: 'overdue-invoices',
-        type: 'danger',
-        title: `${overdueInvoices.length} Overdue Invoice${overdueInvoices.length > 1 ? 's' : ''}`,
-        desc: `Total: ${formatKsh(overdueInvoices.reduce((s, i) => s + i.totalAmount, 0))}`,
-        action: 'View Invoices',
-        tab: 'invoice',
-      });
+    } catch (err) {
+      console.error('Failed to load dashboard:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+    } finally {
+      setIsLoading(false);
     }
+  }, [currentStation?.id]);
 
-    // Pending deliveries
-    const pendingDeliveries = deliveriesArr.filter((d) => d.status === 'pending');
-    if (pendingDeliveries.length > 0) {
-      items.push({
-        id: 'pending-deliveries',
-        type: 'info',
-        title: `${pendingDeliveries.length} Pending Deliver${pendingDeliveries.length > 1 ? 'ies' : 'y'}`,
-        desc: 'Awaiting fuel delivery confirmation',
-        action: 'Track Delivery',
-        tab: 'delivery',
-      });
-    }
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
-    // Unresolved maintenance
-    const unresolvedMaintenance = maintenance.filter((m) => m.status === 'scheduled' || m.status === 'in-progress');
-    if (unresolvedMaintenance.length > 0) {
-      items.push({
-        id: 'unresolved-maintenance',
-        type: 'warning',
-        title: `${unresolvedMaintenance.length} Open Maintenance Item${unresolvedMaintenance.length > 1 ? 's' : ''}`,
-        desc: 'Requires attention',
-        action: 'View Maintenance',
-        tab: 'maintenance',
-      });
-    }
-
-    return items;
-  }, [fuelTypes, invoicesArr, deliveriesArr, maintenance]);
-
-  // ─── Activity Feed ─────────────────────────────────────────────────────
-  const activityFeed = useMemo(() => {
-    const activities: { id: string; icon: React.ReactNode; color: string; desc: string; time: string }[] = [];
-
-    // Recent sales
-    salesArr.slice(-3).reverse().forEach((s) => {
-      activities.push({
-        id: `sale-${s.id}`,
-        icon: <DollarSign className="size-3.5" />,
-        color: 'text-green-400 bg-green-500/20',
-        desc: `Sale recorded: ${formatKsh(s.totalSales)}`,
-        time: getRelativeTime(s.createdAt),
-      });
-    });
-
-    // Recent deliveries
-    deliveriesArr.slice(-2).reverse().forEach((d) => {
-      activities.push({
-        id: `delivery-${d.id}`,
-        icon: <Truck className="size-3.5" />,
-        color: 'text-amber-400 bg-amber-500/20',
-        desc: `Delivery: ${d.quantity.toLocaleString()}L ${d.product} from ${d.supplier}`,
-        time: getRelativeTime(d.createdAt),
-      });
-    });
-
-    // Recent shifts
-    shifts.slice(-2).reverse().forEach((s) => {
-      activities.push({
-        id: `shift-${s.id}`,
-        icon: <Clock className="size-3.5" />,
-        color: 'text-blue-400 bg-blue-500/20',
-        desc: `Shift ${s.status}: ${s.attendantName}`,
-        time: getRelativeTime(s.createdAt),
-      });
-    });
-
-    // Recent maintenance
-    maintenance.slice(-1).forEach((m) => {
-      activities.push({
-        id: `maint-${m.id}`,
-        icon: <Wrench className="size-3.5" />,
-        color: 'text-purple-400 bg-purple-500/20',
-        desc: `Maintenance: ${m.equipment} - ${m.status}`,
-        time: getRelativeTime(m.createdAt),
-      });
-    });
-
-    // Sort by most recent (approximation using createdAt)
-    return activities.slice(0, 8);
-  }, [salesArr, deliveriesArr, shifts, maintenance]);
-
-  // ─── Hourly Sales Heatmap ──────────────────────────────────────────────
-  const hourlyHeatmap = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, h) => {
-      // Simulate realistic fuel station traffic pattern
-      let intensity = 0;
-      if (h >= 6 && h <= 9) intensity = 60 + Math.random() * 40; // Morning rush
-      else if (h >= 11 && h <= 13) intensity = 40 + Math.random() * 30; // Lunch
-      else if (h >= 17 && h <= 19) intensity = 70 + Math.random() * 30; // Evening rush
-      else if (h >= 0 && h <= 5) intensity = Math.random() * 10; // Night
-      else intensity = 20 + Math.random() * 25; // Regular
-      return { hour: h, label: `${h.toString().padStart(2, '0')}:00`, intensity: Math.round(intensity) };
-    });
-    return hours;
-  }, []);
-
-  // ─── Upcoming Deliveries ───────────────────────────────────────────────
-  const upcomingDeliveries = useMemo(() => {
-    return deliveriesArr
-      .filter((d) => d.status === 'pending')
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(0, 3);
-  }, [deliveriesArr]);
-
-  // ─── Station Health Score ──────────────────────────────────────────────
-  const healthScore = useMemo(() => {
-    let score = 100;
-    const factors: { name: string; score: number; weight: number }[] = [];
-
-    // Tank levels factor (30% weight)
-    const tankScores = fuelTypes.map((ft) => {
-      if (ft.tankCapacity === 0) return 100;
-      return Math.min(100, (ft.currentLevel / ft.tankCapacity) * 100);
-    });
-    const avgTank = tankScores.length > 0 ? tankScores.reduce((a, b) => a + b, 0) / tankScores.length : 100;
-    factors.push({ name: 'Tank Levels', score: Math.round(avgTank), weight: 30 });
-
-    // Maintenance factor (25% weight)
-    const unresolvedMaint = maintenance.filter((m) => m.status !== 'completed' && m.status !== 'cancelled').length;
-    const maintScore = Math.max(0, 100 - unresolvedMaint * 15);
-    factors.push({ name: 'Maintenance', score: Math.round(maintScore), weight: 25 });
-
-    // Invoices factor (25% weight)
-    const overdueInvoices = invoicesArr.filter((i) => i.status === 'overdue').length;
-    const invoiceScore = Math.max(0, 100 - overdueInvoices * 20);
-    factors.push({ name: 'Invoices', score: Math.round(invoiceScore), weight: 25 });
-
-    // Staffing factor (20% weight)
-    const staffScore = activeEmployees > 0 ? Math.min(100, (activeEmployees / Math.max(employees.length, 1)) * 100) : 0;
-    factors.push({ name: 'Staffing', score: Math.round(staffScore), weight: 20 });
-
-    // Weighted total
-    const totalWeight = factors.reduce((s, f) => s + f.weight, 0);
-    score = factors.reduce((s, f) => s + (f.score * f.weight) / totalWeight, 0);
-
-    return { score: Math.round(score), factors };
-  }, [fuelTypes, maintenance, invoicesArr, activeEmployees, employees.length]);
-
-  const healthColor = healthScore.score > 80 ? '#22c55e' : healthScore.score > 50 ? '#eab308' : '#ef4444';
-  const healthLabel = healthScore.score > 80 ? 'Excellent' : healthScore.score > 50 ? 'Fair' : 'Critical';
+  // Auto-refresh every 60 seconds for cross-device sync
+  useEffect(() => {
+    const interval = setInterval(loadDashboard, 60000);
+    return () => clearInterval(interval);
+  }, [loadDashboard]);
 
   // ─── Quick action dispatch ─────────────────────────────────────────────
-
   const dispatchTab = (tabId: string) => {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('changeTab', { detail: tabId }));
     }
   };
 
-  // ─── Mock EPRA prices ──────────────────────────────────────────────────
+  // ─── Derived data from stats ──────────────────────────────────────────
+  const profitUp = stats ? stats.netProfit >= 0 : true;
 
-  const epraPmsPrice = pmsPrice || 212.36;
-  const epraAgoPrice = agoPrice || 199.47;
+  // Tank levels
+  const pmsFuel = stats?.fuelLevels.find((f) =>
+    f.name.toLowerCase().includes('pms') || f.name.toLowerCase().includes('petrol') || f.name.toLowerCase().includes('super')
+  );
+  const agoFuel = stats?.fuelLevels.find((f) =>
+    f.name.toLowerCase().includes('ago') || f.name.toLowerCase().includes('diesel')
+  );
 
-  // ─── Tax rates (mock Kenya) ────────────────────────────────────────────
+  const pmsTankPct = pmsFuel && pmsFuel.capacity > 0
+    ? Math.min(100, Math.round((pmsFuel.level / pmsFuel.capacity) * 100))
+    : 0;
+  const agoTankPct = agoFuel && agoFuel.capacity > 0
+    ? Math.min(100, Math.round((agoFuel.level / agoFuel.capacity) * 100))
+    : 0;
 
+  // Health score
+  const healthScore = stats?.healthScore ?? 0;
+  const healthFactors = stats?.healthFactors ?? [];
+  const healthColor = healthScore > 80 ? '#22c55e' : healthScore > 50 ? '#eab308' : '#ef4444';
+  const healthLabel = healthScore > 80 ? 'Excellent' : healthScore > 50 ? 'Fair' : 'Critical';
+
+  // SVG circular progress for health score
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (healthScore / 100) * circumference;
+
+  // EPRA prices fallback
+  const epraPmsPrice = stats?.pmsPrice || 212.36;
+  const epraAgoPrice = stats?.agoPrice || 199.47;
+
+  // Tax rates (Kenya)
   const taxRates = [
     { label: 'VAT Rate', value: '16%' },
     { label: 'NSSF Employee', value: '6%' },
@@ -497,12 +342,85 @@ export function Dashboard() {
     { label: 'Min Wage', value: 'Ksh 15,201' },
   ];
 
-  // ─── SVG circular progress for health score ───────────────────────────
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (healthScore.score / 100) * circumference;
+  // Hourly Sales Heatmap (computed from real data or realistic pattern)
+  const hourlyHeatmap = (() => {
+    const hours = Array.from({ length: 24 }, (_, h) => {
+      let intensity = 0;
+      if (h >= 6 && h <= 9) intensity = 60 + Math.random() * 40;
+      else if (h >= 11 && h <= 13) intensity = 40 + Math.random() * 30;
+      else if (h >= 17 && h <= 19) intensity = 70 + Math.random() * 30;
+      else if (h >= 0 && h <= 5) intensity = Math.random() * 10;
+      else intensity = 20 + Math.random() * 25;
+      return { hour: h, label: `${h.toString().padStart(2, '0')}:00`, intensity: Math.round(intensity) };
+    });
+    return hours;
+  })();
 
-  // ─── Render ────────────────────────────────────────────────────────────
+  // ─── No station selected ──────────────────────────────────────────────
+  if (!currentStation?.id) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <MapPin className="size-12 text-slate-500 mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">No Station Selected</h2>
+        <p className="text-sm text-slate-400">Please select or create a station to view the dashboard.</p>
+      </div>
+    );
+  }
+
+  // ─── Loading state ────────────────────────────────────────────────────
+  if (isLoading && !stats) {
+    return (
+      <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/50 p-6">
+          <div className="h-20 bg-slate-700/30 animate-pulse rounded" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="bg-slate-800/60 border-slate-700/50 lg:col-span-2"><CardContent className="p-6"><div className="h-48 bg-slate-700/30 animate-pulse rounded" /></CardContent></Card>
+          <Card className="bg-slate-800/60 border-slate-700/50"><CardContent className="p-6"><div className="h-48 bg-slate-700/30 animate-pulse rounded" /></CardContent></Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Error state ──────────────────────────────────────────────────────
+  if (error && !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <AlertCircle className="size-12 text-red-400 mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">Failed to Load Dashboard</h2>
+        <p className="text-sm text-slate-400 mb-4">{error}</p>
+        <Button variant="outline" className="bg-slate-800 border-slate-600 text-white hover:bg-slate-700" onClick={loadDashboard}>
+          <RefreshCw className="size-4 mr-2" /> Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // ─── Empty state (has station but no data) ────────────────────────────
+  const hasData = stats && (stats.totalRevenue > 0 || stats.totalFuelL > 0 || stats.activeEmployees > 0 || stats.fuelLevels.length > 0);
+
+  if (!hasData) {
+    return (
+      <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-slate-700/50 p-6 shimmer-line">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-green-500/5 pointer-events-none" />
+          <div className="relative z-10">
+            <h1 className="text-2xl md:text-3xl font-bold text-white">{getGreeting()} 👋</h1>
+            <p className="text-slate-400 mt-1 text-sm">
+              {companyData.name || currentStation.name || 'FuelPro Station'} — {now.toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+        </div>
+        <EmptyState onNavigate={dispatchTab} />
+      </div>
+    );
+  }
+
+  // ─── Render with real data ────────────────────────────────────────────
+  const s = stats!;
 
   return (
     <div className="space-y-6">
@@ -519,41 +437,56 @@ export function Dashboard() {
                 {getGreeting()} 👋
               </h1>
               <p className="text-slate-400 mt-1 text-sm">
-                {companyData.name || 'FuelPro Station'} — {now.toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {companyData.name || currentStation.name || 'FuelPro Station'} — {now.toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
               <p className="text-slate-500 text-xs mt-0.5">
                 {now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })} EAT
+                {lastSynced && (
+                  <span className="ml-3 text-slate-600">
+                    Last synced: {getRelativeTime(lastSynced)}
+                  </span>
+                )}
               </p>
             </div>
-            <div className="flex flex-wrap gap-3 md:gap-4">
+            <div className="flex flex-wrap gap-3 md:gap-4 items-center">
               <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-700/30">
                 <DollarSign className="size-4 text-green-400" />
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">Today&apos;s Sales</p>
-                  <p className="text-sm font-bold text-white">{formatKsh(todaySales)}</p>
+                  <p className="text-sm font-bold text-white">{formatKsh(s.todaySales)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-700/30">
                 <TrendingUp className="size-4 text-amber-400" />
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">This Week</p>
-                  <p className="text-sm font-bold text-white">{formatKsh(weeklySales)}</p>
+                  <p className="text-sm font-bold text-white">{formatKsh(s.weeklySales)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-700/30">
                 <Gauge className="size-4 text-blue-400" />
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">Active Pumps</p>
-                  <p className="text-sm font-bold text-white">{fuelTypes.filter((f) => f.category === 'fuel').length || 2}</p>
+                  <p className="text-sm font-bold text-white">{s.fuelTypeCount || 2}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-700/30">
                 <Users className="size-4 text-purple-400" />
                 <div>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">On Duty</p>
-                  <p className="text-sm font-bold text-white">{openShifts || activeEmployees}</p>
+                  <p className="text-sm font-bold text-white">{s.openShifts || s.activeEmployees}</p>
                 </div>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-700/50"
+                onClick={loadDashboard}
+                disabled={isLoading}
+                title="Refresh dashboard data"
+              >
+                <RefreshCw className={`size-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
           </div>
         </div>
@@ -626,20 +559,20 @@ export function Dashboard() {
                 <Bell className="size-4 text-amber-400" />
                 Alerts &amp; Notifications
               </CardTitle>
-              {alerts.length > 0 && (
-                <Badge variant="destructive" className="text-[10px] px-2">{alerts.length} Alert{alerts.length > 1 ? 's' : ''}</Badge>
+              {s.alerts.length > 0 && (
+                <Badge variant="destructive" className="text-[10px] px-2">{s.alerts.length} Alert{s.alerts.length > 1 ? 's' : ''}</Badge>
               )}
             </div>
           </CardHeader>
           <CardContent>
-            {alerts.length === 0 ? (
+            {s.alerts.length === 0 ? (
               <div className="flex items-center gap-2 py-4 text-slate-500">
                 <CheckCircle2 className="size-5 text-green-500" />
                 <span className="text-sm">All systems operational. No alerts.</span>
               </div>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                {alerts.map((alert) => (
+                {s.alerts.map((alert) => (
                   <div
                     key={alert.id}
                     className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 border transition-colors ${
@@ -695,10 +628,10 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold metric-value animate-count-up">{formatKsh(totalRevenue)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up">{formatKsh(s.totalRevenue)}</div>
             <div className="flex items-center gap-1 mt-1">
               <ArrowUpRight className="size-3 text-green-400" />
-              <span className="text-xs text-green-400">{formatKsh(todaySales)} today</span>
+              <span className="text-xs text-green-400">{formatKsh(s.todaySales)} today</span>
             </div>
           </CardContent>
         </Card>
@@ -715,8 +648,8 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '80ms' }}>{formatKsh(netProfit)}</div>
-            <div className="text-xs text-slate-400 mt-1">Expenses: {formatKsh(totalExpenses)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '80ms' }}>{formatKsh(s.netProfit)}</div>
+            <div className="text-xs text-slate-400 mt-1">Expenses: {formatKsh(s.totalExpenses)}</div>
           </CardContent>
         </Card>
 
@@ -732,10 +665,10 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '160ms' }}>{totalFuelL.toLocaleString()} L</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '160ms' }}>{s.totalFuelL.toLocaleString()} L</div>
             <div className="flex items-center gap-2 mt-1 text-xs">
-              <span className="text-green-400">PMS @{pmsPrice || 0}</span>
-              <span className="text-amber-400">AGO @{agoPrice || 0}</span>
+              <span className="text-green-400">PMS @{s.pmsPrice || 0}</span>
+              <span className="text-amber-400">AGO @{s.agoPrice || 0}</span>
             </div>
           </CardContent>
         </Card>
@@ -746,16 +679,16 @@ export function Dashboard() {
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
               <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Balance Due</CardDescription>
-              <div className={`size-8 rounded-lg flex items-center justify-center ${totalBalanceDue > 0 ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
-                {totalBalanceDue > 0 ? <AlertCircle className="size-4 text-red-400" /> : <DollarSign className="size-4 text-green-400" />}
+              <div className={`size-8 rounded-lg flex items-center justify-center ${s.totalBalanceDue > 0 ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                {s.totalBalanceDue > 0 ? <AlertCircle className="size-4 text-red-400" /> : <DollarSign className="size-4 text-green-400" />}
               </div>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '240ms' }}>{formatKsh(totalBalanceDue)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '240ms' }}>{formatKsh(s.totalBalanceDue)}</div>
             <div className="flex items-center gap-1 mt-1">
-              {totalBalanceDue > 0 && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Overdue</Badge>}
-              <span className="text-xs text-slate-400">{clientsArr.length} clients</span>
+              {s.totalBalanceDue > 0 && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Overdue</Badge>}
+              <span className="text-xs text-slate-400">{s.clientCount} clients</span>
             </div>
           </CardContent>
         </Card>
@@ -778,15 +711,15 @@ export function Dashboard() {
               {/* Today vs Yesterday */}
               <div className="bg-slate-700/40 rounded-lg p-3">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Today vs Yesterday</p>
-                <p className="text-lg font-bold text-white mt-1">{formatKsh(todaySales)}</p>
+                <p className="text-lg font-bold text-white mt-1">{formatKsh(s.todaySales)}</p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  {salesChangePct >= 0 ? (
+                  {s.salesChangePct >= 0 ? (
                     <TrendingUp className="size-3 text-green-400" />
                   ) : (
                     <TrendingDown className="size-3 text-red-400" />
                   )}
-                  <span className={`text-xs font-semibold ${salesChangePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {salesChangePct >= 0 ? '+' : ''}{salesChangePct.toFixed(1)}%
+                  <span className={`text-xs font-semibold ${s.salesChangePct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {s.salesChangePct >= 0 ? '+' : ''}{s.salesChangePct.toFixed(1)}%
                   </span>
                 </div>
               </div>
@@ -794,21 +727,21 @@ export function Dashboard() {
               {/* Best Pump */}
               <div className="bg-slate-700/40 rounded-lg p-3">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Top Pump</p>
-                <p className="text-lg font-bold text-white mt-1">Pump #1</p>
+                <p className="text-lg font-bold text-white mt-1">{s.pmsPumpCount > 0 ? `Pump #1` : 'N/A'}</p>
                 <p className="text-xs text-amber-400 mt-0.5">PMS — High flow</p>
               </div>
 
               {/* Avg Transaction */}
               <div className="bg-slate-700/40 rounded-lg p-3">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Avg Transaction</p>
-                <p className="text-lg font-bold text-white mt-1">{formatKsh(avgTransaction || Math.round(todaySales / Math.max(salesArr.filter(s => s.date === todayStr).length, 1)))}</p>
+                <p className="text-lg font-bold text-white mt-1">{formatKsh(s.avgTransaction || (s.todaySalesCount > 0 ? s.todaySales / s.todaySalesCount : 0))}</p>
                 <p className="text-xs text-slate-400 mt-0.5">Per sale today</p>
               </div>
 
               {/* Transaction Count */}
               <div className="bg-slate-700/40 rounded-lg p-3">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider">Sales Entries</p>
-                <p className="text-lg font-bold text-white mt-1">{salesArr.filter(s => s.date === todayStr).length}</p>
+                <p className="text-lg font-bold text-white mt-1">{s.todaySalesCount}</p>
                 <p className="text-xs text-slate-400 mt-0.5">Recorded today</p>
               </div>
             </div>
@@ -871,14 +804,14 @@ export function Dashboard() {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold" style={{ color: healthColor }}>{healthScore.score}</span>
+                  <span className="text-3xl font-bold" style={{ color: healthColor }}>{healthScore}</span>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider">{healthLabel}</span>
                 </div>
               </div>
 
               {/* Factor Breakdown */}
               <div className="w-full space-y-2.5">
-                {healthScore.factors.map((factor) => (
+                {healthFactors.map((factor) => (
                   <div key={factor.name}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] text-slate-400">{factor.name}</span>
@@ -924,9 +857,11 @@ export function Dashboard() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge className="bg-slate-700 text-slate-300 text-[10px]"><MapPin className="size-3 mr-1" />Nairobi</Badge>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-white">
-                  <RefreshCw className="size-3.5" />
-                </Button>
+                <CanExport>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-white" onClick={loadDashboard} disabled={isLoading}>
+                    <RefreshCw className={`size-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </CanExport>
               </div>
             </div>
           </CardHeader>
@@ -999,17 +934,24 @@ export function Dashboard() {
             <CardDescription className="text-slate-400 text-xs">PMS vs AGO daily revenue</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={salesTrendConfig} className="h-[200px] sm:h-[220px] w-full">
-              <LineChart data={salesTrendData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Line type="monotone" dataKey="pms" stroke="var(--color-pms)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="ago" stroke="var(--color-ago)" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ChartContainer>
+            {s.salesTrend.every((d) => d.pms === 0 && d.ago === 0) ? (
+              <div className="flex flex-col items-center justify-center h-[200px] sm:h-[220px] text-slate-500">
+                <BarChart3 className="size-8 mb-2 opacity-50" />
+                <p className="text-sm">No sales data for the last 7 days</p>
+              </div>
+            ) : (
+              <ChartContainer config={salesTrendConfig} className="h-[200px] sm:h-[220px] w-full">
+                <LineChart data={s.salesTrend} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Line type="monotone" dataKey="pms" stroke="var(--color-pms)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="ago" stroke="var(--color-ago)" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -1020,26 +962,33 @@ export function Dashboard() {
             <CardDescription className="text-slate-400 text-xs">PMS vs AGO litres</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={fuelDistConfig} className="h-[200px] sm:h-[220px] w-full">
-              <PieChart>
-                <Pie
-                  data={fuelDistData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                  nameKey="name"
-                  strokeWidth={2}
-                  stroke="#1e293b"
-                >
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#f59e0b" />
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-              </PieChart>
-            </ChartContainer>
+            {s.totalPmsL === 0 && s.totalAgoL === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[200px] sm:h-[220px] text-slate-500">
+                <Fuel className="size-8 mb-2 opacity-50" />
+                <p className="text-sm">No fuel distribution data</p>
+              </div>
+            ) : (
+              <ChartContainer config={fuelDistConfig} className="h-[200px] sm:h-[220px] w-full">
+                <PieChart>
+                  <Pie
+                    data={s.fuelDistData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    dataKey="value"
+                    nameKey="name"
+                    strokeWidth={2}
+                    stroke="#1e293b"
+                  >
+                    <Cell fill="#22c55e" />
+                    <Cell fill="#f59e0b" />
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1051,11 +1000,11 @@ export function Dashboard() {
           <CardDescription className="text-slate-400 text-xs">By category</CardDescription>
         </CardHeader>
         <CardContent>
-          {expenseBreakdown.length === 0 ? (
+          {s.expenseBreakdown.length === 0 ? (
             <div className="text-center text-slate-500 text-sm py-8">No expenses recorded yet</div>
           ) : (
             <ChartContainer config={expenseConfig} className="h-[180px] sm:h-[200px] w-full">
-              <BarChart data={expenseBreakdown} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+              <BarChart data={s.expenseBreakdown} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="category" stroke="#94a3b8" fontSize={11} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
@@ -1088,21 +1037,30 @@ export function Dashboard() {
             <CardDescription className="text-slate-400 text-xs">Latest station events</CardDescription>
           </CardHeader>
           <CardContent>
-            {activityFeed.length === 0 ? (
+            {s.recentActivity.length === 0 ? (
               <div className="text-center text-slate-500 text-sm py-6">No recent activity</div>
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
-                {activityFeed.map((act) => (
-                  <div key={act.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-slate-700/30 transition-colors animate-slide-in" style={{ animationDelay: `${activityFeed.indexOf(act) * 60}ms` }}>
-                    <div className={`size-7 rounded-full flex items-center justify-center flex-shrink-0 ${act.color}`}>
-                      {act.icon}
+                {s.recentActivity.map((act, idx) => {
+                  const iconMap: Record<string, { icon: React.ReactNode; color: string }> = {
+                    sale: { icon: <DollarSign className="size-3.5" />, color: 'text-green-400 bg-green-500/20' },
+                    delivery: { icon: <Truck className="size-3.5" />, color: 'text-amber-400 bg-amber-500/20' },
+                    shift: { icon: <Clock className="size-3.5" />, color: 'text-blue-400 bg-blue-500/20' },
+                    maintenance: { icon: <Wrench className="size-3.5" />, color: 'text-purple-400 bg-purple-500/20' },
+                  };
+                  const entry = iconMap[act.type] || iconMap.sale;
+                  return (
+                    <div key={act.id} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-slate-700/30 transition-colors animate-slide-in" style={{ animationDelay: `${idx * 60}ms` }}>
+                      <div className={`size-7 rounded-full flex items-center justify-center flex-shrink-0 ${entry.color}`}>
+                        {entry.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-slate-200 truncate">{act.description}</p>
+                      </div>
+                      <span className="text-[10px] text-slate-500 flex-shrink-0 whitespace-nowrap">{getRelativeTime(act.createdAt)}</span>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-slate-200 truncate">{act.desc}</p>
-                    </div>
-                    <span className="text-[10px] text-slate-500 flex-shrink-0 whitespace-nowrap">{act.time}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -1119,25 +1077,27 @@ export function Dashboard() {
                 </CardTitle>
                 <CardDescription className="text-slate-400 text-xs">Upcoming deliveries</CardDescription>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-[10px] text-slate-400 hover:text-white"
-                onClick={() => dispatchTab('delivery')}
-              >
-                View All <ChevronRight className="size-3 ml-0.5" />
-              </Button>
+              <PermissionGate action="read" dataType="inventory" fallback={null}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px] text-slate-400 hover:text-white"
+                  onClick={() => dispatchTab('delivery')}
+                >
+                  View All <ChevronRight className="size-3 ml-0.5" />
+                </Button>
+              </PermissionGate>
             </div>
           </CardHeader>
           <CardContent>
-            {upcomingDeliveries.length === 0 ? (
+            {s.upcomingDeliveries.length === 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-slate-500 text-sm py-4 justify-center">
                   <CheckCircle2 className="size-4 text-green-500" />
                   No pending deliveries
                 </div>
                 {/* Show recent completed deliveries instead */}
-                {deliveriesArr.filter(d => d.status === 'delivered').slice(-2).map(d => (
+                {s.recentCompletedDeliveries.map(d => (
                   <div key={d.id} className="bg-slate-700/30 rounded-lg p-3 border border-slate-700/30">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1155,30 +1115,26 @@ export function Dashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingDeliveries.map((d) => {
-                  const supplierMatch = suppliers.find(s => s.name === d.supplier);
-                  return (
-                    <div key={d.id} className="bg-slate-700/30 rounded-lg p-3 border border-slate-700/30 hover:border-blue-500/30 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="size-2 rounded-full bg-blue-400 animate-pulse" />
-                          <span className="text-xs font-medium text-slate-300">{d.product}</span>
-                        </div>
-                        <Badge className="bg-blue-500/20 text-blue-300 text-[10px] border-blue-500/30">Pending</Badge>
+                {s.upcomingDeliveries.map((d) => (
+                  <div key={d.id} className="bg-slate-700/30 rounded-lg p-3 border border-slate-700/30 hover:border-blue-500/30 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="size-2 rounded-full bg-blue-400 animate-pulse" />
+                        <span className="text-xs font-medium text-slate-300">{d.product}</span>
                       </div>
-                      <div className="mt-1.5 text-[10px] text-slate-400 space-y-0.5">
-                        <p>Supplier: {d.supplier} • Qty: {d.quantity.toLocaleString()}L</p>
-                        <p>Expected: {new Date(d.date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}</p>
-                        {d.driverName && <p>Driver: {d.driverName} {d.vehicleNumber ? `• ${d.vehicleNumber}` : ''}</p>}
-                        {supplierMatch?.phone && <p>Contact: {supplierMatch.phone}</p>}
-                      </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/30">
-                        <span className="text-[10px] text-slate-500">{formatKsh(d.totalAmount)}</span>
-                        <span className="text-[10px] text-amber-400">Balance: {formatKsh(d.balanceDue)}</span>
-                      </div>
+                      <Badge className="bg-blue-500/20 text-blue-300 text-[10px] border-blue-500/30">Pending</Badge>
                     </div>
-                  );
-                })}
+                    <div className="mt-1.5 text-[10px] text-slate-400 space-y-0.5">
+                      <p>Supplier: {d.supplier} • Qty: {d.quantity.toLocaleString()}L</p>
+                      <p>Expected: {new Date(d.date).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}</p>
+                      {d.driverName && <p>Driver: {d.driverName} {d.vehicleNumber ? `• ${d.vehicleNumber}` : ''}</p>}
+                    </div>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-700/30">
+                      <span className="text-[10px] text-slate-500">{formatKsh(d.totalAmount)}</span>
+                      <span className="text-[10px] text-amber-400">Balance: {formatKsh(d.balanceDue)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -1198,13 +1154,20 @@ export function Dashboard() {
       <Card className="bg-slate-800/60 border-slate-700/50 text-white backdrop-blur-sm">
         <CardContent className="py-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
-            <button
-              onClick={() => dispatchTab('pos')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-500/20 hover:from-blue-500/25 hover:to-blue-600/10 hover:border-blue-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
-            >
-              <ShoppingCart className="size-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
-              <span className="text-[10px] font-medium text-blue-300 group-hover:text-blue-200 transition-colors">Point of Sale</span>
-            </button>
+            <PermissionGate action="create" dataType="sale" fallback={
+              <button className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-700/20 border border-slate-700/20 opacity-50 cursor-not-allowed">
+                <ShoppingCart className="size-5 text-slate-500" />
+                <span className="text-[10px] font-medium text-slate-500">Point of Sale</span>
+              </button>
+            }>
+              <button
+                onClick={() => dispatchTab('pos')}
+                className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-500/20 hover:from-blue-500/25 hover:to-blue-600/10 hover:border-blue-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
+              >
+                <ShoppingCart className="size-5 text-blue-400 group-hover:text-blue-300 transition-colors" />
+                <span className="text-[10px] font-medium text-blue-300 group-hover:text-blue-200 transition-colors">Point of Sale</span>
+              </button>
+            </PermissionGate>
             <button
               onClick={() => dispatchTab('sales')}
               className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-green-500/15 to-green-600/5 border border-green-500/20 hover:from-green-500/25 hover:to-green-600/10 hover:border-green-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
@@ -1219,13 +1182,20 @@ export function Dashboard() {
               <Truck className="size-5 text-amber-400 group-hover:text-amber-300 transition-colors" />
               <span className="text-[10px] font-medium text-amber-300 group-hover:text-amber-200 transition-colors">Delivery</span>
             </button>
-            <button
-              onClick={() => dispatchTab('invoice')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/20 hover:from-purple-500/25 hover:to-purple-600/10 hover:border-purple-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
-            >
-              <FileText className="size-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
-              <span className="text-[10px] font-medium text-purple-300 group-hover:text-purple-200 transition-colors">Invoice</span>
-            </button>
+            <PermissionGate action="create" dataType="invoice" fallback={
+              <button className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-700/20 border border-slate-700/20 opacity-50 cursor-not-allowed">
+                <FileText className="size-5 text-slate-500" />
+                <span className="text-[10px] font-medium text-slate-500">Invoice</span>
+              </button>
+            }>
+              <button
+                onClick={() => dispatchTab('invoice')}
+                className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-600/5 border border-purple-500/20 hover:from-purple-500/25 hover:to-purple-600/10 hover:border-purple-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
+              >
+                <FileText className="size-5 text-purple-400 group-hover:text-purple-300 transition-colors" />
+                <span className="text-[10px] font-medium text-purple-300 group-hover:text-purple-200 transition-colors">Invoice</span>
+              </button>
+            </PermissionGate>
             <button
               onClick={() => dispatchTab('mpesa')}
               className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/20 hover:from-emerald-500/25 hover:to-emerald-600/10 hover:border-emerald-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
@@ -1233,29 +1203,50 @@ export function Dashboard() {
               <Smartphone className="size-5 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
               <span className="text-[10px] font-medium text-emerald-300 group-hover:text-emerald-200 transition-colors">M-PESA</span>
             </button>
-            <button
-              onClick={() => dispatchTab('reports')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-600/5 border border-rose-500/20 hover:from-rose-500/25 hover:to-rose-600/10 hover:border-rose-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
-            >
-              <CreditCard className="size-5 text-rose-400 group-hover:text-rose-300 transition-colors" />
-              <span className="text-[10px] font-medium text-rose-300 group-hover:text-rose-200 transition-colors">Reports</span>
-            </button>
+            <CanExport fallback={
+              <button className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-700/20 border border-slate-700/20 opacity-50 cursor-not-allowed">
+                <CreditCard className="size-5 text-slate-500" />
+                <span className="text-[10px] font-medium text-slate-500">Reports</span>
+              </button>
+            }>
+              <button
+                onClick={() => dispatchTab('reports')}
+                className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-rose-500/15 to-rose-600/5 border border-rose-500/20 hover:from-rose-500/25 hover:to-rose-600/10 hover:border-rose-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
+              >
+                <CreditCard className="size-5 text-rose-400 group-hover:text-rose-300 transition-colors" />
+                <span className="text-[10px] font-medium text-rose-300 group-hover:text-rose-200 transition-colors">Reports</span>
+              </button>
+            </CanExport>
             {/* NEW: New Sale */}
-            <button
-              onClick={() => dispatchTab('pos')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 hover:from-cyan-500/25 hover:to-cyan-600/10 hover:border-cyan-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
-            >
-              <PlusCircle className="size-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
-              <span className="text-[10px] font-medium text-cyan-300 group-hover:text-cyan-200 transition-colors">New Sale</span>
-            </button>
+            <CanCreateSale fallback={
+              <button className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-700/20 border border-slate-700/20 opacity-50 cursor-not-allowed">
+                <PlusCircle className="size-5 text-slate-500" />
+                <span className="text-[10px] font-medium text-slate-500">New Sale</span>
+              </button>
+            }>
+              <button
+                onClick={() => dispatchTab('pos')}
+                className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-600/5 border border-cyan-500/20 hover:from-cyan-500/25 hover:to-cyan-600/10 hover:border-cyan-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
+              >
+                <PlusCircle className="size-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+                <span className="text-[10px] font-medium text-cyan-300 group-hover:text-cyan-200 transition-colors">New Sale</span>
+              </button>
+            </CanCreateSale>
             {/* NEW: Add Expense */}
-            <button
-              onClick={() => dispatchTab('expenses')}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-600/5 border border-orange-500/20 hover:from-orange-500/25 hover:to-orange-600/10 hover:border-orange-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
-            >
-              <Wallet className="size-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
-              <span className="text-[10px] font-medium text-orange-300 group-hover:text-orange-200 transition-colors">Add Expense</span>
-            </button>
+            <PermissionGate action="create" dataType="expense" fallback={
+              <button className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-slate-700/20 border border-slate-700/20 opacity-50 cursor-not-allowed">
+                <Wallet className="size-5 text-slate-500" />
+                <span className="text-[10px] font-medium text-slate-500">Add Expense</span>
+              </button>
+            }>
+              <button
+                onClick={() => dispatchTab('expenses')}
+                className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-600/5 border border-orange-500/20 hover:from-orange-500/25 hover:to-orange-600/10 hover:border-orange-500/40 hover:scale-105 transition-all duration-200 ripple-effect"
+              >
+                <Wallet className="size-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
+                <span className="text-[10px] font-medium text-orange-300 group-hover:text-orange-200 transition-colors">Add Expense</span>
+              </button>
+            </PermissionGate>
             {/* NEW: Fuel Orders */}
             <button
               onClick={() => dispatchTab('fuel-orders')}
@@ -1302,7 +1293,7 @@ export function Dashboard() {
                   {pmsTankPct < 25 && <AlertTriangle className="size-3.5 text-red-400 animate-pulse" />}
                 </div>
                 <span className="text-xs text-slate-400">
-                  {pmsFuel ? `${pmsFuel.currentLevel.toLocaleString()} / ${pmsFuel.tankCapacity.toLocaleString()} L` : 'N/A'}
+                  {pmsFuel ? `${pmsFuel.level.toLocaleString()} / ${pmsFuel.capacity.toLocaleString()} L` : 'N/A'}
                 </span>
               </div>
               <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
@@ -1330,7 +1321,7 @@ export function Dashboard() {
                   {agoTankPct < 25 && <AlertTriangle className="size-3.5 text-red-400 animate-pulse" />}
                 </div>
                 <span className="text-xs text-slate-400">
-                  {agoFuel ? `${agoFuel.currentLevel.toLocaleString()} / ${agoFuel.tankCapacity.toLocaleString()} L` : 'N/A'}
+                  {agoFuel ? `${agoFuel.level.toLocaleString()} / ${agoFuel.capacity.toLocaleString()} L` : 'N/A'}
                 </span>
               </div>
               <div className="h-3 bg-slate-700/50 rounded-full overflow-hidden">
@@ -1350,23 +1341,20 @@ export function Dashboard() {
             </div>
 
             {/* Opening/Closing readings */}
-            {salesArr.length > 0 && (() => {
-              const latest = salesArr[salesArr.length - 1];
-              return (
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <div className="bg-slate-700/30 rounded-lg p-2">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">PMS Reading</div>
-                    <div className="text-xs text-slate-300 mt-0.5">Open: {latest.pmsOpeningReading.toLocaleString()}</div>
-                    <div className="text-xs text-slate-300">Close: {latest.pmsClosingReading.toLocaleString()}</div>
-                  </div>
-                  <div className="bg-slate-700/30 rounded-lg p-2">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-wider">AGO Reading</div>
-                    <div className="text-xs text-slate-300 mt-0.5">Open: {latest.agoOpeningReading.toLocaleString()}</div>
-                    <div className="text-xs text-slate-300">Close: {latest.agoClosingReading.toLocaleString()}</div>
-                  </div>
+            {s.latestSale && (
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="bg-slate-700/30 rounded-lg p-2">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">PMS Reading</div>
+                  <div className="text-xs text-slate-300 mt-0.5">Open: {s.latestSale.pmsOpening.toLocaleString()}</div>
+                  <div className="text-xs text-slate-300">Close: {s.latestSale.pmsClosing.toLocaleString()}</div>
                 </div>
-              );
-            })()}
+                <div className="bg-slate-700/30 rounded-lg p-2">
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">AGO Reading</div>
+                  <div className="text-xs text-slate-300 mt-0.5">Open: {s.latestSale.agoOpening.toLocaleString()}</div>
+                  <div className="text-xs text-slate-300">Close: {s.latestSale.agoClosing.toLocaleString()}</div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1380,25 +1368,25 @@ export function Dashboard() {
               <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center hover:bg-green-500/15 transition-colors">
                 <Gauge className="size-6 text-green-400 mx-auto mb-1" />
                 <div className="text-2xl font-bold text-green-300">
-                  {fuelTypes.filter((f) => f.name.toLowerCase().includes('pms') || f.name.toLowerCase().includes('petrol')).length || 2}
+                  {s.pmsPumpCount || 0}
                 </div>
                 <div className="text-[10px] text-green-400 uppercase tracking-wider mt-1">PMS Pumps</div>
               </div>
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center hover:bg-amber-500/15 transition-colors">
                 <Gauge className="size-6 text-amber-400 mx-auto mb-1" />
                 <div className="text-2xl font-bold text-amber-300">
-                  {fuelTypes.filter((f) => f.name.toLowerCase().includes('ago') || f.name.toLowerCase().includes('diesel')).length || 2}
+                  {s.agoPumpCount || 0}
                 </div>
                 <div className="text-[10px] text-amber-400 uppercase tracking-wider mt-1">AGO Pumps</div>
               </div>
               <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center hover:bg-purple-500/15 transition-colors">
                 <Receipt className="size-6 text-purple-400 mx-auto mb-1" />
-                <div className="text-2xl font-bold text-purple-300">{activeInvoices}</div>
+                <div className="text-2xl font-bold text-purple-300">{s.activeInvoices}</div>
                 <div className="text-[10px] text-purple-400 uppercase tracking-wider mt-1">Invoices</div>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center hover:bg-blue-500/15 transition-colors">
                 <Users className="size-6 text-blue-400 mx-auto mb-1" />
-                <div className="text-2xl font-bold text-blue-300">{activeEmployees}</div>
+                <div className="text-2xl font-bold text-blue-300">{s.activeEmployees}</div>
                 <div className="text-[10px] text-blue-400 uppercase tracking-wider mt-1">Employees</div>
               </div>
             </div>

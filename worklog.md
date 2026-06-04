@@ -271,3 +271,146 @@ Stage Summary:
 5. Add real-time WebSocket for Live Transactions
 6. Add onboarding tutorial/walkthrough for first-time users
 7. Implement light/dark theme toggle with persistent preference
+
+---
+
+## Phase 6: Security, RBAC, Audit Logs, Data Isolation & Real Data
+
+---
+Task ID: 6
+Agent: main-developer
+Task: Remove hardcoded data, implement RBAC, SOC-2 audit logs, data isolation, cross-device sync, real API backend
+
+Work Log:
+- Read all uploaded requirements (FULLLL.txt, Security Integration Plans, PDF)
+- Analyzed current codebase (38 components, Prisma schema, Zustand stores, auth store)
+- Read reference website (fuel-app-mobile.vercel.app) for feature requirements
+- **Enhanced Prisma Schema** with:
+  - RBAC: Permission model (userId, action, dataType, teamScope, stationId)
+  - Teams: Team + TeamMember models
+  - Sessions: Session model for cross-device auth
+  - SOC-2 Audit: AuditLogSoc2 model (immutable, hash-chained, HMAC-signed, separate from app data)
+  - AppVersion model for frontend-backend version sync
+  - Extended User model (tier, isActive, lastLogin)
+  - All entities now have `createdBy` field for audit tracking
+- Pushed schema to SQLite database successfully
+- **Created Auth API Routes**:
+  - `/api/auth/login` - POST: email/password auth, creates session, returns user + token + permissions
+  - `/api/auth/register` - POST: creates user with bcrypt password, default permissions, session
+  - `/api/auth/session` - GET: validates Bearer token, returns user with permissions/stations
+  - `/api/auth/logout` - POST: deletes session, logs to audit trail
+  - `/api/auth/demo` - POST: creates demo user + station + fuel types + sample sales, returns session
+- **Created CRUD API Routes for ALL 13 Entities** (26 route files):
+  - sales, deliveries, invoices, clients, employees, expenses, shifts, fuel-types, suppliers, maintenance, stations, documents, audit-logs
+  - Each has list/create and individual get/update/delete routes
+  - ALL routes enforce data isolation (stationId filtering)
+  - ALL routes require authentication (Bearer token)
+  - ALL mutations create SOC-2 audit log entries
+- **Created Shared Backend Utilities**:
+  - `src/lib/api-helpers.ts` - getSession, getStationId, verifyStationAccess, createAuditLog, authenticateAndAuthorize, response helpers
+  - `src/lib/audit.ts` - SOC-2 audit logging with SHA-256 integrity hashes, chain hashing, session validation
+- **Created Dashboard API Route** (`/api/dashboard`):
+  - GET endpoint returning aggregated stats from real database
+  - Computes today/weekly/monthly sales, fuel levels, recent activity, expense breakdown, alerts
+  - 15 parallel Prisma queries for performance
+- **Created App Version Route** (`/api/version`):
+  - GET endpoint for frontend-backend version sync
+- **Updated Frontend Auth System**:
+  - `src/store/auth-store.ts` - Complete rewrite with:
+    - Real API calls for login/register/logout
+    - `can(action, dataType, stationId?)` method for RBAC permission checking
+    - `hasStationAccess(stationId)` method
+    - `validateSession()` for cross-device session validation
+    - Token storage and automatic header injection
+    - Auto-logout on expired session
+  - `src/components/auth/PermissionGate.tsx` - Declarative permission gating:
+    - PermissionGate, CanCreateSale, CanEditSale, CanDeleteInventory, CanViewAuditLogs, CanApprove, CanExport, CanManageUsers, CanManageStation
+  - `src/components/auth/login-screen.tsx` - Updated with:
+    - Two tabs: Sign In + Register (replaces instant bypass)
+    - Real API authentication (no more demo bypass)
+    - Password strength meter on registration
+    - Demo Mode button calls `/api/auth/demo` for DB-backed demo
+    - **REMOVED all hardcoded seed data** (seedDemoData function deleted)
+- **Updated Frontend Data Layer**:
+  - `src/store/fuel-store.ts` - Added API sync methods:
+    - `syncFromServer(stationId)` - fetches all entities from API in parallel
+    - `syncSaleToServer()`, `syncDeliveryToServer()` - per-entity sync
+    - `syncToServer()` - syncs all pending changes
+    - Server-wins conflict resolution
+  - `src/lib/api-client.ts` - Centralized API client with:
+    - Auto-inject auth headers and station headers
+    - Auto-handle 401 (logout) and 403 (permission denied)
+    - Typed CRUD methods for all entities
+  - `src/hooks/use-api-sync.ts` - Cross-device sync hook:
+    - Auto-syncs on mount, polls every 30 seconds
+    - Handles station/auth state changes
+  - `src/types/fuel.ts` - Added RBAC types:
+    - ActionType, DataType, TeamScope, UserRoleExtended, UserTier
+    - Permission, Team, TeamMember, Session, UserPublicExtended
+    - AuditLogSoc2, AppVersion interfaces
+- **Updated page.tsx**:
+  - Session validation on mount (cross-device sync)
+  - Auto-fetch user's stations from API after login
+  - Auto-sync data from server when station changes
+  - Auto-refresh every 30 seconds for cross-device sync
+- **Updated Dashboard** to use real API data:
+  - Fetches from `/api/dashboard` instead of hardcoded data
+  - Loading skeletons during data fetch
+  - Empty state with CTAs for new users
+  - Refresh button with auto-refresh
+  - Permission-gated actions using PermissionGate
+- **All lint checks pass** (0 errors, 2 warnings for eslint-disable directives)
+
+Stage Summary:
+- **RBAC**: Full role-based access control implemented (founder, owner, manager, staff, auditor, guest)
+- **SOC-2 Audit Logs**: Immutable, hash-chained, HMAC-signed audit trail separate from app data
+- **Data Isolation**: Every API query filters by stationId, user must have station binding
+- **Cross-Device Sync**: Session-based auth, 30-second polling, server-wins conflict resolution
+- **Real Data**: All hardcoded seed data removed, dashboard uses real API data
+- **Version Sync**: AppVersion model for frontend-backend mismatch prevention
+- **28 new API route files** created
+- **6 new utility/module files** created
+- **Auth store, fuel store, types, login screen** all updated
+
+## Current Project Status (Phase 6)
+
+### Architecture Overview
+```
+Frontend (React/Next.js 16)
+├── 38 tab components (dynamic imports)
+├── Zustand stores (auth, fuel, station) with API sync
+├── PermissionGate component for RBAC UI gating
+├── API client with auto-auth headers
+└── 30-sec polling for cross-device sync
+
+Backend (Next.js API Routes + Prisma + SQLite)
+├── /api/auth/* (login, register, session, logout, demo)
+├── /api/{entity}/* (CRUD for 13 entities)
+├── /api/dashboard (aggregated stats)
+├── /api/version (version sync)
+├── /api/chat (AI chatbot)
+├── Data isolation (stationId filtering on all queries)
+├── RBAC (Permission model, role-based access)
+├── SOC-2 audit logs (AuditLogSoc2, hash-chained)
+└── Session management (Bearer token, 24h expiry)
+```
+
+### Unresolved Issues and Risks
+1. **Many components still use Zustand local data** instead of API calls - need incremental migration
+2. **No real M-PESA integration** - still simulated
+3. **No real-time WebSocket** - Live Transactions are simulated
+4. **No PWA support** - mobile installation not available
+5. **No email/password reset** - Forgot Password button is non-functional
+6. **Audit log UI** - Audit Trail tab still uses old AuditLog model, not AuditLogSoc2
+7. **Station creation on register** - New users go through Setup Wizard but it doesn't create via API
+
+### Priority Recommendations for Next Phase
+1. Migrate remaining components to use API data instead of Zustand local state
+2. Update Audit Trail component to query AuditLogSoc2
+3. Update Setup Wizard to create stations via API
+4. Implement M-PESA Daraja API integration
+5. Add WebSocket for real-time live transactions
+6. Add PWA support
+7. Implement password reset flow
+8. Add team management UI (create teams, assign members)
+9. Add audit log viewer for SOC-2 compliance

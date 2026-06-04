@@ -1,0 +1,1209 @@
+# 🔐 Security Integration Plan for FUEL_APP_MOBILE
+## Complete Implementation Guide for RBAC, Audit Logs & Data Isolation
+
+Based on my analysis of your repository at `https://github.com/leonnovic/FUEL_APP_MOBILE`, here is a **fully detailed, production-ready integration** for the three security requirements. Your stack: **FastAPI (Python) + MongoDB + React/TypeScript + Capacitor**.
+
+> ⚠️ **Note**: Per your preference, I am providing **implementation specifications and code templates only** — no simulations or mock executions.
+
+---
+
+## 📋 Architecture Overview (Current State)
+
+```
+FUEL_APP_MOBILE/
+├── backend/
+│   ├── core.py          # Shared config, auth helpers, Pydantic models
+│   ├── server.py        # FastAPI app entry point
+│   ├── routers/         # API route handlers
+│   ├── services/        # Business logic layer
+│   ├── middleware/      # Request middleware (empty - ready for integration)
+│   └── requirements.txt # Dependencies (FastAPI, motor, PyJWT, bcrypt)
+├── frontend/
+│   ├── src/             # React 19 + TypeScript + tRPC
+│   ├── api/             # API client layer
+│   └── capacitor.config.ts # Mobile build config
+└── memory/              # Local persistence layer
+```
+
+---
+
+# 1️⃣ ROLE-BASED ACCESS CONTROL (RBAC)
+## Scoped by: Team × Data Type × Action
+
+### A. Database Schema Additions (`backend/core.py` extensions)
+
+```python
+# === ADD TO backend/core.py ===
+
+from enum import Enum, StrEnum
+from typing import Literal, Set
+
+# RBAC Enum Definitions
+class ActionType(StrEnum):
+    CREATE = "create"
+    READ = "read"
+    UPDATE = "update"
+    DELETE = "delete"
+    EXPORT = "export"
+    APPROVE = "approve"
+
+class DataType(StrEnum):
+    STATION = "station"
+    SALE = "sale"
+    INVENTORY = "inventory"
+    EMPLOYEE = "employee"
+    INVOICE = "invoice"
+    EXPENSE = "expense"
+    AUDIT_LOG = "audit_log"  # Special: only auditors/founders
+    USER = "user"
+
+class TeamScope(StrEnum):
+    GLOBAL = "global"           # All stations (founder/enterprise)
+    STATION = "station"         # Single station (manager/staff)
+    TEAM = "team"               # Custom team grouping
+    PERSONAL = "personal"       # User's own records only
+
+# Permission Matrix Model
+class Permission(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    action: ActionType
+    data_type: DataType
+    team_scope: TeamScope
+    station_id: Optional[str] = None  # Required if team_scope == STATION
+    
+    def __hash__(self):
+        return hash((self.action, self.data_type, self.team_scope, self.station_id))
+
+# Extended UserOut model with permissions cache
+class UserOut(BaseModel):
+    # ... existing fields ...
+    permissions: list[Permission] = Field(default_factory=list)
+    team_id: Optional[str] = None
+    assigned_stations: list[str] = Field(default_factory=list)
+```
+
+### B. Permission Evaluation Engine (`backend/services/rbac.py`)
+
+```python
+# === CREATE FILE: backend/services/rbac.py ===
+
+from fastapi import HTTPException, Request
+from . import core  # Import shared core module
+
+class RBACService:
+    """Centralized permission evaluation with team/data/action scoping"""
+    
+    @staticmethod
+    async def check_permission(
+        user: dict,
+        action: core.ActionType,
+        data_type: core.DataType,
+        resource_context: dict,  # {station_id, team_id, owner_id, etc.}
+        request: Request
+    ) -> bool:
+        """
+        Evaluate if user can perform action on data_type given resource context.
+        Returns True if authorized, raises 403 otherwise.
+        """
+        # Founder bypass (global admin)
+        if user.get("email") == core.FOUNDER_EMAIL:
+            return True
+            
+        # Guest users: read-only on public data
+        if user.get("is_guest"):
+            if action == core.ActionType.READ and data_type in {
+                core.DataType.STATION, core.DataType.INVENTORY
+            }:
+                return resource_context.get("is_public", False)
+            return False
+        
+        # Load permissions if not cached
+        permissions = user.get("permissions", [])
+        if not permissions and user.get("id"):
+            permissions = await RBACService._load_user_permissions(user["id"])
+            user["permissions"] = permissions
+        
+        # Evaluate each permission rule
+        for perm in permissions:
+            if RBACService._matches_rule(perm, action, data_type, resource_context, user):
+                return True
+                
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied: {action.value} on {data_type.value}",
+            headers={"X-Permission-Debug": f"User:{user.get('id')}|Scope:{user.get('team_scope')}"}
+        )
+    
+    @staticmethod
+    def _matches_rule(
+        perm: core.Permission,
+        action: core.ActionType,
+        data_type: core.DataType,
+        context: dict,
+        user: dict
+    ) -> bool:
+        """Check if a single permission rule matches the request"""
+        # Action and data type must match exactly
+        if perm.action != action or perm.data_type != data_type:
+            return False
+            
+        # Team scope evaluation
+        if perm.team_scope == core.TeamScope.GLOBAL:
+            return user.get("tier") in {"pro", "enterprise"}
+            
+        elif perm.team_scope == core.TeamScope.STATION:
+            # Must have station_id in context AND in user's assigned stations
+            ctx_station = context.get("station_id") or context.get("resource_station_id")
+            return (
+                ctx_station 
+                and perm.station_id == ctx_station
+                and ctx_station in user.get("assigned_stations", [])
+            )
+            
+        elif perm.team_scope == core.TeamScope.TEAM:
+            # Check team membership
+            return (
+                user.get("team_id") 
+                and user["team_id"] == context.get("team_id")
+            )
+            
+        elif perm.team_scope == core.TeamScope.PERSONAL:
+            # Owner check
+            return context.get("owner_id") == user.get("id")
+            
+        return False
+    
+    @staticmethod
+    async def _load_user_permissions(user_id: str) -> list[core.Permission]:
+        """Load permissions from DB based on user role/tier/station assignments"""
+        from core import db
+        
+        user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user_doc:
+            return []
+            
+        permissions = []
+        role = user_doc.get("role", "staff")
+        tier = user_doc.get("tier", "free")
+        stations = user_doc.get("assigned_stations", [])
+        
+        # Role-based permission templates
+        if role == "owner":
+            permissions.extend([
+                core.Permission(action=a, data_type=d, team_scope=core.TeamScope.STATION, station_id=s)
+                for a in core.ActionType for d in core.DataType
+                for s in stations or [None]  # All assigned stations
+            ])
+        elif role == "manager":
+            permissions.extend([
+                core.Permission(action=a, data_type=d, team_scope=core.TeamScope.STATION, station_id=s)
+                for a in [core.ActionType.READ, core.ActionType.CREATE, core.ActionType.UPDATE]
+                for d in [core.DataType.SALE, core.DataType.INVENTORY, core.DataType.EMPLOYEE]
+                for s in stations
+            ])
+        elif role == "staff":
+            permissions.extend([
+                core.Permission(action=core.ActionType.READ, data_type=d, team_scope=core.TeamScope.STATION, station_id=s)
+                for d in [core.DataType.SALE, core.DataType.INVENTORY]
+                for s in stations
+            ])
+            permissions.append(core.Permission(
+                action=core.ActionType.CREATE, 
+                data_type=core.DataType.SALE, 
+                team_scope=core.TeamScope.PERSONAL
+            ))
+        elif role == "auditor":
+            permissions.append(core.Permission(
+                action=core.ActionType.READ, 
+                data_type=core.DataType.AUDIT_LOG, 
+                team_scope=core.TeamScope.GLOBAL
+            ))
+            permissions.extend([
+                core.Permission(action=core.ActionType.READ, data_type=d, team_scope=core.TeamScope.STATION, station_id=s)
+                for d in [core.DataType.SALE, core.DataType.INVENTORY, core.DataType.EXPENSE]
+                for s in stations
+            ])
+            
+        return permissions
+```
+
+### C. FastAPI Dependency for Route Protection (`backend/middleware/auth.py`)
+
+```python
+# === CREATE FILE: backend/middleware/auth.py ===
+
+from fastapi import Depends, Request, HTTPException
+from ..services import rbac, core
+
+async def require_permission(
+    action: core.ActionType,
+    data_type: core.DataType,
+    request: Request,
+    current_user: dict = Depends(core.get_current_user)
+):
+    """
+    FastAPI dependency to enforce RBAC at route level.
+    Usage: 
+    @router.get("/sales/{sale_id}")
+    async def get_sale(..., _=Depends(lambda: require_permission("read", "sale"))):
+    """
+    # Extract resource context from path/query/body
+    resource_context = {
+        "station_id": request.path_params.get("station_id") 
+                   or request.query_params.get("station_id"),
+        "team_id": request.path_params.get("team_id"),
+        "owner_id": request.path_params.get("user_id"),
+        "resource_station_id": None,  # Will be populated by service layer if needed
+    }
+    
+    await rbac.RBACService.check_permission(
+        user=current_user,
+        action=action,
+        data_type=data_type,
+        resource_context=resource_context,
+        request=request
+    )
+    return current_user  # Return user for route handler use
+
+# Convenience decorators for common patterns
+def read_station_data: return require_permission(core.ActionType.READ, core.DataType.STATION)
+def write_sale_data: return require_permission(core.ActionType.CREATE, core.DataType.SALE)
+def delete_inventory: return require_permission(core.ActionType.DELETE, core.DataType.INVENTORY)
+```
+
+### D. Integration Example: Protecting a Router (`backend/routers/sales.py`)
+
+```python
+# === MODIFY: backend/routers/sales.py ===
+
+from fastapi import APIRouter, Depends, Request
+from ..middleware.auth import require_permission
+from .. import core
+
+router = APIRouter(prefix="/api/sales", tags=["sales"])
+
+@router.post("")
+async def create_sale(
+    sale_data: dict,
+    request: Request,
+    current_user: dict = Depends(lambda: require_permission(
+        core.ActionType.CREATE, 
+        core.DataType.SALE
+    ))
+):
+    # RBAC already validated - proceed with business logic
+    # Enforce station scoping at data layer
+    station_id = sale_data.get("station_id")
+    if station_id and station_id not in current_user.get("assigned_stations", []):
+        raise HTTPException(403, "Cannot create sale for unassigned station")
+    
+    # Add audit trail (see Section 2)
+    await audit_service.log_access(
+        user_id=current_user["id"],
+        action="create",
+        resource_type="sale",
+        resource_id=None,  # Will be set after insert
+        station_id=station_id,
+        ip_address=request.client.host,
+        user_agent=request.headers.get("user-agent")
+    )
+    
+    result = await core.db.sales.insert_one({
+        **sale_data,
+        "created_by": current_user["id"],
+        "created_at": core.now_iso(),
+        "station_id": station_id  # Critical for data isolation
+    })
+    return {"id": str(result.inserted_id), "status": "created"}
+
+@router.get("/{sale_id}")
+async def get_sale(
+    sale_id: str,
+    request: Request,
+    current_user: dict = Depends(lambda: require_permission(
+        core.ActionType.READ,
+        core.DataType.SALE
+    ))
+):
+    # Fetch sale AND verify station ownership
+    sale = await core.db.sales.find_one({"id": sale_id})
+    if not sale:
+        raise HTTPException(404, "Sale not found")
+    
+    # Data isolation check: user must have access to this station
+    if sale.get("station_id") not in current_user.get("assigned_stations", []):
+        # Log unauthorized access attempt (audit)
+        await audit_service.log_access(
+            user_id=current_user["id"],
+            action="read_denied",
+            resource_type="sale",
+            resource_id=sale_id,
+            station_id=sale.get("station_id"),
+            ip_address=request.client.host,
+            reason="station_scope_violation"
+        )
+        raise HTTPException(403, "Access denied: station scope mismatch")
+    
+    return sale
+```
+
+---
+
+# 2️⃣ SOC-2 COMPLIANT AUDIT LOGGING
+## Immutable, Queryable, Separated from App Data
+
+### A. Dedicated Audit Database Schema
+
+```python
+# === ADD TO backend/core.py ===
+
+# Audit log collection name (separate from app collections)
+AUDIT_COLLECTION = "audit_logs_soc2"
+
+class AuditLogEntry(BaseModel):
+    """SOC-2 compliant audit log structure"""
+    id: str = Field(default_factory=core.new_id)
+    
+    # WHO: Actor identification
+    user_id: str
+    user_email: str
+    user_role: str
+    session_id: Optional[str] = None
+    
+    # WHAT: Action details
+    action: str  # create/read/update/delete/login/export/approve
+    resource_type: str  # sale/station/user/etc.
+    resource_id: Optional[str] = None
+    resource_snapshot_before: Optional[dict] = None  # For update/delete
+    resource_snapshot_after: Optional[dict] = None   # For create/update
+    request_payload_hash: Optional[str] = None       # SHA-256 of request body
+    
+    # WHERE: Context
+    ip_address: str
+    user_agent: str
+    station_id: Optional[str] = None
+    team_id: Optional[str] = None
+    
+    # WHEN: Timestamps (immutable once written)
+    timestamp: str = Field(default_factory=core.now_iso)
+    server_timestamp: Optional[str] = None  # Set by DB trigger if supported
+    
+    # INTEGRITY: Immutability controls
+    log_signature: Optional[str] = None  # HMAC-SHA256 of critical fields
+    previous_log_hash: Optional[str] = None  # Chain of hashes for tamper evidence
+    
+    model_config = ConfigDict(extra="forbid")
+```
+
+### B. Audit Service Implementation (`backend/services/audit.py`)
+
+```python
+# === CREATE FILE: backend/services/audit.py ===
+
+import hashlib
+import hmac
+import json
+from .. import core
+
+class AuditService:
+    """SOC-2 compliant audit logging with immutability guarantees"""
+    
+    # Server-side secret for log signing (rotate quarterly)
+    _AUDIT_HMAC_KEY = core.os.environ.get("AUDIT_HMAC_KEY", core.JWT_SECRET)
+    
+    @classmethod
+    def _compute_log_hash(cls, entry: dict) -> str:
+        """Compute SHA-256 hash of critical fields for tamper detection"""
+        critical = {
+            "user_id": entry["user_id"],
+            "action": entry["action"],
+            "resource_type": entry["resource_type"],
+            "resource_id": entry.get("resource_id"),
+            "timestamp": entry["timestamp"],
+            "ip_address": entry["ip_address"]
+        }
+        return hashlib.sha256(
+            json.dumps(critical, sort_keys=True).encode()
+        ).hexdigest()
+    
+    @classmethod
+    def _compute_signature(cls, entry: dict) -> str:
+        """HMAC signature for integrity verification"""
+        message = json.dumps({
+            "user_id": entry["user_id"],
+            "action": entry["action"],
+            "resource_type": entry["resource_type"],
+            "timestamp": entry["timestamp"],
+            "log_hash": cls._compute_log_hash(entry)
+        }, sort_keys=True)
+        return hmac.new(
+            cls._AUDIT_HMAC_KEY.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+    
+    @classmethod
+    async def log_access(
+        cls,
+        user_id: str,
+        action: str,
+        resource_type: str,
+        resource_id: Optional[str] = None,
+        station_id: Optional[str] = None,
+        ip_address: str = "unknown",
+        user_agent: str = "unknown",
+        user_email: str = "unknown",
+        user_role: str = "unknown",
+        request_payload: Optional[dict] = None,
+        before_state: Optional[dict] = None,
+        after_state: Optional[dict] = None,
+        reason: Optional[str] = None
+    ):
+        """Write an immutable audit log entry"""
+        
+        # Build base entry
+        entry = core.AuditLogEntry(
+            user_id=user_id,
+            user_email=user_email,
+            user_role=user_role,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            resource_snapshot_before=before_state,
+            resource_snapshot_after=after_state,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            station_id=station_id,
+        )
+        
+        # Hash request payload if provided (never store raw sensitive data)
+        if request_payload:
+            # Remove sensitive fields before hashing
+            sanitized = {k: v for k, v in request_payload.items() 
+                        if k not in {"password", "token", "secret", "card_number"}}
+            entry.request_payload_hash = hashlib.sha256(
+                json.dumps(sanitized, sort_keys=True, default=str).encode()
+            ).hexdigest()
+        
+        # Chain to previous log for tamper-evident sequencing
+        last_log = await core.db[core.AUDIT_COLLECTION].find_one(
+            {}, sort=[("timestamp", -1)], projection={"log_hash": 1}
+        )
+        if last_log:
+            entry.previous_log_hash = last_log.get("log_hash")
+        
+        # Compute integrity fields
+        entry.log_signature = cls._compute_signature(entry.model_dump())
+        
+        # Write to SEPARATE audit collection (never mixed with app data)
+        audit_doc = entry.model_dump(mode="json")
+        audit_doc["log_hash"] = cls._compute_log_hash(audit_doc)  # For indexing
+        
+        # Insert with write concern for durability
+        await core.db[core.AUDIT_COLLECTION].insert_one(
+            audit_doc,
+            # MongoDB options for SOC-2:
+            # - journal: true (write-ahead logging)
+            # - w: "majority" (replica set acknowledgment)
+        )
+        
+        return entry.id
+    
+    @classmethod
+    async def query_logs(
+        cls,
+        *,
+        user_id: Optional[str] = None,
+        action: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        station_id: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        limit: int = 100,
+        requester_user: dict  # For access control on audit queries
+    ) -> list[dict]:
+        """
+        Query audit logs with RBAC enforcement.
+        Only auditors/founders can access full logs; managers see station-scoped logs.
+        """
+        from .rbac import RBACService
+        
+        # Enforce: only auditors/founders can query audit logs
+        await RBACService.check_permission(
+            user=requester_user,
+            action=core.ActionType.READ,
+            data_type=core.DataType.AUDIT_LOG,
+            resource_context={},
+            request=None  # Not needed for service-layer calls
+        )
+        
+        # Build query with scoping
+        query = {}
+        if station_id and requester_user.get("role") != "founder":
+            # Non-founders can only see logs for their stations
+            query["station_id"] = {"$in": requester_user.get("assigned_stations", [])}
+        if user_id:
+            query["user_id"] = user_id
+        if action:
+            query["action"] = action
+        if resource_type:
+            query["resource_type"] = resource_type
+        if start_time or end_time:
+            query["timestamp"] = {}
+            if start_time: query["timestamp"]["$gte"] = start_time
+            if end_time: query["timestamp"]["$lte"] = end_time
+        
+        # Execute query with projection (exclude sensitive snapshots by default)
+        projection = {
+            "resource_snapshot_before": 0,  # Exclude by default
+            "resource_snapshot_after": 0,
+            "request_payload_hash": 1,  # Include hash for verification
+            "log_signature": 1,
+            "log_hash": 1
+        }
+        
+        cursor = core.db[core.AUDIT_COLLECTION].find(
+            query,
+            projection=projection,
+            sort=[("timestamp", -1)],
+            limit=limit
+        )
+        
+        return [core._strip_oid(doc) async for doc in cursor]
+    
+    @classmethod
+    async def verify_log_integrity(cls, log_id: str) -> dict:
+        """Verify a log entry hasn't been tampered with"""
+        log = await core.db[core.AUDIT_COLLECTION].find_one({"id": log_id})
+        if not log:
+            return {"valid": False, "error": "Log not found"}
+        
+        # Recompute hash and signature
+        expected_hash = cls._compute_log_hash(log)
+        expected_sig = cls._compute_signature(log)
+        
+        # Verify chain if previous hash exists
+        chain_valid = True
+        if log.get("previous_log_hash"):
+            prev_log = await core.db[core.AUDIT_COLLECTION].find_one(
+                {"log_hash": log["previous_log_hash"]}
+            )
+            chain_valid = prev_log is not None
+        
+        return {
+            "valid": (
+                log.get("log_hash") == expected_hash and
+                log.get("log_signature") == expected_sig and
+                chain_valid
+            ),
+            "hash_match": log.get("log_hash") == expected_hash,
+            "signature_match": log.get("log_signature") == expected_sig,
+            "chain_valid": chain_valid
+        }
+```
+
+### C. MongoDB Indexes for Audit Performance (`backend/core.py` initialization)
+
+```python
+# === ADD TO backend/core.py initialization section ===
+
+async def initialize_audit_indexes():
+    """Create optimized indexes for SOC-2 audit queries"""
+    audit_coll = db[AUDIT_COLLECTION]
+    
+    # Core query patterns
+    await audit_coll.create_index([("timestamp", -1)])  # Time-range queries
+    await audit_coll.create_index([("user_id", 1), ("timestamp", -1)])  # User activity
+    await audit_coll.create_index([("station_id", 1), ("timestamp", -1)])  # Station audits
+    await audit_coll.create_index([("resource_type", 1), ("resource_id", 1)])  # Resource history
+    await audit_coll.create_index([("action", 1)])  # Action filtering
+    await audit_coll.create_index([("log_hash", 1)], unique=True)  # Integrity lookups
+    
+    # TTL index for log retention policy (SOC-2 requires defined retention)
+    # Adjust retention_days per compliance policy (e.g., 7 years for financial)
+    retention_days = int(os.environ.get("AUDIT_RETENTION_DAYS", "2555"))  # 7 years
+    await audit_coll.create_index(
+        [("timestamp", 1)], 
+        expireAfterSeconds=retention_days * 86400,
+        partialFilterExpression={"action": {"$nin": ["login", "read"]}}  # Keep auth logs longer
+    )
+```
+
+### D. Middleware for Automatic Audit Logging (`backend/middleware/audit.py`)
+
+```python
+# === CREATE FILE: backend/middleware/audit.py ===
+
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from ..services import audit, core
+
+class AuditLoggingMiddleware(BaseHTTPMiddleware):
+    """Automatically log all API requests for SOC-2 compliance"""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Capture request start
+        start_time = core.now_iso()
+        request_id = core.new_id()
+        request.state.audit_request_id = request_id
+        
+        # Get user context (may be None for public endpoints)
+        user = await core.get_current_user_optional(
+            creds=await core.bearer(request)
+        )
+        
+        # Execute request
+        response: Response = await call_next(request)
+        
+        # Skip logging for health checks and static assets
+        if request.url.path in {"/health", "/metrics", "/docs", "/redoc"}:
+            return response
+            
+        # Determine action from HTTP method + path
+        action_map = {
+            "GET": "read",
+            "POST": "create", 
+            "PUT": "update",
+            "PATCH": "update",
+            "DELETE": "delete"
+        }
+        action = action_map.get(request.method, "unknown")
+        
+        # Extract resource context from path
+        path_parts = request.url.path.strip("/").split("/")
+        resource_type = path_parts[-2] if len(path_parts) >= 2 else "unknown"
+        resource_id = path_parts[-1] if len(path_parts) >= 3 and path_parts[-2] != "api" else None
+        
+        # Log asynchronously (non-blocking)
+        core.asyncio.create_task(
+            audit.AuditService.log_access(
+                user_id=user["id"] if user else "anonymous",
+                user_email=user.get("email", "anonymous") if user else "anonymous",
+                user_role=user.get("role", "guest") if user else "guest",
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                station_id=request.headers.get("x-station-id"),
+                ip_address=request.client.host if request.client else "unknown",
+                user_agent=request.headers.get("user-agent", "unknown"),
+                request_payload=await self._safe_read_body(request),
+            )
+        )
+        
+        return response
+    
+    @staticmethod
+    async def _safe_read_body(request: Request) -> Optional[dict]:
+        """Read request body without consuming stream (for logging)"""
+        try:
+            # Note: This requires body cache middleware in production
+            # For now, log only for mutation endpoints with known schemas
+            if request.method in {"POST", "PUT", "PATCH"} and "application/json" in request.headers.get("content-type", ""):
+                body = await request.json()
+                # Sanitize before logging
+                return {k: v for k, v in body.items() if k not in {"password", "token"}}
+        except:
+            pass
+        return None
+```
+
+### E. Register Middleware in `backend/server.py`
+
+```python
+# === MODIFY: backend/server.py ===
+
+from fastapi import FastAPI
+from .middleware.audit import AuditLoggingMiddleware
+
+app = FastAPI(title="FuelPro API", version="1.0")
+
+# Register audit middleware FIRST (captures all requests)
+app.add_middleware(AuditLoggingMiddleware)
+
+# ... existing middleware (CORS, etc.) ...
+
+# Initialize audit indexes on startup
+@app.on_event("startup")
+async def startup_event():
+    from .core import initialize_audit_indexes
+    await initialize_audit_indexes()
+    # ... other startup tasks ...
+```
+
+---
+
+# 3️⃣ MULTI-TENANT DATA ISOLATION
+## Architecture-Level Separation for Customer Data
+
+### A. Data Isolation Strategy: Hybrid Approach
+
+Given your MongoDB usage and fuel station context, implement **logical isolation with mandatory station_id filtering** + **optional physical isolation for enterprise tenants**.
+
+```python
+# === ADD TO backend/core.py ===
+
+class DataIsolationConfig(BaseModel):
+    """Configuration for multi-tenant data isolation"""
+    mode: Literal["logical", "physical", "hybrid"] = "logical"
+    default_isolation_key: str = "station_id"  # Primary isolation field
+    enterprise_physical_db_suffix: str = "_enterprise"  # Suffix for physical DBs
+    
+    # Fields that MUST be present in every query for logical isolation
+    required_query_filters: dict[str, str] = {
+        "station_id": "assigned_stations",  # Map query param to user field
+        "team_id": "team_id"
+    }
+
+ISOLATION_CONFIG = DataIsolationConfig(
+    mode=os.environ.get("DATA_ISOLATION_MODE", "logical")
+)
+```
+
+### B. Query Wrapper for Automatic Isolation (`backend/services/isolation.py`)
+
+```python
+# === CREATE FILE: backend/services/isolation.py ===
+
+from fastapi import HTTPException
+from .. import core
+
+class IsolationService:
+    """Enforce data isolation at query layer"""
+    
+    @classmethod
+    def apply_isolation_filter(
+        cls,
+        base_query: dict,
+        user: dict,
+        resource_type: str,
+        requested_station_id: Optional[str] = None
+    ) -> dict:
+        """
+        Inject mandatory isolation filters into MongoDB queries.
+        Prevents cross-tenant data access at the database level.
+        """
+        # Founder/enterprise global access bypass (auditable)
+        if user.get("email") == core.FOUNDER_EMAIL:
+            return base_query
+            
+        # Guest users: only public data
+        if user.get("is_guest"):
+            return {**base_query, "is_public": True}
+        
+        # Logical isolation: enforce station_id scoping
+        assigned_stations = user.get("assigned_stations", [])
+        if not assigned_stations and user.get("role") != "founder":
+            # Users must have at least one station assignment (except founder)
+            raise HTTPException(
+                403, 
+                "Access denied: user has no assigned stations",
+                headers={"X-Isolation-Error": "no_station_assignment"}
+            )
+        
+        # If specific station requested, verify it's in user's assignments
+        if requested_station_id:
+            if requested_station_id not in assigned_stations:
+                raise HTTPException(
+                    403,
+                    f"Access denied: station {requested_station_id} not assigned to user",
+                    headers={"X-Isolation-Error": "station_scope_violation"}
+                )
+            # Filter to exact station
+            return {**base_query, "station_id": requested_station_id}
+        
+        # Default: allow access to all assigned stations
+        return {
+            **base_query,
+            "station_id": {"$in": assigned_stations}
+        }
+    
+    @classmethod
+    async def get_isolated_collection(
+        cls,
+        collection_name: str,
+        user: dict,
+        station_id: Optional[str] = None
+    ):
+        """
+        Return MongoDB collection with isolation applied.
+        For enterprise tenants in physical mode, route to dedicated DB.
+        """
+        # Physical isolation for enterprise tenants
+        if (
+            ISOLATION_CONFIG.mode in {"physical", "hybrid"}
+            and user.get("tier") == "enterprise"
+            and user.get("isolation_db_name")
+        ):
+            # Route to dedicated database
+            client = core.AsyncIOMotorClient(core.MONGO_URL)
+            return client[user["isolation_db_name"]][collection_name]
+        
+        # Default: logical isolation on shared DB
+        return core.db[collection_name]
+    
+    @classmethod
+    def validate_resource_ownership(
+        cls,
+        resource: dict,
+        user: dict,
+        resource_type: str
+    ) -> bool:
+        """Verify resource belongs to user's scope before returning"""
+        if user.get("email") == core.FOUNDER_EMAIL:
+            return True
+            
+        resource_station = resource.get("station_id")
+        if not resource_station:
+            # Resources without station_id are considered public/global
+            return resource.get("is_public", False)
+            
+        return resource_station in user.get("assigned_stations", [])
+```
+
+### C. Repository Pattern with Built-in Isolation (`backend/services/repositories/base.py`)
+
+```python
+# === CREATE FILE: backend/services/repositories/base.py ===
+
+from typing import TypeVar, Generic, Optional
+from pydantic import BaseModel
+from ... import core
+from .. import isolation
+
+T = TypeVar("T", bound=BaseModel)
+
+class IsolatedRepository(Generic[T]):
+    """Base repository enforcing data isolation on all operations"""
+    
+    collection_name: str
+    model_class: type[T]
+    
+    def __init__(self, user: dict):
+        self.user = user
+    
+    async def _get_collection(self, station_id: Optional[str] = None):
+        """Get collection with isolation applied"""
+        return await isolation.IsolationService.get_isolated_collection(
+            self.collection_name,
+            self.user,
+            station_id
+        )
+    
+    async def find_one(
+        self, 
+        query: dict, 
+        station_id: Optional[str] = None,
+        projection: Optional[dict] = None
+    ) -> Optional[T]:
+        """Find with automatic isolation filter"""
+        isolated_query = isolation.IsolationService.apply_isolation_filter(
+            query, self.user, self.collection_name, station_id
+        )
+        
+        coll = await self._get_collection(station_id)
+        doc = await coll.find_one(isolated_query, projection=projection)
+        
+        if not doc:
+            return None
+            
+        # Double-check ownership at application layer (defense in depth)
+        if not isolation.IsolationService.validate_resource_ownership(
+            doc, self.user, self.collection_name
+        ):
+            return None
+            
+        return self.model_class(**core._strip_oid(doc))
+    
+    async def find_many(
+        self,
+        query: dict,
+        station_id: Optional[str] = None,
+        limit: int = 100,
+        skip: int = 0
+    ) -> list[T]:
+        """List with automatic isolation filter"""
+        isolated_query = isolation.IsolationService.apply_isolation_filter(
+            query, self.user, self.collection_name, station_id
+        )
+        
+        coll = await self._get_collection(station_id)
+        cursor = coll.find(isolated_query, skip=skip, limit=limit).sort("created_at", -1)
+        
+        results = []
+        async for doc in cursor:
+            if isolation.IsolationService.validate_resource_ownership(
+                doc, self.user, self.collection_name
+            ):
+                results.append(self.model_class(**core._strip_oid(doc)))
+        return results
+    
+    async def create(self, data: dict, station_id: str) -> T:
+        """Create with mandatory station assignment"""
+        # Enforce: new resources must be assigned to a station the user owns
+        if station_id not in self.user.get("assigned_stations", []):
+            raise HTTPException(403, "Cannot create resource in unassigned station")
+        
+        # Inject isolation fields
+        doc = {
+            **data,
+            "station_id": station_id,
+            "created_by": self.user["id"],
+            "created_at": core.now_iso(),
+            "updated_at": core.now_iso()
+        }
+        
+        coll = await self._get_collection(station_id)
+        result = await coll.insert_one(doc)
+        doc["_id"] = result.inserted_id
+        return self.model_class(**core._strip_oid(doc))
+    
+    # ... implement update/delete with similar isolation checks ...
+```
+
+### D. Example: Sales Repository with Isolation (`backend/services/repositories/sales.py`)
+
+```python
+# === CREATE FILE: backend/services/repositories/sales.py ===
+
+from .base import IsolatedRepository
+from ...core import Sale  # Assume Sale Pydantic model exists
+
+class SalesRepository(IsolatedRepository[Sale]):
+    collection_name = "sales"
+    model_class = Sale
+    
+    async def get_daily_totals(self, station_id: str, date: str) -> dict:
+        """Aggregation with enforced station isolation"""
+        # Isolation is applied at collection level + query filter
+        coll = await self._get_collection(station_id)
+        
+        pipeline = [
+            {"$match": {
+                "station_id": station_id,  # Redundant but explicit
+                "date": date,
+                "status": "completed"
+            }},
+            {"$group": {
+                "_id": None,
+                "total_sales": {"$sum": "$amount"},
+                "total_liters": {"$sum": "$liters"},
+                "transaction_count": {"$sum": 1}
+            }}
+        ]
+        
+        result = await coll.aggregate(pipeline).to_list(1)
+        return result[0] if result else {"total_sales": 0, "total_liters": 0, "transaction_count": 0}
+```
+
+### E. Frontend Enforcement: tRPC Context with Station Scope (`frontend/src/lib/trpc.ts`)
+
+```typescript
+// === MODIFY: frontend/src/lib/trpc.ts ===
+
+import { createTRPCProxyClient, httpLink } from '@trpc/client';
+import type { AppRouter } from '../../backend/routers/_app'; // Your tRPC router type
+
+export const trpc = createTRPCProxyClient<AppRouter>({
+  links: [
+    httpLink({
+      url: import.meta.env.VITE_API_URL || '/api',
+      headers() {
+        // Automatically inject station context from auth store
+        const { user, activeStationId } = useAuthStore.getState();
+        return {
+          Authorization: user?.token ? `Bearer ${user.token}` : '',
+          'X-Station-ID': activeStationId || '', // Critical for isolation
+          'X-User-ID': user?.id || '',
+        };
+      },
+    }),
+  ],
+});
+
+// Helper hook for station-scoped queries
+export function useStationScopedQuery<T>(
+  queryFn: (stationId: string) => Promise<T>,
+  options?: { enabled?: boolean }
+) {
+  const { activeStationId } = useAuthStore();
+  
+  return useQuery({
+    queryKey: ['station', activeStationId, queryFn.name],
+    queryFn: () => activeStationId ? queryFn(activeStationId) : Promise.resolve(null),
+    enabled: options?.enabled !== false && !!activeStationId,
+    // Auto-refetch when station changes
+    refetchOnMount: 'always',
+  });
+}
+```
+
+---
+
+# 🚀 Deployment & Configuration Checklist
+
+### Environment Variables (`backend/.env.example` additions)
+
+```bash
+# === RBAC & Isolation ===
+DATA_ISOLATION_MODE=logical  # logical|physical|hybrid
+DEFAULT_ROLE_PERMISSIONS_JSON=/path/to/permissions.json  # Optional override
+
+# === Audit Logging (SOC-2) ===
+AUDIT_HMAC_KEY=change-this-in-production-min-32-chars
+AUDIT_RETENTION_DAYS=2555  # 7 years for financial compliance
+AUDIT_COLLECTION=audit_logs_soc2
+MONGO_AUDIT_WRITE_CONCERN=majority  # For replica sets
+
+# === Security Hardening ===
+JWT_SCOPE_CLAIM=scope  # Enable scoped tokens for founder access
+RATE_LIMIT_AUDIT_ENDPOINTS=100  # Prevent audit log enumeration
+```
+
+### MongoDB Setup Script (`scripts/init-mongo.js`)
+
+```javascript
+// Run once during deployment
+db = db.getSiblingDB(process.env.DB_NAME);
+
+// Create audit collection with validation schema
+db.createCollection("audit_logs_soc2", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["user_id", "action", "resource_type", "timestamp", "log_hash"],
+      properties: {
+        user_id: { bsonType: "string" },
+        action: { enum: ["create","read","update","delete","login","export","approve"] },
+        resource_type: { bsonType: "string" },
+        timestamp: { bsonType: "string" },
+        log_hash: { bsonType: "string" },
+        log_signature: { bsonType: "string" }
+      }
+    }
+  }
+});
+
+// Create indexes (also in Python init, but DB-level is authoritative)
+db.audit_logs_soc2.createIndex({ timestamp: -1 });
+db.audit_logs_soc2.createIndex({ user_id: 1, timestamp: -1 });
+db.audit_logs_soc2.createIndex({ station_id: 1, timestamp: -1 });
+db.audit_logs_soc2.createIndex({ log_hash: 1 }, { unique: true });
+
+// TTL index for retention (adjust per policy)
+db.audit_logs_soc2.createIndex(
+  { timestamp: 1 },
+  { 
+    expireAfterSeconds: 2555 * 86400,  // 7 years
+    partialFilterExpression: { action: { $nin: ["login", "read"] } }
+  }
+);
+```
+
+### GitHub Actions Security Scan (`.github/workflows/security.yml`)
+
+```yaml
+# === ADD FILE: .github/workflows/security.yml ===
+name: Security & Compliance Scan
+
+on: [push, pull_request]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for hardcoded secrets
+        run: |
+          # Scan for common secret patterns in code
+          grep -rE "(password|secret|api_key|token)\s*[=:]\s*['\"][^'\"]{8,}['\"]" \
+            --exclude-dir={.git,node_modules,venv} \
+            --exclude="*.lock" \
+            . && exit 1 || true
+      
+      - name: Validate audit log schema
+        run: |
+          python -c "
+          import sys, json
+          from backend.core import AuditLogEntry
+          # Verify model can serialize/deserialize
+          sample = {'user_id':'test','action':'read','resource_type':'sale','timestamp':'2026-01-01T00:00:00Z','ip_address':'127.0.0.1'}
+          entry = AuditLogEntry(**sample)
+          assert entry.log_signature, 'Signature generation failed'
+          print('✓ Audit log schema valid')
+          "
+      
+      - name: RBAC permission matrix check
+        run: |
+          python -c "
+          from backend.core import Permission, ActionType, DataType, TeamScope
+          # Verify critical permission combinations exist
+          critical = [
+            Permission(ActionType.READ, DataType.AUDIT_LOG, TeamScope.GLOBAL),
+            Permission(ActionType.CREATE, DataType.SALE, TeamScope.STATION),
+          ]
+          for p in critical:
+            assert hash(p), f'Permission hashing failed: {p}'
+          print('✓ RBAC permission model valid')
+          "
+```
+
+---
+
+# 🔑 Critical Implementation Notes
+
+1. **Never store raw sensitive data in audit logs** - Always hash or redact passwords, tokens, card numbers
+2. **Audit log immutability** - Use MongoDB's document versioning or append-only collections; consider blockchain-style hashing for high-assurance deployments
+3. **Data isolation testing** - Write integration tests that attempt cross-station access and verify 403 responses
+4. **Key rotation** - Implement quarterly rotation for `AUDIT_HMAC_KEY` and `JWT_SECRET` with backward-compatible verification
+5. **SOC-2 evidence collection** - Export audit logs monthly to write-once storage (S3 Object Lock, Glacier Vault Lock)
+
+---
+
+# 📦 Files to Commit to Your Repository
+
+```
+backend/
+├── middleware/
+│   ├── auth.py          # RBAC dependency injector
+│   └── audit.py         # Auto-audit middleware
+├── services/
+│   ├── rbac.py          # Permission evaluation engine
+│   ├── audit.py         # SOC-2 audit service
+│   ├── isolation.py     # Data isolation enforcement
+│   └── repositories/
+│       ├── base.py      # Isolated repository base class
+│       └── sales.py     # Example isolated repo
+├── core.py              # [MODIFY] Add RBAC enums, AuditLogEntry, isolation config
+└── server.py            # [MODIFY] Register audit middleware, init indexes
+
+frontend/
+├── src/lib/
+│   └── trpc.ts          # [MODIFY] Add station-id header injection
+└── src/hooks/
+    └── useStationScopedQuery.ts  # New helper hook
+
+scripts/
+├── init-mongo.js        # MongoDB setup for audit collection
+└── rotate-audit-keys.py # Key rotation utility (optional)
+
+.github/workflows/
+└── security.yml         # Automated compliance checks
+
+backend/.env.example     # [APPEND] New security variables
+```
+
+---
+
+# ✅ Verification Steps Post-Integration
+
+1. **RBAC Test**: Create users with different roles; verify station-scoped access denial
+2. **Audit Test**: Perform CRUD operations; confirm entries appear in `audit_logs_soc2` with valid signatures
+3. **Isolation Test**: User A (Station 1) cannot query Station 2 data even with direct ID knowledge
+4. **SOC-2 Export**: Run `python scripts/export_audit.py --format=jsonl --output=s3://compliance-bucket/` to verify export capability
+5. **Penetration Test**: Attempt JWT tampering, station_id manipulation, and audit log deletion - all should fail gracefully with audit trails
+
+---
+
+This implementation provides **defense-in-depth security** aligned with SOC-2 requirements while maintaining your existing FastAPI/MongoDB architecture. All components are designed for incremental adoption - start with RBAC middleware, then add audit logging, then enforce isolation at the repository layer.

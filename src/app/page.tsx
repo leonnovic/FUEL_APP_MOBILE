@@ -66,8 +66,14 @@ const FleetManager = dynamic(() => import('@/components/fuel/fleet-manager').the
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
+  const validateSession = useAuthStore((s) => s.validateSession);
   const stations = useStationStore((s) => s.stations);
+  const currentStation = useStationStore((s) => s.currentStation);
+  const setStations = useStationStore((s) => s.setStations);
   const theme = useFuelStore((s) => s.theme);
+  const syncFromServer = useFuelStore((s) => s.syncFromServer);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showStations, setShowStations] = useState(false);
 
@@ -77,6 +83,54 @@ export default function Home() {
       document.documentElement.classList.toggle('dark', theme === 'dark');
     }
   }, [theme]);
+
+  // Validate session on mount (cross-device sync)
+  useEffect(() => {
+    if (token) {
+      validateSession().catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync data from server when station changes
+  useEffect(() => {
+    if (isAuthenticated && token && currentStation?.id) {
+      syncFromServer(currentStation.id).catch(() => {});
+    }
+  }, [isAuthenticated, token, currentStation?.id, syncFromServer]);
+
+  // Fetch user's stations from API after login
+  useEffect(() => {
+    if (isAuthenticated && token && stations.length === 0) {
+      fetch('/api/stations', {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data?.length > 0) {
+            setStations(data.data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              location: s.location,
+              country: s.country || 'Kenya',
+              currency: s.currency || 'KSH',
+              ownerId: s.ownerId,
+              createdAt: s.createdAt,
+              updatedAt: s.updatedAt,
+            })));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isAuthenticated, token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh data every 30 seconds for cross-device sync
+  useEffect(() => {
+    if (!isAuthenticated || !token || !currentStation?.id) return;
+    const interval = setInterval(() => {
+      syncFromServer(currentStation.id).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, token, currentStation?.id, syncFromServer]);
 
   // Derive view state from auth and stations
   const viewState = useMemo(() => {

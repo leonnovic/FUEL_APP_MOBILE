@@ -24,6 +24,7 @@ import type {
   CompanyData,
   Theme,
 } from '@/types/fuel';
+import { useAuthStore } from '@/store/auth-store';
 
 interface FuelState {
   // Current station context
@@ -53,6 +54,11 @@ interface FuelState {
 
   // Loading states
   isLoading: boolean;
+
+  // Sync state
+  isSyncing: boolean;
+  lastSyncAt: string | null;
+  syncError: string | null;
 
   // ─── Actions ─────────────────────────────────────────────────────────────
 
@@ -133,11 +139,30 @@ interface FuelState {
   // General
   setLoading: (loading: boolean) => void;
   resetStore: () => void;
+
+  // ─── API Sync Methods ───────────────────────────────────────────────────
+  syncFromServer: (stationId: string) => Promise<void>;
+  syncSaleToServer: (sale: Sale) => Promise<void>;
+  syncDeliveryToServer: (delivery: Delivery) => Promise<void>;
+  syncToServer: () => Promise<void>;
 }
 
 // Helper to generate a unique ID
 const generateId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// API call helper with auth token
+const apiCall = async (path: string, options?: RequestInit) => {
+  const token = useAuthStore.getState().token;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> || {}),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return fetch(path, { ...options, headers });
 };
 
 // Default company data
@@ -165,6 +190,9 @@ const initialState = {
   companyData: defaultCompanyData,
   theme: 'light' as Theme,
   isLoading: false,
+  isSyncing: false,
+  lastSyncAt: null as string | null,
+  syncError: null as string | null,
 };
 
 export const useFuelStore = create<FuelState>()(
@@ -621,6 +649,161 @@ export const useFuelStore = create<FuelState>()(
       setLoading: (isLoading: boolean) => set({ isLoading }),
 
       resetStore: () => set(initialState),
+
+      // ─── API Sync Methods ───────────────────────────────────────────────
+
+      syncFromServer: async (stationId: string) => {
+        set({ isSyncing: true, syncError: null });
+        try {
+          const params = new URLSearchParams({ stationId });
+
+          // Fetch all entity data in parallel
+          const [salesRes, deliveriesRes, clientsRes, invoicesRes, employeesRes, expensesRes, shiftsRes, fuelTypesRes, suppliersRes, maintenanceRes] = await Promise.allSettled([
+            apiCall(`/api/sales?${params}`),
+            apiCall(`/api/deliveries?${params}`),
+            apiCall(`/api/clients?${params}`),
+            apiCall(`/api/invoices?${params}`),
+            apiCall(`/api/employees?${params}`),
+            apiCall(`/api/expenses?${params}`),
+            apiCall(`/api/shifts?${params}`),
+            apiCall(`/api/fuel-types?${params}`),
+            apiCall(`/api/suppliers?${params}`),
+            apiCall(`/api/maintenance?${params}`),
+          ]);
+
+          // Process results - server wins for now (conflict resolution)
+          const processResult = async (result: PromiseSettledResult<Response>) => {
+            if (result.status === 'fulfilled' && result.value.ok) {
+              try {
+                const json = await result.value.json();
+                return json.success ? json.data : null;
+              } catch {
+                return null;
+              }
+            }
+            return null;
+          };
+
+          const [sales, deliveries, clients, invoices, employees, expenses, shifts, fuelTypes, suppliers, maintenance] = await Promise.all([
+            processResult(salesRes),
+            processResult(deliveriesRes),
+            processResult(clientsRes),
+            processResult(invoicesRes),
+            processResult(employeesRes),
+            processResult(expensesRes),
+            processResult(shiftsRes),
+            processResult(fuelTypesRes),
+            processResult(suppliersRes),
+            processResult(maintenanceRes),
+          ]);
+
+          // Update local state with server data (server wins)
+          const updates: Partial<FuelState> = {
+            stationId,
+            isSyncing: false,
+            lastSyncAt: new Date().toISOString(),
+            syncError: null,
+          };
+
+          if (sales) updates.salesHistory = sales.reduce((acc: Record<string, Sale>, s: Sale) => ({ ...acc, [s.id]: s }), {});
+          if (deliveries) updates.deliveryData = deliveries.reduce((acc: Record<string, Delivery>, d: Delivery) => ({ ...acc, [d.id]: d }), {});
+          if (clients) updates.clients = clients.reduce((acc: Record<string, Client>, c: Client) => ({ ...acc, [c.id]: c }), {});
+          if (invoices) updates.invoices = invoices.reduce((acc: Record<string, Invoice>, i: Invoice) => ({ ...acc, [i.id]: i }), {});
+          if (employees) updates.employees = employees;
+          if (expenses) updates.expenses = expenses;
+          if (shifts) updates.shifts = shifts;
+          if (fuelTypes) updates.fuelTypes = fuelTypes;
+          if (suppliers) updates.suppliers = suppliers;
+          if (maintenance) updates.maintenance = maintenance;
+
+          set(updates);
+        } catch (err) {
+          set({
+            isSyncing: false,
+            syncError: err instanceof Error ? err.message : 'Sync failed',
+          });
+        }
+      },
+
+      syncSaleToServer: async (sale: Sale) => {
+        try {
+          const existingSale = get().salesHistory[sale.id];
+          if (existingSale) {
+            // Update existing sale
+            await apiCall(`/api/sales/${sale.id}`, {
+              method: 'PUT',
+              body: JSON.stringify(sale),
+            });
+          } else {
+            // Create new sale
+            await apiCall('/api/sales', {
+              method: 'POST',
+              body: JSON.stringify(sale),
+            });
+          }
+        } catch (err) {
+          set({
+            syncError: err instanceof Error ? err.message : 'Failed to sync sale',
+          });
+        }
+      },
+
+      syncDeliveryToServer: async (delivery: Delivery) => {
+        try {
+          const existingDelivery = get().deliveryData[delivery.id];
+          if (existingDelivery) {
+            // Update existing delivery
+            await apiCall(`/api/deliveries/${delivery.id}`, {
+              method: 'PUT',
+              body: JSON.stringify(delivery),
+            });
+          } else {
+            // Create new delivery
+            await apiCall('/api/deliveries', {
+              method: 'POST',
+              body: JSON.stringify(delivery),
+            });
+          }
+        } catch (err) {
+          set({
+            syncError: err instanceof Error ? err.message : 'Failed to sync delivery',
+          });
+        }
+      },
+
+      syncToServer: async () => {
+        set({ isSyncing: true, syncError: null });
+        try {
+          const state = get();
+          if (!state.stationId) {
+            set({ isSyncing: false });
+            return;
+          }
+
+          // Sync all sales
+          const salesList = Object.values(state.salesHistory);
+          for (const sale of salesList) {
+            await state.syncSaleToServer(sale);
+          }
+
+          // Sync all deliveries
+          const deliveryList = Object.values(state.deliveryData);
+          for (const delivery of deliveryList) {
+            await state.syncDeliveryToServer(delivery);
+          }
+
+          set({
+            isSyncing: false,
+            lastSyncAt: new Date().toISOString(),
+            syncError: null,
+          });
+        } catch (err) {
+          set({
+            isSyncing: false,
+            syncError: err instanceof Error ? err.message : 'Sync failed',
+          });
+        }
+      },
     }),
     {
       name: 'fuelpro-data',

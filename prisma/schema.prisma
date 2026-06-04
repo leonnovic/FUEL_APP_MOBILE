@@ -1,4 +1,5 @@
 // FuelPro - Fuel Management System
+// Enhanced with RBAC, SOC-2 Audit Logs, Data Isolation, Cross-Device Sync
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,22 +9,89 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── RBAC Enums ──────────────────────────────────────────────────────────────
+
+// Action types for permission matrix
+// create, read, update, delete, export, approve
+// Data types: station, sale, inventory, employee, invoice, expense, audit_log, user, report, settings
+// Team scopes: global, station, team, personal
+
 // ─── User ────────────────────────────────────────────────────────────────────
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String
-  password  String
-  role      String   @default("staff") // owner, manager, staff
+  password  String   // bcrypt hashed
+  role      String   @default("staff") // founder, owner, manager, staff, auditor, guest
+  tier      String   @default("free")  // free, pro, enterprise
   phone     String?
   avatarUrl String?
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stations     StationBinding[]
-  auditLogs    AuditLog[]
-  documents    Document[]
-  ownedStations Station[]            @relation("StationOwner")
+  stations       StationBinding[]
+  auditLogs      AuditLog[]
+  auditLogsActor AuditLogSoc2[]  @relation("AuditActor")
+  documents      Document[]
+  ownedStations  Station[]       @relation("StationOwner")
+  sessions       Session[]
+  permissions    Permission[]
+  teamMembers    TeamMember[]
+}
+
+// ─── Session (Cross-Device Sync & Auth) ──────────────────────────────────────
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  deviceInfo String? // browser/device info
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Permission (RBAC Matrix) ────────────────────────────────────────────────
+model Permission {
+  id         String  @id @default(cuid())
+  userId     String
+  action     String  // create, read, update, delete, export, approve
+  dataType   String  // station, sale, inventory, employee, invoice, expense, audit_log, user, report, settings
+  teamScope  String  // global, station, team, personal
+  stationId  String? // required if teamScope = station
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, action, dataType, teamScope, stationId])
+}
+
+// ─── Team ────────────────────────────────────────────────────────────────────
+model Team {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members TeamMember[]
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  teamId String
+  userId String
+  role   String @default("member") // admin, member, viewer
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
 }
 
 // ─── Station ─────────────────────────────────────────────────────────────────
@@ -34,6 +102,7 @@ model Station {
   country   String   @default("Kenya")
   currency  String   @default("KSH")
   ownerId   String
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -50,6 +119,7 @@ model Station {
   suppliers    Supplier[]
   maintenance  Maintenance[]
   auditLogs    AuditLog[]
+  auditLogsSoc2 AuditLogSoc2[]
   documents    Document[]
 }
 
@@ -58,7 +128,7 @@ model StationBinding {
   id        String   @id @default(cuid())
   userId    String
   stationId String
-  role      String   @default("staff") // owner, manager, attendant
+  role      String   @default("staff") // owner, manager, attendant, auditor
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
@@ -85,6 +155,7 @@ model Sale {
   agoSalesL          Float    @default(0)
   totalSales         Float    @default(0)
   expenses           Float    @default(0)
+  createdBy          String?
   createdAt          DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
@@ -105,6 +176,7 @@ model Delivery {
   driverName    String?
   vehicleNumber String?
   status        String   @default("pending") // pending, delivered, cancelled
+  createdBy     String?
   createdAt     DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
@@ -112,16 +184,17 @@ model Delivery {
 
 // ─── Invoice ────────────────────────────────────────────────────────────────
 model Invoice {
-  id           String   @id @default(cuid())
-  stationId    String
-  clientName   String
-  clientPhone  String?
-  items        String   // JSON string: [{name, quantity, unitPrice, total}]
-  totalAmount  Float    @default(0)
-  status       String   @default("pending") // pending, paid, overdue, cancelled
-  dueDate      DateTime?
-  invoiceNumber String  @unique
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  stationId     String
+  clientName    String
+  clientPhone   String?
+  items         String   // JSON string: [{name, quantity, unitPrice, total}]
+  totalAmount   Float    @default(0)
+  status        String   @default("pending") // pending, paid, overdue, cancelled
+  dueDate       DateTime?
+  invoiceNumber String   @unique
+  createdBy     String?
+  createdAt     DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
 }
@@ -136,6 +209,7 @@ model Client {
   address     String?
   creditLimit Float    @default(0)
   balanceDue  Float    @default(0)
+  createdBy   String?
   createdAt   DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
@@ -143,16 +217,17 @@ model Client {
 
 // ─── Employee ───────────────────────────────────────────────────────────────
 model Employee {
-  id        String   @id @default(cuid())
-  stationId String
-  name      String
-  phone     String?
-  role      String   // manager, attendant, accountant, etc.
-  salary    Float    @default(0)
-  hireDate  DateTime?
-  status    String   @default("active") // active, inactive, terminated
+  id         String    @id @default(cuid())
+  stationId  String
+  name       String
+  phone      String?
+  role       String    // manager, attendant, accountant, etc.
+  salary     Float     @default(0)
+  hireDate   DateTime?
+  status     String    @default("active") // active, inactive, terminated
   nationalId String?
-  createdAt DateTime @default(now())
+  createdBy  String?
+  createdAt  DateTime  @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
 }
@@ -173,21 +248,22 @@ model Expense {
 
 // ─── Shift ──────────────────────────────────────────────────────────────────
 model Shift {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   stationId     String
   date          DateTime
   attendantName String
   startTime     DateTime?
   endTime       DateTime?
-  pmsOpening    Float    @default(0)
-  pmsClosing    Float    @default(0)
-  agoOpening    Float    @default(0)
-  agoClosing    Float    @default(0)
-  totalSales    Float    @default(0)
-  cashDeclared  Float    @default(0)
-  variance      Float    @default(0)
-  status        String   @default("open") // open, closed, verified
-  createdAt     DateTime @default(now())
+  pmsOpening    Float     @default(0)
+  pmsClosing    Float     @default(0)
+  agoOpening    Float     @default(0)
+  agoClosing    Float     @default(0)
+  totalSales    Float     @default(0)
+  cashDeclared  Float     @default(0)
+  variance      Float     @default(0)
+  status        String    @default("open") // open, closed, verified
+  createdBy     String?
+  createdAt     DateTime  @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
 }
@@ -201,6 +277,7 @@ model FuelType {
   price        Float    @default(0)
   tankCapacity Float    @default(0)
   currentLevel Float    @default(0)
+  createdBy    String?
   createdAt    DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
@@ -215,6 +292,7 @@ model Supplier {
   email     String?
   product   String?
   address   String?
+  createdBy String?
   createdAt DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
@@ -232,24 +310,62 @@ model Maintenance {
   completedDate DateTime?
   cost          Float     @default(0)
   assignedTo    String?
+  createdBy     String?
   createdAt     DateTime  @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
 }
 
-// ─── AuditLog ───────────────────────────────────────────────────────────────
+// ─── AuditLog (Application-level, basic) ────────────────────────────────────
 model AuditLog {
   id         String   @id @default(cuid())
   stationId  String
   userId     String?
-  action     String   // create, update, delete, login, etc.
+  action     String   // create, update, delete, login, logout, export, approve
   entityType String   // Sale, Delivery, Invoice, etc.
   entityId   String?
   details    String?  // JSON string for structured details
+  ipAddress  String?
+  userAgent  String?
   createdAt  DateTime @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
   user    User?    @relation(fields: [userId], references: [id])
+}
+
+// ─── AuditLogSoc2 (SOC-2 Compliant, Immutable, Separate) ────────────────────
+// Separate from app data - stores WHO did WHAT, WHERE, WHEN with integrity checks
+model AuditLogSoc2 {
+  id         String   @id @default(cuid())
+  // WHO: Actor identification
+  userId     String
+  userEmail  String
+  userRole   String
+  sessionId  String?
+  // WHAT: Action details
+  action     String   // create, read, update, delete, login, logout, export, approve, read_denied
+  resourceType String  // sale, station, user, invoice, etc.
+  resourceId String?
+  snapshotBefore String? // JSON string of resource before change
+  snapshotAfter  String? // JSON string of resource after change
+  payloadHash String?   // SHA-256 hash of request payload
+  // WHERE: Context
+  ipAddress  String   @default("unknown")
+  userAgent  String   @default("unknown")
+  stationId  String?
+  teamId     String?
+  // WHEN: Timestamps (immutable once written)
+  timestamp  DateTime @default(now())
+  // INTEGRITY: Immutability controls
+  logSignature String? // HMAC-SHA256 of critical fields
+  previousLogHash String? // Chain of hashes for tamper evidence
+  logHash    String?  // SHA-256 of critical fields for indexing
+  // METADATA
+  reason     String?  // For denied actions
+  createdAt  DateTime @default(now())
+
+  station Station? @relation(fields: [stationId], references: [id])
+  actor   User     @relation("AuditActor", fields: [userId], references: [id])
 }
 
 // ─── Document ───────────────────────────────────────────────────────────────
@@ -266,4 +382,14 @@ model Document {
 
   station Station @relation(fields: [stationId], references: [id])
   user    User?    @relation(fields: [uploadedBy], references: [id])
+}
+
+// ─── AppVersion (Prevent Frontend-Backend Mismatches) ────────────────────────
+model AppVersion {
+  id          String   @id @default(cuid())
+  version     String   @unique // e.g., "1.2.3"
+  buildNumber Int      @default(0)
+  releaseNotes String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
 }
