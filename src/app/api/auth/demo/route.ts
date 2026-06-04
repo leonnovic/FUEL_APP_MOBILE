@@ -227,6 +227,177 @@ export async function POST(request: NextRequest) {
     }
     await db.sale.createMany({ data: salesData });
 
+    // Create sample employees
+    const employee1 = await db.employee.create({
+      data: {
+        stationId: station.id,
+        name: 'John Mwangi',
+        phone: '+254 712 345 678',
+        role: 'manager',
+        salary: 45000,
+        hireDate: new Date('2023-01-15'),
+        status: 'active',
+        nationalId: '12345678',
+        createdBy: user.id,
+      },
+    });
+    const employee2 = await db.employee.create({
+      data: {
+        stationId: station.id,
+        name: 'Sarah Wanjiku',
+        phone: '+254 723 456 789',
+        role: 'attendant',
+        salary: 25000,
+        hireDate: new Date('2023-06-01'),
+        status: 'active',
+        nationalId: '23456789',
+        createdBy: user.id,
+      },
+    });
+
+    // Create sample CreditAccount records
+    await db.creditAccount.createMany({
+      data: [
+        {
+          stationId: station.id,
+          customerName: 'Nairobi Transport Co.',
+          contactPerson: 'James Karanja',
+          phone: '+254 734 567 890',
+          email: 'accounts@nairobico.ke',
+          kraPin: 'A001234567X',
+          creditLimit: 500000,
+          balanceUsed: 125000,
+          paymentTermsDays: 30,
+          bankName: 'Equity Bank',
+          bankAccount: '0123456789012',
+          status: 'active',
+          notes: 'Monthly fuel credit for fleet',
+          createdBy: user.id,
+        },
+        {
+          stationId: station.id,
+          customerName: 'Mombasa Logistics Ltd',
+          contactPerson: 'Fatima Hassan',
+          phone: '+254 745 678 901',
+          email: 'finance@mombasalog.ke',
+          kraPin: 'A002345678Y',
+          creditLimit: 750000,
+          balanceUsed: 340000,
+          paymentTermsDays: 45,
+          mpesaTill: '987654',
+          status: 'active',
+          notes: 'Diesel bulk purchase agreement',
+          createdBy: user.id,
+        },
+      ],
+    });
+
+    // Create sample PaymentMethod records
+    await db.paymentMethod.createMany({
+      data: [
+        {
+          stationId: station.id,
+          type: 'mobile_money',
+          providerName: 'M-PESA',
+          tillNumber: '123456',
+          paybillNumber: '542542',
+          isActive: true,
+          countryCode: 'KE',
+          createdBy: user.id,
+        },
+        {
+          stationId: station.id,
+          type: 'bank',
+          providerName: 'Equity Bank',
+          accountNumber: '0123456789012',
+          accountName: 'FuelPro Demo Station',
+          branchName: 'Westlands Branch',
+          swiftCode: 'EQBLKENA',
+          isActive: true,
+          countryCode: 'KE',
+          createdBy: user.id,
+        },
+      ],
+    });
+
+    // Create sample QualityTest record
+    await db.qualityTest.create({
+      data: {
+        stationId: station.id,
+        date: new Date(),
+        batchNo: 'EPRA-2024-001',
+        fuelType: 'PMS',
+        density: 745.2,
+        sulfur: 12.5,
+        flashPoint: 42,
+        appearance: 'Clear & Bright',
+        result: 'pass',
+        testedBy: 'EPRA Lab Nairobi',
+        notes: 'EPRA Validation: Passed',
+        createdBy: user.id,
+      },
+    });
+
+    // Create sample AppSetting records
+    await db.appSetting.createMany({
+      data: [
+        {
+          stationId: station.id,
+          category: 'general',
+          key: 'station_name',
+          value: 'FuelPro Demo Station',
+        },
+        {
+          stationId: station.id,
+          category: 'general',
+          key: 'currency',
+          value: 'KSH',
+        },
+        {
+          stationId: station.id,
+          category: 'general',
+          key: 'country',
+          value: 'Kenya',
+        },
+        {
+          stationId: station.id,
+          category: 'mpesa',
+          key: 'paybill_number',
+          value: '542542',
+        },
+        {
+          stationId: station.id,
+          category: 'mpesa',
+          key: 'till_number',
+          value: '123456',
+        },
+        {
+          stationId: station.id,
+          category: 'mpesa',
+          key: 'environment',
+          value: 'sandbox',
+        },
+        {
+          stationId: station.id,
+          category: 'sms',
+          key: 'provider',
+          value: 'africas_talking',
+        },
+        {
+          stationId: station.id,
+          category: 'sms',
+          key: 'sender_id',
+          value: 'FUELPRO',
+        },
+        {
+          stationId: station.id,
+          category: 'compliance',
+          key: 'epra_license',
+          value: JSON.stringify({ number: 'EPRA/2024/1234', expiresAt: '2025-12-31' }),
+        },
+      ],
+    });
+
     // Create a session
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date();

@@ -39,6 +39,8 @@ import {
   ClipboardList,
   Settings,
   MapPin,
+  Crown,
+  Building2,
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
@@ -98,6 +100,8 @@ const tabs = [
   { id: 'fuel-orders', label: 'Orders', icon: ClipboardList },
   { id: 'profit-calc', label: 'Profit Calc', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'founder', label: 'Founder', icon: Crown },
+  { id: 'company', label: 'Company', icon: Building2 },
 ];
 
 export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {

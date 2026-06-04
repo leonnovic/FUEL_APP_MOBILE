@@ -85,52 +85,161 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     }
   };
 
-  const handleSave = () => {
+  const token = useAuthStore((s) => s.token);
+
+  const handleSave = async () => {
     const ownerId = user?.id ?? 'demo-user';
 
-    // Save station
-    addStation({
-      name: stationName,
-      location: stationLocation,
-      country: stationCountry,
-      currency: stationCurrency,
-      ownerId,
-    });
-
-    // Save fuel types
-    const stationId = useStationStore.getState().currentStation?.id ?? '';
-
-    if (pmsPrice) {
-      addFuelType({
-        name: 'PMS (Super)',
-        category: 'fuel',
-        price: parseFloat(pmsPrice),
-        tankCapacity: pmsCapacity ? parseFloat(pmsCapacity) : 20000,
-        currentLevel: pmsCapacity ? parseFloat(pmsCapacity) * 0.6 : 12000,
+    try {
+      // Create station via API
+      const res = await fetch('/api/stations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: stationName,
+          location: stationLocation,
+          country: stationCountry,
+          currency: stationCurrency,
+          isActive: true,
+        }),
       });
-      setPmsPriceStore(parseFloat(pmsPrice));
-    }
 
-    if (agoPrice) {
-      addFuelType({
-        name: 'AGO (Diesel)',
-        category: 'fuel',
-        price: parseFloat(agoPrice),
-        tankCapacity: agoCapacity ? parseFloat(agoCapacity) : 20000,
-        currentLevel: agoCapacity ? parseFloat(agoCapacity) * 0.5 : 10000,
+      const data = await res.json();
+      const stationId = data.data?.id;
+
+      if (stationId) {
+        // Add station to local store with the real database ID
+        addStation({
+          id: stationId,
+          name: stationName,
+          location: stationLocation,
+          country: stationCountry,
+          currency: stationCurrency,
+          ownerId,
+        });
+
+        // Create fuel types via API
+        if (pmsPrice) {
+          await fetch(`/api/fuel-types?stationId=${stationId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: 'PMS',
+              category: 'fuel',
+              price: parseFloat(pmsPrice),
+              tankCapacity: pmsCapacity ? parseFloat(pmsCapacity) : 20000,
+              currentLevel: pmsCapacity ? parseFloat(pmsCapacity) * 0.6 : 12000,
+            }),
+          });
+          setPmsPriceStore(parseFloat(pmsPrice));
+        }
+
+        if (agoPrice) {
+          await fetch(`/api/fuel-types?stationId=${stationId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: 'AGO',
+              category: 'fuel',
+              price: parseFloat(agoPrice),
+              tankCapacity: agoCapacity ? parseFloat(agoCapacity) : 20000,
+              currentLevel: agoCapacity ? parseFloat(agoCapacity) * 0.5 : 10000,
+            }),
+          });
+          setAgoPriceStore(parseFloat(agoPrice));
+        }
+      } else {
+        // Fallback to local-only creation if API fails
+        addStation({
+          name: stationName,
+          location: stationLocation,
+          country: stationCountry,
+          currency: stationCurrency,
+          ownerId,
+        });
+
+        if (pmsPrice) {
+          addFuelType({
+            name: 'PMS (Super)',
+            category: 'fuel',
+            price: parseFloat(pmsPrice),
+            tankCapacity: pmsCapacity ? parseFloat(pmsCapacity) : 20000,
+            currentLevel: pmsCapacity ? parseFloat(pmsCapacity) * 0.6 : 12000,
+          });
+          setPmsPriceStore(parseFloat(pmsPrice));
+        }
+
+        if (agoPrice) {
+          addFuelType({
+            name: 'AGO (Diesel)',
+            category: 'fuel',
+            price: parseFloat(agoPrice),
+            tankCapacity: agoCapacity ? parseFloat(agoCapacity) : 20000,
+            currentLevel: agoCapacity ? parseFloat(agoCapacity) * 0.5 : 10000,
+          });
+          setAgoPriceStore(parseFloat(agoPrice));
+        }
+      }
+
+      // Save company
+      setCompanyData({
+        name: companyName || stationName,
+        phone: companyPhone,
+        email: companyEmail,
+        address: companyAddress,
       });
-      setAgoPriceStore(parseFloat(agoPrice));
+
+      setStep(5);
+    } catch (error) {
+      // Fallback to local-only creation if API fails
+      addStation({
+        name: stationName,
+        location: stationLocation,
+        country: stationCountry,
+        currency: stationCurrency,
+        ownerId,
+      });
+
+      if (pmsPrice) {
+        addFuelType({
+          name: 'PMS (Super)',
+          category: 'fuel',
+          price: parseFloat(pmsPrice),
+          tankCapacity: pmsCapacity ? parseFloat(pmsCapacity) : 20000,
+          currentLevel: pmsCapacity ? parseFloat(pmsCapacity) * 0.6 : 12000,
+        });
+        setPmsPriceStore(parseFloat(pmsPrice));
+      }
+
+      if (agoPrice) {
+        addFuelType({
+          name: 'AGO (Diesel)',
+          category: 'fuel',
+          price: parseFloat(agoPrice),
+          tankCapacity: agoCapacity ? parseFloat(agoCapacity) : 20000,
+          currentLevel: agoCapacity ? parseFloat(agoCapacity) * 0.5 : 10000,
+        });
+        setAgoPriceStore(parseFloat(agoPrice));
+      }
+
+      setCompanyData({
+        name: companyName || stationName,
+        phone: companyPhone,
+        email: companyEmail,
+        address: companyAddress,
+      });
+
+      setStep(5);
     }
-
-    // Save company
-    setCompanyData({
-      name: companyName || stationName,
-      phone: companyPhone,
-      email: companyEmail,
-      address: companyAddress,
-    });
-
-    setStep(5);
   };
 
   return (

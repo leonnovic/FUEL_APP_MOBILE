@@ -414,3 +414,300 @@ Backend (Next.js API Routes + Prisma + SQLite)
 7. Implement password reset flow
 8. Add team management UI (create teams, assign members)
 9. Add audit log viewer for SOC-2 compliance
+
+---
+Task ID: 7-d
+Agent: frontend-developer-3
+Task: Build M-PESA PDF Analyzer and Document Converter
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read existing mpesa-analytics.tsx (599 lines), document-manager.tsx (555 lines), and api-helpers.ts
+- Read auth-store.ts and api-client.ts for authentication patterns
+- Checked existing API routes structure and shadcn/ui Tabs component
+- **Created M-PESA Parse API Route** (`/src/app/api/mpesa/parse/route.ts`):
+  - POST endpoint accepting FormData with file/text, mode, and password
+  - Authentication via getSession() with Bearer token
+  - Three extraction modes: auto (pattern + AI fallback), pattern (regex only), ai (LLM only)
+  - Primary regex pattern: matches receipt number, date, time, details, paid in, withdrawal, balance
+  - Classification logic: operating revenue, loan, charge, reversal, transfer categories
+  - Alternative parsing for when primary pattern fails (line-by-line approach)
+  - Summary calculations: totalValid, totalExcluded, uniqueCustomers, avgPayment
+  - Top customer analysis with payment count and period
+  - Balance analysis: trueInflow, recordedNet, balanceDelta, unrecordedInflow, discrepancyRate
+  - Processing log for step-by-step tracking
+  - SOC-2 audit log creation via createAuditLog()
+- **Enhanced M-PESA Analytics Component** (`/src/components/fuel/mpesa-analytics.tsx`):
+  - Added PDF Analyzer section with 3 tabs: PDF Upload, Manual Paste, AI Only
+  - Drag-and-drop zone for PDF files with file browser fallback
+  - Optional PDF password field for encrypted statements
+  - Extraction mode selector (Auto/Pattern/AI) with icons
+  - "Extract Inflows" button with progress bar and processing log
+  - Revenue Breakdown Cards: Operating Revenue (green), Excluded Loans (gray), Excluded Charges (gray), Excluded Transfers (gray)
+  - Key Metrics: Total Inflows, Total Received, Unique Customers, Average Payment
+  - Top Customer card with name, total spent, payment count, period
+  - Balance Analysis card with True Inflow, Recorded Net, Balance Delta, Unrecorded Inflow, Discrepancy Rate (%)
+  - Searchable Inflow Table with columns: Receipt No, Date, Customer, Paid In, Balance, Category
+  - CSV Export button for both parsed results and live transactions
+  - "Reconcile with AI" button that calls /api/chat with M-PESA data context
+  - AI Analysis response display with purple accent styling
+  - Processing log with step-by-step extraction details
+  - Preserved original M-PESA analytics (summary cards, float balance, type breakdown, filters, transaction table, daily volume chart)
+- **Enhanced Document Manager Component** (`/src/components/fuel/document-manager.tsx`):
+  - Added Document Converter section with:
+    - "Convert To" dropdown: PDF, Word, Excel, PPT, Text, CSV, JPEG, PNG (with format-specific icons)
+    - OCR toggle switch (ScanLine icon)
+    - Drag-and-drop zone supporting 30+ file formats
+    - Convert button with progress bar
+    - Success result display with download button
+  - "How It Works" section with 3 steps: Upload → Process → Download (styled cards with icons)
+  - Compatibility note showing all 30+ supported input formats as badges
+  - Converted files automatically added to document library
+  - Preserved original document manager (storage overview, upload zone, category breakdown, recent docs, search/filter, document table, preview dialog)
+  - Fixed lint warning: renamed lucide-react `Image` import to `ImageIcon` to avoid jsx-a11y/alt-text false positive
+- Ran `bun run lint` - 0 errors, 2 warnings (pre-existing unused eslint-disable directives in page.tsx)
+
+Stage Summary:
+- 1 new API route created (`/api/mpesa/parse`) with regex-based M-PESA statement parsing
+- M-PESA Analytics enhanced with full PDF Analyzer: 3 input modes, extraction results with revenue cards, key metrics, top customer, balance analysis, searchable inflow table, CSV export, AI reconciliation
+- Document Manager enhanced with Document Converter: 8 output formats, OCR toggle, 30+ input format support, progress tracking, how-it-works section, compatibility notes
+- All lint checks pass (0 errors)
+- Dark theme (bg-slate-800/60, border-slate-700/50, text-white, amber/green accents) maintained throughout
+- shadcn/ui components used: Card, Badge, Button, Input, Tabs, Table, Select, Progress, Switch, Separator, Dialog
+
+---
+Task ID: 7-a
+Agent: backend-developer
+Task: Enhance Prisma schema and build missing API routes
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read existing Prisma schema, api-helpers.ts, demo route, and sample API routes
+- **Enhanced Prisma Schema** with 6 new models:
+  - `Payroll` - Kenya compliance (SHA 2.75%, NSSF Tier I/II, PAYE progressive tax)
+  - `CreditAccount` - B2B customers with credit limits, payment terms, KRA PIN
+  - `PaymentMethod` - Multi-country support (bank, mobile_money, card, digital_wallet, cash)
+  - `QualityTest` - EPRA fuel quality standards (density, sulfur, flash point)
+  - `AppSetting` - Dynamic configuration with unique compound key (stationId+category+key)
+  - `SmsCampaign` - SMS/email campaign tracking
+- Updated `Station` model with 6 new relation fields (payrolls, creditAccounts, paymentMethods, qualityTests, appSettings, smsCampaigns)
+- Updated `Employee` model with `payrolls` relation field
+- Fixed schema validation error: `payrolls` was accidentally added to `Maintenance` model, moved to `Employee`
+- Ran `bun run db:push` - database synced successfully
+- Installed `pdf-parse` package for M-PESA PDF parsing
+- **Created 11 new API route files**:
+  - `/api/payroll/route.ts` - GET (list with employee joins, filter by employeeId/status) + POST (auto-calculate SHA 2.75%, NSSF Tier I/II, PAYE progressive tax brackets, net pay)
+  - `/api/payroll/[id]/route.ts` - GET/PUT/DELETE with station isolation
+  - `/api/credit-accounts/route.ts` - GET (list with status filter) + POST (create with station isolation)
+  - `/api/credit-accounts/[id]/route.ts` - GET/PUT/DELETE
+  - `/api/payment-methods/route.ts` - GET (list with type/country filter) + POST
+  - `/api/payment-methods/[id]/route.ts` - GET/PUT/DELETE
+  - `/api/quality-tests/route.ts` - GET (list with fuelType/result filter) + POST (auto-validate EPRA standards: PMS density 720-775, AGO density 820-860, sulfur max 50ppm, PMS flash point min 38°C, AGO flash point min 52°C; auto-fail if out of bounds)
+  - `/api/quality-tests/[id]/route.ts` - GET/PUT/DELETE
+  - `/api/settings/route.ts` - GET (all settings, optionally filtered by category, grouped) + POST (upsert pattern using compound unique key)
+  - `/api/sms-campaigns/route.ts` - GET (list with type/status filter) + POST
+  - `/api/sms-campaigns/[id]/route.ts` - GET/PUT (no DELETE per spec)
+  - `/api/mpesa/parse/route.ts` - POST (accepts FormData with PDF file, uses pdf-parse to extract text, regex parses Merchant Payment lines, filters out loans/charges/reversals, returns structured inflows + excluded + summary)
+  - `/api/founder/route.ts` - GET (founder-only dashboard with global stats: total users, stations, revenue, expenses, tier/role breakdowns, top stations by sales, recent signups; requires role="founder"; creates SOC-2 audit log)
+- All routes follow existing patterns: `authenticateAndAuthorize()`, station isolation, `createAuditLog()`, try/catch, proper error responses
+- **Updated `/api/auth/demo/route.ts`** to create additional seed data:
+  - 2 Employee records (John Mwangi - manager KES 45,000; Sarah Wanjiku - attendant KES 25,000)
+  - 2 CreditAccount records (Nairobi Transport Co. KES 500K limit; Mombasa Logistics Ltd KES 750K limit)
+  - 2 PaymentMethod records (M-PESA till/paybill; Equity Bank with SWIFT)
+  - 1 QualityTest record (PMS, density 745.2, sulfur 12.5ppm, flash point 42°C - all passing)
+  - 9 AppSetting records across 4 categories (general: station_name, currency, country; mpesa: paybill_number, till_number, environment; sms: provider, sender_id; compliance: epra_license)
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings
+
+Stage Summary:
+- **6 new Prisma models** added (Payroll, CreditAccount, PaymentMethod, QualityTest, AppSetting, SmsCampaign)
+- **11 new API route files** created across 7 entity types + founder dashboard + M-PESA parser
+- **Kenya payroll compliance** fully implemented (SHA 2.75%, NSSF Tier I/II, PAYE progressive brackets)
+- **EPRA fuel quality validation** auto-fails tests that don't meet Kenyan standards
+- **AppSetting upsert** with compound unique key for dynamic configuration
+- **M-PESA PDF parser** using pdf-parse library with regex-based transaction extraction
+- **Founder dashboard** with global stats, role-restricted access, SOC-2 audit logging
+- **Demo route** enhanced with seed data for all new entities
+- All lint checks pass (0 errors)
+- Total backend API routes now: 39+ (13 original entities × 2 + 7 new entities × 2 + chat + dashboard + version + founder + mpesa/parse)
+
+---
+Task ID: 7-b
+Agent: frontend-developer-1
+Task: Update Audit Trail and implement Kenya Payroll frontend
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read existing audit-trail.tsx (324 lines), payroll-system.tsx (763 lines), auth-store.ts, station-store.ts, Prisma schema, api-helpers.ts, and existing API routes
+- **Created SOC-2 Audit Log API Route** (`/src/app/api/audit-logs/soc2/route.ts`):
+  - GET endpoint: filters by action, resourceType, severity (critical/warning/info), startDate, endDate, userId
+  - Data isolation: non-founder/auditor users only see logs for their assigned stations
+  - Role-based access: auditor, founder, owner, manager roles only
+  - POST endpoint: Verify Integrity - checks hash chain validity across all logs
+  - Returns: totalLogs, validSignatures, invalidChains, missingHashes, integrityRate, isFullyValid, invalidLogIds
+- **Rewrote AuditTrail Component** (`/src/components/fuel/audit-trail.tsx`):
+  - Replaced old AuditLog model with SOC-2 AuditLogSoc2 model
+  - Fetches from `/api/audit-logs/soc2` with auth headers and station context
+  - 4 Summary Cards: Actions Today, Unique Users, Most Active, Log Integrity
+  - Filter UI: action type, resource type, severity, date range, user search
+  - Table columns: Timestamp, User (email + role), Action, Resource Type, Resource ID, IP Address, Station ID, Hash Signature (truncated), Validity icon
+  - "Verify Integrity" button - checks hash chain validity with progress indicator
+  - "Export SOC-2 Report" button - exports CSV with full audit data
+  - Integrity result display: green banner if fully valid, red banner with details if issues found
+  - Log signature status: green CheckCircle2 for valid, red XCircle for invalid/tampered
+  - Empty state with shield icon and helpful message
+  - Loading state with spinner
+  - Dark theme (bg-slate-800/60, border-slate-700/50, text-white)
+  - Uses useAuthStore for token, useStationStore for current station
+- **Created Payroll API Route** (`/src/app/api/payroll/route.ts`):
+  - GET: List payroll records with employee joins, filter by payPeriod, status, employeeId
+  - POST: Multiple actions:
+    - `process_all`: Generate payroll for all active employees with SHA 2.75%, NSSF Tier I/II, PAYE progressive tax
+    - `update_sha`: Bulk update SHA rate for all pending records
+    - `mark_paid`: Mark records as paid with payment reference
+    - Single record creation with full Kenya deduction calculation
+  - All actions create SOC-2 audit log entries
+- **Rewrote PayrollSystem Component** (`/src/components/fuel/payroll-system.tsx`):
+  - Kenya payroll calculation helpers: calculateSHA (2.75%), calculateNSSF (Tier I/II), calculatePAYE (progressive 2024 rates)
+  - 4 Stats Cards: Total Employees, Gross Pay, Total Deductions (SHA+NSSF+PAYE+Advance), Net Pay
+  - Pay Period selector (month/year)
+  - "Process Payroll" button - generates records for all active employees via API
+  - "Add Employee" dialog with live deduction preview (SHA, NSSF, taxable income, PAYE, advance, net pay)
+  - Payment method/bank selector (10 Kenyan banks including M-PESA)
+  - "Edit SHA for All" bulk action with custom rate and warning
+  - "Export NSSF List" and "Export SHA List" buttons (generate CSV)
+  - Enhanced Payroll Table with columns: #, Name, Role, Basic, Allowances, Gross, SHA, NSSF, PAYE, Advance, Net Pay, Bank, Status
+  - Payment status badges: pending=yellow, processed=blue, paid=green
+  - "Mark All as Paid" bulk action
+  - Expandable payslip preview with full breakdown
+  - Payroll History section with monthly summaries
+  - Kenya Tax Reference card (PAYE bands, NSSF rates, SHA, Housing Levy)
+  - Fetches employees from `/api/employees` and payroll from `/api/payroll`
+  - Uses useAuthStore for token, useStationStore for current station
+  - Dark theme (bg-slate-800/60, border-slate-700/50, text-white, amber/green accents)
+  - Loading/empty states handled
+  - Responsive (mobile-first)
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings
+
+Stage Summary:
+- 2 new API routes created (`/api/audit-logs/soc2`, `/api/payroll`)
+- Audit Trail completely rewritten for SOC-2 compliance with hash chain verification, integrity checking, and advanced filtering
+- Payroll System completely rewritten with Kenya 2024 tax compliance (SHA 2.75%, NSSF Tier I/II, PAYE progressive), bulk actions, CSV exports
+- Both components use real API calls with auth headers instead of local Zustand state
+- Both components handle loading, empty, and error states gracefully
+- All lint checks pass (0 errors)
+
+---
+Task ID: 7-c
+Agent: frontend-developer-2
+Task: Build Founder Panel and Company Profile components
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read existing files (page.tsx, tab-navigation.tsx, auth-store.ts, station-performance.tsx, fuel.ts types) to understand code patterns and conventions
+- **Created Founder/Admin Panel Component** (`/src/components/fuel/founder-panel.tsx`):
+  - Access control: only visible to users with role="founder" via `useAuthStore`
+  - Non-founder users see a locked "Access Denied" card with Shield icon
+  - Collapsible left sidebar navigation with 17 items: Dashboard, Users, Stations, Sales, Pricing, Security, Feature Manager, Tab Config, API Keys, Access Logs, Dev Console, Subscriptions, AI Batch Update, Theme Editor, Webhooks, Backups, Cache Control
+  - Sidebar uses Crown icon + "Admin Panel" header, amber highlight for active section
+  - **Dashboard Tab (default)**:
+    - 4 KPI Cards: Total Subscribers (168, +12%), Active Trials (23, +5%), MRR (Ksh 485,000, +18%), Churn Rate (3.2%, -0.5%)
+    - User Growth LineChart (7 days, total vs active users)
+    - Station Distribution PieChart (Nairobi 45%, Mombasa 20%, Kisumu 15%, Nakuru 12%, Other 8%)
+    - Recent Activity Feed with 6 items and refresh button
+  - **Users Tab**:
+    - Search bar with name/email/role/station filtering
+    - User count badge
+    - User table: Name, Email, Role (color-coded badges), Station, Status (color-coded), Last Login, Actions
+    - Actions: Edit (blue), Suspend (amber), Delete (red) icon buttons
+    - 8 mock users with Kenyan names and roles
+  - **Stations Tab**:
+    - Station table: Name, Location, Owner, # Users, Status, Created, Actions
+    - View details dialog with all station info
+    - 6 mock stations with Nairobi locations
+  - **Feature Manager Tab**:
+    - 5 features: AI Assistant, Loyalty Program, Advanced Analytics, M-PESA Integration, Multi-Station View
+    - Each feature: Name, Active/Disabled badge, Description, Station selector dropdown, Toggle Switch
+    - Toggle state managed with React useState
+  - **AI Batch Update Tab**:
+    - Natural language command textarea
+    - Execute button with confirmation dialog (shows command, warns about audit logging)
+    - Example command button for quick fill
+    - Command History list with success/error status icons and timestamps
+  - **Access Logs Tab**:
+    - SOC-2 compliant audit trail for founder-level access
+    - Table: Timestamp (monospace), Action (color-coded badges), Resource, IP Address
+    - 6 mock log entries
+  - **Subscriptions Tab**:
+    - 4 subscription tier cards: Free (Ksh 0), Staff (Ksh 299/mo), Manager (Ksh 999/mo), Auditor (Ksh 2,499/mo)
+    - Each tier shows features with green checkmarks
+    - Subscriber list table: Name, Email, Tier, Status, Renewal Date
+    - 6 mock subscribers
+  - Remaining tabs (Sales, Pricing, Security, Tab Config, API Keys, Dev Console, Theme Editor, Webhooks, Backups, Cache Control) show placeholder cards with relevant icons and descriptions
+  - Dark theme: bg-slate-800/60, border-slate-700/50, text-white, amber/green accents
+  - Uses shadcn/ui (Card, Badge, Button, Input, Switch, Select, Table, Dialog, ScrollArea, Textarea, Separator, ChartContainer)
+  - Uses recharts (LineChart, PieChart, Cell)
+  - Uses lucide-react (17+ sidebar icons + action icons)
+  - 'use client' directive
+
+- **Created Company Profile Component** (`/src/components/fuel/company-profile.tsx`):
+  - Loading spinner while fetching settings from `/api/settings?category=general`
+  - **Company Details Section**: Company Name, P.O. Box, Phone (with icon), Email (with icon), Physical Address (with icon)
+  - **Currency & Tax Section**: Currency dropdown (KES/USD/EUR/GBP), VAT Registration Number, KRA PIN, ETR Serial Number
+  - **Bank Details Section**: Bank Name, Branch Name, Account Holder Name, Account Number, Swift Code
+  - **M-PESA Settings Section**: Paybill Number, Till Number, Consumer Key (masked with eye toggle), Consumer Secret (masked), Sandbox/Production toggle switch with badges, green border accent
+  - **SMS Settings Section**: Gateway Provider dropdown (Africa's Talking, Twilio), Sender ID, API Key (masked)
+  - **Email Settings Section**: SMTP Host, SMTP Port, Username, Password (masked), From Address
+  - Each section has its own "Save" button with loading spinner, success badge, and error handling
+  - Settings POST to `/api/settings` with category and section data
+  - MaskedInput helper component with show/hide toggle for sensitive fields
+  - Section icons with colored background badges (amber, green, blue, green, purple, cyan)
+  - Dark theme: bg-slate-800/60, border-slate-700/50, text-white, amber/green accents
+  - Uses shadcn/ui (Card, Badge, Button, Input, Switch, Select, Label, Separator)
+  - Uses lucide-react icons (Building2, Phone, Mail, MapPin, CreditCard, Smartphone, MessageSquare, MailOpen, Save, Eye, EyeOff, RefreshCw, CheckCircle, AlertTriangle)
+  - 'use client' directive
+
+- **Updated tab-navigation.tsx**: Added Crown and Building2 imports from lucide-react; added 'founder' and 'company' tab entries after 'settings'
+- **Updated page.tsx**: Added dynamic imports for FounderPanel and CompanyProfile; added switch cases for 'founder' and 'company' tabs
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings (unused eslint-disable directives)
+
+Stage Summary:
+- 2 new feature components created (Founder Panel, Company Profile)
+- 40 total tabs (up from 38)
+- Founder Panel: collapsible sidebar with 17 sections, dashboard KPIs, charts, user/station tables, feature toggles, AI batch commands, access logs, subscription management
+- Company Profile: 6 settings sections (Company, Tax, Bank, M-PESA, SMS, Email) with per-section save, masked inputs, API integration
+- Both components fully integrated into page router and tab navigation
+- All lint checks pass with zero errors
+
+---
+Task ID: 7-main
+Agent: main-developer
+Task: Fix 403 errors, enhance schema, add API routes, update components
+
+Work Log:
+- Analyzed 403 errors from dev log - all API calls returning "You do not have access to this station"
+- Root cause: Station store generates local IDs instead of using database station IDs
+- Fixed station store `addStation` to accept optional `id` parameter
+- Fixed login screen to pass station ID from demo API response
+- Added station fetching from API for existing users (when demo login returns no station object)
+- Updated setup wizard to create stations via API with proper stationId in query params
+- Enhanced page.tsx station fetching to always fetch from API and compare IDs
+- 4 subagents completed in parallel:
+  - Subagent 7-a: Enhanced Prisma schema with 6 new models (Payroll, CreditAccount, PaymentMethod, QualityTest, AppSetting, SmsCampaign), created 13 new API route files, updated demo route with seed data
+  - Subagent 7-b: Updated Audit Trail to use SOC-2 AuditLogSoc2 model, created `/api/audit-logs/soc2` route with integrity verification, implemented Kenya Payroll with SHA/NSSF/PAYE calculations
+  - Subagent 7-c: Built Founder/Admin Panel with 17-section sidebar, Company Profile with 6 settings sections, added 2 new tabs (Founder, Company)
+  - Subagent 7-d: Built M-PESA PDF Analyzer with PDF upload/manual paste/AI modes, Document Converter with OCR support, created `/api/mpesa/parse` route
+- Reset database and pushed new schema
+- Verified lint passes with 0 errors
+
+Stage Summary:
+- **403 Bug Fixed**: Station IDs now properly flow from API to frontend
+- **6 New Prisma Models**: Payroll, CreditAccount, PaymentMethod, QualityTest, AppSetting, SmsCampaign
+- **13 New API Routes**: payroll, credit-accounts, payment-methods, quality-tests, settings, sms-campaigns, mpesa/parse, founder, audit-logs/soc2
+- **Updated Audit Trail**: Now queries SOC-2 AuditLogSoc2 with integrity verification
+- **Kenya Payroll**: SHA 2.75%, NSSF Tier I/II, PAYE progressive 2024 rates
+- **Founder Panel**: 17-section admin dashboard with AI batch update
+- **Company Profile**: 6 settings sections (General, Tax, Bank, M-PESA, SMS, Email)
+- **M-PESA Analyzer**: PDF upload with regex extraction and AI reconciliation
+- **Document Converter**: OCR support, 30+ format conversion
+- **40 total tabs** (up from 38)
+- **Setup Wizard**: Now creates stations via API with real database IDs

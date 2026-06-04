@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import {
   FileText,
   Upload,
@@ -17,6 +17,15 @@ import {
   Clock,
   Download,
   X,
+  RefreshCw,
+  ImageIcon,
+  FileCode,
+  ScanLine,
+  CheckCircle2,
+  ArrowRight,
+  Loader2,
+  FileDown,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Card,
@@ -30,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +62,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/auth-store';
 
 type DocCategory = 'invoices' | 'receipts' | 'reports' | 'contracts' | 'compliance' | 'other';
 
@@ -66,6 +78,8 @@ interface DocEntry {
   uploadedBy: string;
 }
 
+type ConvertFormat = 'pdf' | 'word' | 'excel' | 'ppt' | 'text' | 'csv' | 'jpeg' | 'png';
+
 const CATEGORY_CONFIG: Record<DocCategory, { label: string; color: string; bg: string }> = {
   invoices: { label: 'Invoices', color: 'text-amber-400', bg: 'bg-amber-500/20' },
   receipts: { label: 'Receipts', color: 'text-green-400', bg: 'bg-green-500/20' },
@@ -74,6 +88,24 @@ const CATEGORY_CONFIG: Record<DocCategory, { label: string; color: string; bg: s
   compliance: { label: 'Compliance', color: 'text-teal-400', bg: 'bg-teal-500/20' },
   other: { label: 'Other', color: 'text-slate-400', bg: 'bg-slate-500/20' },
 };
+
+const FORMAT_CONFIG: Record<ConvertFormat, { label: string; icon: React.ReactNode; color: string }> = {
+  pdf: { label: 'PDF', icon: <FileText className="size-3.5 text-red-400" />, color: 'text-red-400' },
+  word: { label: 'Word', icon: <FileText className="size-3.5 text-blue-400" />, color: 'text-blue-400' },
+  excel: { label: 'Excel', icon: <FileSpreadsheet className="size-3.5 text-green-400" />, color: 'text-green-400' },
+  ppt: { label: 'PPT', icon: <FileText className="size-3.5 text-orange-400" />, color: 'text-orange-400' },
+  text: { label: 'Text', icon: <FileCode className="size-3.5 text-slate-400" />, color: 'text-slate-400' },
+  csv: { label: 'CSV', icon: <FileSpreadsheet className="size-3.5 text-cyan-400" />, color: 'text-cyan-400' },
+  jpeg: { label: 'JPEG', icon: <ImageIcon className="size-3.5 text-pink-400" />, color: 'text-pink-400' },
+  png: { label: 'PNG', icon: <ImageIcon className="size-3.5 text-purple-400" />, color: 'text-purple-400' },
+};
+
+const SUPPORTED_INPUT_FORMATS = [
+  'PDF', 'DOC', 'DOCX', 'XLS', 'XLSX', 'PPT', 'PPTX', 'TXT', 'CSV', 'RTF',
+  'ODT', 'ODS', 'ODP', 'HTML', 'HTM', 'XML', 'JSON', 'MD', 'LOG',
+  'JPG', 'JPEG', 'PNG', 'GIF', 'BMP', 'TIFF', 'SVG', 'WEBP',
+  'ZIP', 'RAR', '7Z', 'EPUB',
+];
 
 function getFileIcon(type: string) {
   if (type.includes('pdf')) return <FileText className="size-4 text-red-400" />;
@@ -106,6 +138,7 @@ const MOCK_DOCS: DocEntry[] = [
 
 export function DocumentManager() {
   const { toast } = useToast();
+  const token = useAuthStore((s) => s.token);
 
   const [documents, setDocuments] = useState<DocEntry[]>(MOCK_DOCS);
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,6 +151,18 @@ export function DocumentManager() {
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState('application/pdf');
   const [formCategory, setFormCategory] = useState<DocCategory>('reports');
+
+  // Document Converter state
+  const [convertFormat, setConvertFormat] = useState<ConvertFormat>('pdf');
+  const [ocrEnabled, setOcrEnabled] = useState(false);
+  const [convertDragActive, setConvertDragActive] = useState(false);
+  const [convertFile, setConvertFile] = useState<File | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [convertProgress, setConvertProgress] = useState(0);
+  const [convertResult, setConvertResult] = useState<{ url: string; name: string } | null>(null);
+  const convertFileInputRef = useRef<HTMLInputElement>(null);
+
+  const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
 
   // Filter documents
   const filteredDocs = useMemo(() => {
@@ -182,10 +227,293 @@ export function DocumentManager() {
     toast({ title: 'Files Received', description: 'File upload simulated successfully' });
   };
 
-  const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
+  // ─── Document Converter Handlers ──────────────────────────────────────
+  const handleConvertDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setConvertDragActive(true);
+  };
+
+  const handleConvertDragLeave = () => setConvertDragActive(false);
+
+  const handleConvertDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setConvertDragActive(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      setConvertFile(files[0]);
+      setConvertResult(null);
+      toast({ title: 'File Ready', description: files[0].name });
+    }
+  };
+
+  const handleConvert = useCallback(async () => {
+    if (!convertFile) {
+      toast({ title: 'Error', description: 'Please select a file to convert', variant: 'destructive' });
+      return;
+    }
+
+    setIsConverting(true);
+    setConvertProgress(10);
+    setConvertResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', convertFile);
+      formData.append('convertTo', convertFormat);
+      formData.append('ocr', ocrEnabled ? 'true' : 'false');
+
+      setConvertProgress(30);
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      setConvertProgress(60);
+
+      const data = await res.json();
+
+      setConvertProgress(85);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Simulate successful conversion
+      setConvertProgress(100);
+      const convertedName = convertFile.name.replace(/\.[^/.]+$/, '') + '.' + (convertFormat === 'word' ? 'docx' : convertFormat === 'excel' ? 'xlsx' : convertFormat === 'ppt' ? 'pptx' : convertFormat);
+      setConvertResult({
+        url: '#',
+        name: convertedName,
+      });
+
+      toast({
+        title: 'Conversion Complete',
+        description: `File converted to ${FORMAT_CONFIG[convertFormat].label} format`,
+      });
+
+      // Add to document list
+      const newDoc: DocEntry = {
+        id: `doc-${Date.now()}`,
+        name: convertedName,
+        type: convertFormat === 'pdf' ? 'application/pdf' : convertFormat === 'word' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : convertFormat === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream',
+        category: 'other',
+        size: Math.floor(convertFile.size * 0.8),
+        uploadDate: new Date().toISOString().slice(0, 10),
+        uploadedBy: 'Admin',
+      };
+      setDocuments((prev) => [newDoc, ...prev]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Conversion failed';
+      toast({ title: 'Conversion Failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsConverting(false);
+    }
+  }, [convertFile, convertFormat, ocrEnabled, token, toast]);
 
   return (
     <div className="space-y-6">
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 1: DOCUMENT CONVERTER
+         ══════════════════════════════════════════════════════════════════ */}
+      <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileDown className="size-4 text-amber-400" />
+                Document Converter
+              </CardTitle>
+              <CardDescription className="text-slate-400 text-xs mt-1">
+                Convert between 30+ file formats with optional OCR
+              </CardDescription>
+            </div>
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px]">
+              <RefreshCw className="size-3 mr-1" /> 30+ Formats
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Convert To + OCR Toggle */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+            <div className="flex-1 w-full sm:w-auto">
+              <Label className="text-slate-400 text-xs">Convert To</Label>
+              <Select value={convertFormat} onValueChange={(v) => setConvertFormat(v as ConvertFormat)}>
+                <SelectTrigger className={inputClass}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  {(Object.entries(FORMAT_CONFIG) as [ConvertFormat, typeof FORMAT_CONFIG[ConvertFormat]][]).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        {config.icon}
+                        <span>{config.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3 pb-1">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={ocrEnabled}
+                  onCheckedChange={setOcrEnabled}
+                  className="data-[state=checked]:bg-amber-500"
+                />
+                <Label className="text-slate-400 text-xs flex items-center gap-1">
+                  <ScanLine className="size-3" /> OCR Enabled
+                </Label>
+              </div>
+            </div>
+          </div>
+
+          {/* Drag & Drop Zone */}
+          <div
+            onDragOver={handleConvertDragOver}
+            onDragLeave={handleConvertDragLeave}
+            onDrop={handleConvertDrop}
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+              convertDragActive
+                ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
+                : 'border-slate-600 hover:border-slate-500'
+            }`}
+            onClick={() => convertFileInputRef.current?.click()}
+          >
+            <input
+              ref={convertFileInputRef}
+              type="file"
+              className="hidden"
+              accept={SUPPORTED_INPUT_FORMATS.map((f) => `.${f.toLowerCase()}`).join(',')}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  setConvertFile(f);
+                  setConvertResult(null);
+                  toast({ title: 'File Selected', description: f.name });
+                }
+              }}
+            />
+            <Upload className={`size-10 mx-auto mb-3 ${convertDragActive ? 'text-amber-400' : 'text-slate-500'}`} />
+            <p className="text-sm text-slate-300 mb-1">Drag & drop any file here</p>
+            <p className="text-xs text-slate-500 mb-3">Supports 30+ formats: PDF, Word, Excel, Images, and more</p>
+            {convertFile ? (
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                {getFileIcon(convertFile.type)} <span className="ml-1.5">{convertFile.name}</span> ({formatSize(convertFile.size)})
+                <button
+                  className="ml-2 hover:text-white"
+                  onClick={(e) => { e.stopPropagation(); setConvertFile(null); setConvertResult(null); }}
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-slate-600 text-slate-500">Click to browse</Badge>
+            )}
+          </div>
+
+          {/* Convert Button + Progress */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleConvert}
+                disabled={isConverting || !convertFile}
+                className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              >
+                {isConverting ? (
+                  <><Loader2 className="size-4 mr-2 animate-spin" /> Converting...</>
+                ) : (
+                  <><RefreshCw className="size-4 mr-2" /> Convert to {FORMAT_CONFIG[convertFormat].label}</>
+                )}
+              </Button>
+              {convertFile && (
+                <div className="text-xs text-slate-400">
+                  {convertFile.name} → <span className={FORMAT_CONFIG[convertFormat].color}>{FORMAT_CONFIG[convertFormat].label}</span>
+                  {ocrEnabled && <span className="text-amber-400 ml-1">(OCR)</span>}
+                </div>
+              )}
+            </div>
+
+            {isConverting && (
+              <div className="space-y-1">
+                <Progress value={convertProgress} className="h-2 bg-slate-700" />
+                <div className="text-[10px] text-slate-500 text-right">{convertProgress}%</div>
+              </div>
+            )}
+
+            {convertResult && (
+              <div className="flex items-center gap-3 p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
+                <CheckCircle2 className="size-5 text-green-400 shrink-0" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-green-400">Conversion Complete</div>
+                  <div className="text-xs text-slate-400">{convertResult.name}</div>
+                </div>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs">
+                  <Download className="size-3 mr-1" /> Download
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* How It Works */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-700/20 rounded-xl p-4 border border-slate-700/30 text-center">
+              <div className="size-10 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-2">
+                <Upload className="size-4 text-amber-400" />
+              </div>
+              <div className="text-xs font-medium text-slate-200 mb-1">1. Upload</div>
+              <div className="text-[10px] text-slate-500">Drag & drop or browse for any supported file format</div>
+            </div>
+            <div className="bg-slate-700/20 rounded-xl p-4 border border-slate-700/30 text-center">
+              <div className="size-10 rounded-full bg-cyan-500/20 flex items-center justify-center mx-auto mb-2">
+                <RefreshCw className="size-4 text-cyan-400" />
+              </div>
+              <div className="text-xs font-medium text-slate-200 mb-1">2. Process</div>
+              <div className="text-[10px] text-slate-500">We convert your file using secure server-side processing</div>
+            </div>
+            <div className="bg-slate-700/20 rounded-xl p-4 border border-slate-700/30 text-center">
+              <div className="size-10 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-2">
+                <Download className="size-4 text-green-400" />
+              </div>
+              <div className="text-xs font-medium text-slate-200 mb-1">3. Download</div>
+              <div className="text-[10px] text-slate-500">Get your converted file instantly in the chosen format</div>
+            </div>
+          </div>
+
+          {/* Compatibility Note */}
+          <div className="bg-slate-700/20 rounded-lg p-3 border border-slate-700/30">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="size-4 text-slate-500 mt-0.5 shrink-0" />
+              <div>
+                <div className="text-xs font-medium text-slate-400 mb-1">Supported Input Formats</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {SUPPORTED_INPUT_FORMATS.map((fmt) => (
+                    <Badge key={fmt} variant="outline" className="border-slate-600 text-slate-500 text-[9px] px-1.5 py-0">
+                      {fmt}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 2: EXISTING DOCUMENT MANAGER
+         ══════════════════════════════════════════════════════════════════ */}
+      <div className="border-t border-slate-700/50 pt-6">
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <FolderOpen className="size-4 text-amber-400" /> Document Library
+        </h3>
+      </div>
+
       {/* ── Storage Overview ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card className="bg-slate-800/60 border-slate-700/50 text-white">

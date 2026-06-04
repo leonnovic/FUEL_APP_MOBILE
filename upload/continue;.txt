@@ -1,0 +1,2070 @@
+Hello LEON. Below is the **Master Build Prompt**. It is a highly detailed, comprehensive specification document designed to be copied and pasted directly into an AI coding assistant (like Cursor, GitHub Copilot Workspace, v0, or a senior development team) to build the entire **FuelPro / ISPLedger** platform from scratch. 
+
+Per your instructions, this contains **zero simulations**. It is purely the architectural blueprint, logic, data structures, and UI/UX requirements.
+
+***
+
+# 🚀 MASTER BUILD PROMPT: FUELPRO / ISPLEDGER SAAS PLATFORM
+
+**ROLE:** Act as an Expert Full-Stack SaaS Architect, UI/UX Designer, and Senior React/Node.js Developer. 
+**OBJECTIVE:** Build a production-ready, offline-first, multi-tenant Fuel Station Management SaaS platform. It must be heavily optimized for the Kenyan market (KRA eTIMS tax compliance, M-PESA Daraja integration, EPRA fuel standards, SHA/NSSF payroll) but architecturally scalable to 250 countries.
+**ARCHITECTURE PATTERN:** Offline-First Progressive Web App (PWA) with Cloud Sync. The app must function flawlessly without internet (crucial for remote stations like Lodwar, Turkana) and sync data to the backend when connectivity is restored.
+
+---
+
+## 1. TECHNICAL STACK
+*   **Frontend Framework:** React 18+ (Vite), TypeScript, React Router (HashRouter for PWA).
+*   **UI/Styling:** Tailwind CSS, Shadcn/UI components, Lucide Icons, Recharts (for BI).
+*   **State & Local DB (Offline-First):** Dexie.js (IndexedDB wrapper) or Zustand with `persist` middleware. LocalStorage keys prefixed with `fuelpro_` (e.g., `fuelpro_stations`, `fuelpro_expenses_v2`).
+*   **Backend/API:** Node.js, Hono or Express, tRPC for end-to-end type safety.
+*   **Database:** PostgreSQL (via Drizzle ORM) or MongoDB. 
+*   **File Storage:** AWS S3 (Pre-signed URLs for direct client upload).
+*   **Integrations:** Safaricom Daraja API (M-PESA), KRA eTIMS API, Resend (Email), Africa's Talking (SMS).
+*   **PDF/OCR:** `pdf-parse` for M-PESA statements, `Tesseract.js` for receipt OCR, `jsPDF` for invoicing.
+
+---
+
+## 2. DATABASE SCHEMA & LOCAL STORAGE KEYS
+*The app uses a dual-layer approach: Local IndexedDB for offline operations, and a central SQL/NoSQL DB for multi-tenant cloud sync.*
+
+### Core Tables / Collections:
+1.  **`users`**: `id, email, name, phone, role (owner/manager/staff/auditor/founder), station_access[], two_factor_enabled, status`.
+2.  **`stations`**: `id, name, location, country_code, kra_pin, etr_serial, currency, timezone, coordinates`.
+3.  **`sales`**: `id, station_id, date, shift, fuel_type, pump_id, opening_meter, closing_meter, litres, unit_price, subtotal, vat_rate (16%), vat_amount, total, payment_method, mpesa_ref, customer_kra_pin, etr_receipt_number`.
+4.  **`inventory`**: `station_id, fuel_type (PMS/AGO), tank_name, current_stock, capacity, unit_cost, selling_price, alert_threshold, status`.
+5.  **`fuel_offloading`**: `station_id, date, truck_reg, driver_name, fuel_type, quantity, unit_rate, total_amount, supplier_name, delivery_note_no`.
+6.  **`expenses`**: `station_id, date, category (fuel_purchase/salaries/maintenance/rent), description, amount, payment_method, status (pending/approved), receipt_url`.
+7.  **`employees`**: `station_id, name, role, basic_salary, sha_deduction, nssf_deduction, paye_deduction, advance_balance, bank_details`.
+8.  **`payroll`**: `employee_id, pay_period, gross_pay, sha, nssf, paye, advance_deduction, net_pay, status (pending/paid)`.
+9.  **`credit_accounts`**: `station_id, customer_name, kra_pin, credit_limit, balance_used, payment_terms, bank_details`.
+10. **`quality_tests`**: `station_id, date, batch_no, fuel_type, density, sulfur, flash_point, appearance, result (pass/fail)`.
+11. **`audit_logs`**: `user_id, action, category, details_json, ip_address, severity`.
+
+---
+
+## 3. CORE MODULES SPECIFICATION (UI & LOGIC)
+
+### MODULE 1: Dashboard & Business Intelligence
+*   **Logic:** Aggregates data from local DB. Calculates 7-day growth, net profit, and fuel mix (PMS vs AGO).
+*   **UI Layout:** 
+    *   **Header:** Station Selector (Dropdown with "Combined View"), User Profile, Sync Status Indicator (Green=Online, Red=Offline).
+    *   **KPI Cards:** Total Revenue, Net Profit, Fuel Sold (Litres), Cash at Hand.
+    *   **Charts:** Sales Trend (Line), Fuel Distribution (Pie), Expense Breakdown (Bar).
+    *   **Widgets:** Current Pump Prices, Tank Levels (Visual gauges), Weather Widget (OpenWeather API), Regulatory Alerts (KRA/EPRA).
+
+### MODULE 2: Point of Sale (POS) & KRA eTIMS
+*   **Logic:** Quick entry for fuel sales. Automatically calculates 16% VAT. Generates ETR-compliant receipt strings: `ETR-[station]-[date]-[sequence]`.
+*   **UI Layout:**
+    *   **Quick Sale:** Fuel Type Selector (Petrol/Diesel), Litres Input, Auto-calculated Total.
+    *   **Cart:** Custom items, Customer Name, KRA PIN (mandatory for B2B).
+    *   **Payment:** Cash, M-PESA (Triggers Daraja STK Push), Card, Bank.
+    *   **Receipt:** Auto-generates a printable thermal receipt format with KRA QR code data.
+
+### MODULE 3: Sales Tracking & Shift Management
+*   **Logic:** Reconciles physical pump meters with system sales. 
+*   **UI Layout:**
+    *   **Shift Selector:** Day / Night / Full Day.
+    *   **Tank Inventory:** Opening/Closing meter readings for PMS and AGO tanks. Auto-calculates litres sold.
+    *   **Pump Readings Grid:** Dynamic rows for multiple pumps per fuel type.
+    *   **Daily Expenses:** Quick add for shift-specific expenses (e.g., generator fuel).
+    *   **Till Reconciliation:** Input total Till/M-PESA payments. System calculates expected cash in hand and highlights discrepancies.
+
+### MODULE 4: Inventory & Fuel Offloading
+*   **Logic:** `Current Stock = Previous Stock + Offloaded - Sold`. Triggers alerts if `current_stock < alert_threshold`.
+*   **UI Layout:**
+    *   **Inventory Table:** Fuel Type, Stock (L), Capacity, Fill %, Unit Cost, Selling Price, Status Badge (Normal/Low/Critical).
+    *   **Offloading Tracker:** Form to log truck deliveries (Truck Reg, Driver, Supplier, Quantity, Rate). Updates inventory automatically.
+
+### MODULE 5: Finance (Payroll, Expenses, M-PESA Analyzer)
+*   **Payroll Logic (Kenya Specific):** 
+    *   `SHA` = 2.75% of Gross.
+    *   `NSSF` = Tier I (6% of first 7,000) + Tier II (6% of 7,001-36,000).
+    *   `PAYE` = Progressive tax bands (10% to 32.5%).
+    *   **UI:** Data table showing Gross, SHA, NSSF, Advance, Net Pay. Bulk actions for "Edit SHA for All", "Export NSSF List".
+*   **M-PESA Inflow Analyzer (AI Feature):**
+    *   **Logic:** User uploads M-PESA PDF. System uses regex/AI to extract lines matching `Merchant Payment from`. Filters out loans, charges, and reversals.
+    *   **UI:** Drag-and-drop PDF zone. Progress bar. 
+    *   **Output:** Clean Revenue Breakdown cards (Valid Inflows vs Excluded). Reconciliation table matching M-PESA receipts to recorded POS sales. Discrepancy rate calculation.
+
+### MODULE 6: Operations (Maintenance, Quality, Delivery)
+*   **Maintenance:** Kanban/List view for equipment tasks (Pump calibration, Generator service). Status: Scheduled, In Progress, Overdue.
+*   **Fuel Quality (EPRA Standards):** 
+    *   Form to record batch tests. 
+    *   **Validation Rules:** PMS Density (720-775 kg/m³), Sulfur (max 50ppm), Flash Point (min 38°C). AGO Density (820-860 kg/m³), Flash Point (min 52°C). Auto-fails if out of bounds.
+*   **Delivery Tracker:** B2B fuel delivery log. Captures Client, Litres, Price, Vehicle Reg, Payment Status.
+
+### MODULE 7: CRM, Credit & Invoicing
+*   **Credit Accounts:** Track B2B customers. `Balance Used` vs `Credit Limit`. Block POS credit sales if limit exceeded.
+*   **Invoice Generator:** Add line items, auto-calculate totals. "Edit Bank Details" modal to inject company bank info. Export to PDF/Excel.
+*   **Debt Reminder:** Template builder for WhatsApp/Email/SMS. Select overdue clients, click "Send Reminders".
+
+### MODULE 8: Reports Center
+*   **Report Types:** Overall P&L, VAT Return (KRA), KRA Daily Sales, Fuel Sales Report (Monthly).
+*   **UI:** Date range picker, Currency selector. 
+*   **Output:** Visual breakdown of Revenue vs Costs. Export buttons for PDF, Excel, and direct KRA eTIMS submission payload generation.
+
+---
+
+## 4. SETTINGS & COMPLIANCE HUB
+*   **Organization Profile:** Company Name, P.O. Box, Contacts, Currency (KES/USD), VAT Reg No, Bank Details (for invoices).
+*   **Team Management:** Invite users via email/phone. Role hierarchy: Owner > Manager > Staff > Auditor. Granular feature access toggles per role.
+*   **Kenya Compliance Engine:** 
+    *   Auto-detects country. If KE, enforces 16% VAT, ETR receipt formats, and displays EPRA quality standards.
+    *   Data Residency warning: "Data stored and processed within Kenya's jurisdiction."
+*   **Integrations Hub:** 
+    *   **M-PESA Daraja:** Inputs for Consumer Key, Secret, Shortcode, Passkey. Toggle Sandbox/Production.
+    *   **Banks:** KCB, Equity, Co-op, NCBA, Absa API connectors.
+    *   **KRA eTIMS:** ETR Serial Number and TIN configuration.
+
+---
+
+## 5. FOUNDER / SUPER ADMIN PANEL (Hidden/Secure Route)
+*Accessed via a special route (e.g., `/#/founder`) with strict 2FA.*
+*   **Dashboard:** Global SaaS metrics (Total Subscribers, Active Trials, MRR).
+*   **AI Batch Update:** Natural language input to execute DB changes (e.g., *"Set Petrol price to 180.50 for station S1"*).
+*   **Feature Manager:** Dynamically toggle modules (Loyalty, AI Assistant) on/off for specific tenants.
+*   **Tab Config:** Reorder, rename, or hide navigation tabs for the tenant UI.
+*   **Subscriptions & Billing:** Manage tiers (Free, Staff Ksh 299, Manager Ksh 999, Auditor Ksh 2499).
+*   **Developer Backend:** 
+    *   **DB Manager:** View/Clear local IndexedDB tables.
+    *   **Cache Control:** Clear Service Workers, localStorage, and browser caches.
+    *   **Webhooks:** Configure HTTP endpoints for `sale.created`, `transaction.completed`.
+    *   **Access Logs:** Immutable audit trail of all Founder logins and config changes.
+    *   **API Keys:** Encrypted storage for Resend, Twilio, Stripe, Daraja, AWS S3.
+
+---
+
+## 6. DOCUMENT CENTER & AI UTILITIES
+*   **Doc Converter:** Drag-and-drop zone. Supports 30+ formats. 
+*   **OCR Engine:** Toggle "Enable OCR for images". Uses AI to extract text from handwritten shift records or faded M-PESA receipts.
+*   **Categories:** Auto-tag uploads as M-PESA Receipt, Invoice, Delivery Note, Payroll, Compliance.
+
+---
+
+## 7. UI/UX & DESIGN SYSTEM GUIDELINES
+*   **Theme:** Professional, high-contrast. Support Dark/Light mode. Primary color: Deep Blue/Emerald (Energy/Trust).
+*   **Mobile-First:** The POS and Sales Tracking modules must be fully optimized for mobile touchscreens (large tap targets, numeric keypads).
+*   **Navigation:** 
+    *   **Desktop:** Left sidebar with collapsible menu.
+    *   **Mobile:** Bottom navigation bar for core actions (Dashboard, POS, Sales, Inventory, Reports).
+*   **Feedback:** Use toast notifications for sync status ("Syncing 5 sales to cloud...", "Offline mode active").
+*   **Forms:** Use React Hook Form with Zod validation. Inline error messages.
+
+---
+
+## 8. EXECUTION STRATEGY (FOR THE AI DEVELOPER)
+**Phase 1: Foundation & Auth**
+1. Initialize Vite + React + TS + Tailwind + Shadcn.
+2. Setup local IndexedDB (Dexie) schema.
+3. Build Auth flow (Email/Password, Phone OTP) and RBAC middleware.
+
+**Phase 2: Core Operations (Offline-First)**
+1. Build the Dashboard and KPI aggregation logic.
+2. Build POS and Sales Tracking modules. Ensure they write to local DB first, then queue for background sync.
+3. Build Inventory and Offloading modules.
+
+**Phase 3: Finance & Kenya Compliance**
+1. Implement Payroll logic (SHA, NSSF, PAYE formulas).
+2. Build the M-PESA PDF parser and reconciliation UI.
+3. Implement KRA eTIMS receipt generation logic.
+
+**Phase 4: Integrations & Cloud Sync**
+1. Setup Node.js/Hono backend.
+2. Implement Safaricom Daraja STK Push and C2B webhooks.
+3. Build the cloud sync engine (conflict resolution for offline data).
+
+**Phase 5: Founder Panel & Polish**
+1. Build the Super Admin dashboard, AI Batch Update, and DB Manager.
+2. Implement PWA Service Worker for offline caching.
+3. Final UI polish, accessibility checks, and performance optimization.
+
+***
+
+**INSTRUCTION TO AI:** Acknowledge this master specification. Do not write code yet. Ask me which **Phase** or **Specific Module** (e.g., "M-PESA Analyzer", "POS Offline Sync", "Founder DB Manager") I want you to generate the exact code, API routes, or component structure for first.
+
+# **COMPREHENSIVE REBUILD PROMPT: FuelPro/ISPLedger Fuel Station Management Platform**
+
+---
+
+## **PROJECT OVERVIEW**
+
+**Objective:** Build a complete, production-ready fuel station management SaaS platform with multi-tenant architecture, real-time operations tracking, Kenya-specific tax compliance, and support for 250 countries worldwide.
+
+**Target Users:**
+- Fuel station owners/operators (Kenya & global)
+- Station managers
+- Cashiers/staff
+- County auditors
+- Platform founder/admin
+
+**Core Value Proposition:**
+- Real-time fuel sales tracking with pump meter integration
+- Automated Kenya Revenue Authority (KRA) eTIMS compliance
+- M-PESA payment reconciliation with AI-powered statement analysis
+- Multi-station management with combined view analytics
+- 250-country payment ecosystem with local banks, mobile money, and digital wallets
+
+---
+
+## **TECHNICAL STACK & ARCHITECTURE**
+
+### **Frontend Stack**
+```typescript
+Framework: React 18+ with TypeScript
+Build Tool: Vite 5+
+Routing: React Router v7 (HashRouter for SPA)
+State Management: React Query (TanStack Query) via tRPC
+Styling: Tailwind CSS + shadcn/ui components
+Icons: Lucide React
+Charts: Recharts
+Forms: React Hook Form + Zod validation
+PDF Generation: jsPDF + html2canvas
+Excel Export: xlsx library
+OCR: Tesseract.js (fallback) + AI extraction
+```
+
+### **Backend Stack**
+```typescript
+Runtime: Node.js 20+
+Framework: Hono (lightweight, fast)
+API: tRPC (end-to-end type safety)
+Database: MySQL 8+ with Drizzle ORM
+Authentication: OAuth 2.0 (Google, Apple, Microsoft) + Phone OTP + Email verification
+2FA: TOTP (Time-based One-Time Password)
+File Storage: AWS S3 (pre-signed URLs for direct upload)
+Email: Resend API
+SMS: Africa's Talking / Twilio
+Payments: Safaricom Daraja API (M-PESA)
+```
+
+### **Architecture Pattern**
+- **Monorepo structure** with shared types between frontend/backend
+- **tRPC routers** for type-safe API calls
+- **Lazy-loaded routes** for performance (code splitting)
+- **Client-side caching** with React Query
+- **Real-time updates** via polling (10s intervals) or WebSocket (future)
+- **Multi-tenant data isolation** via `station_users` junction table
+
+---
+
+## **DATABASE SCHEMA (10 Core Tables)**
+
+### **1. users**
+```sql
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255),
+  phone VARCHAR(20),
+  role ENUM('user', 'admin') DEFAULT 'user',
+  email_verified BOOLEAN DEFAULT FALSE,
+  phone_verified BOOLEAN DEFAULT FALSE,
+  two_factor_enabled BOOLEAN DEFAULT FALSE,
+  two_factor_secret VARCHAR(255),
+  oauth_provider VARCHAR(50),
+  oauth_id VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### **2. stations**
+```sql
+CREATE TABLE stations (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  location TEXT,
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
+  country_code CHAR(2) DEFAULT 'KE',
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  kra_pin VARCHAR(20), -- Kenya Revenue Authority PIN
+  etr_serial VARCHAR(50), -- Electronic Tax Register
+  status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### **3. station_users (Access Control)**
+```sql
+CREATE TABLE station_users (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  role ENUM('owner', 'manager', 'cashier', 'viewer', 'auditor') NOT NULL,
+  permissions JSON, -- Granular tab/feature access
+  granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_station_user (station_id, user_id)
+);
+```
+
+### **4. sales**
+```sql
+CREATE TABLE sales (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL, -- Cashier
+  date DATE NOT NULL,
+  shift ENUM('morning', 'afternoon', 'night', 'full_day') DEFAULT 'full_day',
+  fuel_type ENUM('petrol_pms', 'diesel_ago', 'premium', 'kerosene', 'lpg') NOT NULL,
+  pump_id VARCHAR(50),
+  opening_meter DECIMAL(12, 2),
+  closing_meter DECIMAL(12, 2),
+  litres_sold DECIMAL(12, 2) NOT NULL,
+  unit_price DECIMAL(10, 2) NOT NULL,
+  subtotal DECIMAL(12, 2) NOT NULL,
+  vat_rate DECIMAL(5, 2) DEFAULT 16.00, -- Kenya VAT
+  vat_amount DECIMAL(12, 2),
+  total_amount DECIMAL(12, 2) NOT NULL,
+  payment_method ENUM('cash', 'mpesa', 'card', 'bank_transfer', 'credit') NOT NULL,
+  mpesa_reference VARCHAR(50),
+  customer_name VARCHAR(255),
+  customer_kra_pin VARCHAR(20), -- For B2B invoices
+  etr_receipt_number VARCHAR(100), -- KRA eTIMS receipt
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### **5. inventory**
+```sql
+CREATE TABLE inventory (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  fuel_type ENUM('petrol_pms', 'diesel_ago', 'premium', 'kerosene', 'lpg') NOT NULL,
+  tank_name VARCHAR(100) DEFAULT 'Main Tank',
+  current_stock DECIMAL(12, 2) NOT NULL,
+  capacity DECIMAL(12, 2) NOT NULL,
+  unit_cost DECIMAL(10, 2),
+  selling_price DECIMAL(10, 2) NOT NULL,
+  alert_threshold DECIMAL(12, 2) DEFAULT 500.00,
+  status ENUM('normal', 'low', 'critical') DEFAULT 'normal',
+  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_station_fuel (station_id, fuel_type, tank_name)
+);
+```
+
+### **6. fuel_offloading (Deliveries)**
+```sql
+CREATE TABLE fuel_offloading (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  date TIMESTAMP NOT NULL,
+  truck_reg VARCHAR(20) NOT NULL,
+  driver_name VARCHAR(255),
+  driver_phone VARCHAR(20),
+  fuel_type ENUM('petrol_pms', 'diesel_ago', 'premium', 'kerosene', 'lpg') NOT NULL,
+  quantity_litres DECIMAL(12, 2) NOT NULL,
+  unit_rate DECIMAL(10, 2) NOT NULL,
+  total_amount DECIMAL(12, 2) NOT NULL,
+  supplier_name VARCHAR(255),
+  delivery_note_number VARCHAR(100),
+  invoice_number VARCHAR(100),
+  verified_by VARCHAR(255),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE
+);
+```
+
+### **7. expenses**
+```sql
+CREATE TABLE expenses (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  date DATE NOT NULL,
+  category ENUM('fuel_purchase', 'salaries', 'wages', 'maintenance', 'rent_utilities', 'supplies', 'transport', 'marketing', 'taxes', 'other') NOT NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(12, 2) NOT NULL,
+  payment_method ENUM('cash', 'mpesa', 'bank_transfer', 'card') DEFAULT 'cash',
+  reference_number VARCHAR(100),
+  receipt_url VARCHAR(500),
+  status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+  approved_by BIGINT UNSIGNED,
+  approved_at TIMESTAMP,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_by) REFERENCES users(id)
+);
+```
+
+### **8. employees**
+```sql
+CREATE TABLE employees (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED, -- Link to user account if exists
+  employee_number VARCHAR(50) UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  role ENUM('manager', 'supervisor', 'cashier', 'pump_attendant', 'security', 'cleaner', 'accountant') NOT NULL,
+  department VARCHAR(100),
+  basic_salary DECIMAL(12, 2) NOT NULL,
+  allowances DECIMAL(12, 2) DEFAULT 0,
+  sha_deduction DECIMAL(10, 2), -- Social Health Authority (Kenya)
+  nssf_deduction DECIMAL(10, 2), -- National Social Security Fund
+  paye_deduction DECIMAL(10, 2), -- Pay As You Earn tax
+  advance_balance DECIMAL(12, 2) DEFAULT 0,
+  bank_name VARCHAR(100),
+  bank_account VARCHAR(50),
+  status ENUM('active', 'inactive', 'terminated') DEFAULT 'active',
+  hire_date DATE NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### **9. payroll**
+```sql
+CREATE TABLE payroll (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  employee_id BIGINT UNSIGNED NOT NULL,
+  pay_period_start DATE NOT NULL,
+  pay_period_end DATE NOT NULL,
+  basic_salary DECIMAL(12, 2) NOT NULL,
+  allowances DECIMAL(12, 2) DEFAULT 0,
+  overtime_hours DECIMAL(5, 2) DEFAULT 0,
+  overtime_rate DECIMAL(10, 2) DEFAULT 0,
+  gross_pay DECIMAL(12, 2) NOT NULL,
+  sha_deduction DECIMAL(10, 2) NOT NULL,
+  nssf_deduction DECIMAL(10, 2) NOT NULL,
+  paye_deduction DECIMAL(10, 2) NOT NULL,
+  advance_deduction DECIMAL(12, 2) DEFAULT 0,
+  other_deductions DECIMAL(12, 2) DEFAULT 0,
+  total_deductions DECIMAL(12, 2) NOT NULL,
+  net_pay DECIMAL(12, 2) NOT NULL,
+  payment_method ENUM('bank_transfer', 'mpesa', 'cash') DEFAULT 'bank_transfer',
+  payment_reference VARCHAR(100),
+  status ENUM('pending', 'processed', 'paid') DEFAULT 'pending',
+  paid_at TIMESTAMP,
+  payslip_url VARCHAR(500),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE,
+  FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);
+```
+
+### **10. credit_accounts (B2B Customers)**
+```sql
+CREATE TABLE credit_accounts (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  customer_name VARCHAR(255) NOT NULL,
+  contact_person VARCHAR(255),
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  kra_pin VARCHAR(20),
+  credit_limit DECIMAL(12, 2) NOT NULL,
+  balance_used DECIMAL(12, 2) DEFAULT 0,
+  payment_terms_days INT DEFAULT 30,
+  bank_name VARCHAR(100),
+  bank_account VARCHAR(50),
+  mpesa_till VARCHAR(20),
+  status ENUM('active', 'suspended', 'closed') DEFAULT 'active',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE
+);
+```
+
+### **11. audit_logs (Founder Access)**
+```sql
+CREATE TABLE audit_logs (
+  id SERIAL PRIMARY KEY,
+  user_id BIGINT UNSIGNED,
+  action VARCHAR(100) NOT NULL, -- 'login', 'config_update', 'data_export', etc.
+  category VARCHAR(50), -- 'auth', 'finance', 'inventory', 'system'
+  details JSON,
+  ip_address VARCHAR(45),
+  user_agent TEXT,
+  severity ENUM('info', 'warning', 'critical') DEFAULT 'info',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### **12. payment_methods (Multi-Country)**
+```sql
+CREATE TABLE payment_methods (
+  id SERIAL PRIMARY KEY,
+  station_id BIGINT UNSIGNED NOT NULL,
+  type ENUM('bank', 'mobile_money', 'card', 'digital_wallet', 'cash') NOT NULL,
+  provider_name VARCHAR(100) NOT NULL, -- 'Equity Bank', 'M-PESA', 'Visa', etc.
+  account_number VARCHAR(100),
+  account_name VARCHAR(255),
+  branch_name VARCHAR(100),
+  swift_code VARCHAR(20),
+  till_number VARCHAR(20), -- For M-PESA
+  paybill_number VARCHAR(20), -- For M-PESA
+  is_active BOOLEAN DEFAULT TRUE,
+  country_code CHAR(2) DEFAULT 'KE',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE
+);
+```
+
+---
+
+## **API STRUCTURE (tRPC Routers)**
+
+### **Router 1: station**
+```typescript
+// Endpoints
+station.create(input: { name, location, country_code, phone, email, kra_pin })
+station.list() // Returns stations user has access to
+station.get(id: number)
+station.update(id: number, data: Partial<Station>)
+station.delete(id: number)
+station.addUser(stationId: number, userId: number, role: string, permissions: object)
+station.removeUser(stationId: number, userId: number)
+station.combined() // AGGREGATED VIEW: Returns combined data across all user's stations
+```
+
+### **Router 2: sale**
+```typescript
+// Endpoints
+sale.create(input: { station_id, fuel_type, litres_sold, unit_price, payment_method, ... })
+sale.listByStation(stationId: number, filters: { dateRange, fuelType, paymentMethod })
+sale.listCombined(filters: { dateRange }) // Across all user's stations
+sale.dailySummary(stationId: number, date: string)
+sale.analytics(stationId: number, period: '7d' | '30d' | '90d')
+sale.get(id: number)
+sale.generateETRReceipt(saleId: number) // Kenya tax compliance
+```
+
+### **Router 3: inventory**
+```typescript
+// Endpoints
+inventory.create(input: { station_id, fuel_type, current_stock, capacity, selling_price })
+inventory.listByStation(stationId: number)
+inventory.listCombined() // Across all stations
+inventory.update(id: number, data: Partial<Inventory>)
+inventory.delete(id: number)
+inventory.recordOffloading(input: { station_id, fuel_type, quantity, supplier, ... })
+inventory.checkLowStock(stationId: number) // Returns alerts
+```
+
+### **Router 4: payment**
+```typescript
+// Endpoints
+payment.createBankAccount(input: { station_id, bank_name, account_number, ... })
+payment.listBankAccounts(stationId: number)
+payment.createMobileMoney(input: { station_id, provider, till_number, ... })
+payment.listMobileMoney(stationId: number)
+payment.createAdditionalMethod(input: { station_id, type, provider_name, ... })
+payment.listAdditionalMethods(stationId: number)
+payment.update(id: number, data: Partial<PaymentMethod>)
+payment.delete(id: number)
+```
+
+### **Router 5: audit**
+```typescript
+// Endpoints
+audit.log(input: { action, category, details, severity })
+audit.list(filters: { userId, category, dateRange })
+audit.listAll(filters: { severity, dateRange }) // Founder only
+audit.summary(dateRange: { start, end })
+audit.getFounderSession(userId: number)
+audit.upsertFounderSession(userId: number, data: { twoFactorEnabled, ... })
+```
+
+### **Router 6: mpesa (Kenya-Specific)**
+```typescript
+// Endpoints
+mpesa.parseStatement(pdfBuffer: Buffer) // AI-powered extraction
+mpesa.reconcile(statementInflows: array, recordedSales: array)
+mpesa.initiateSTKPush(input: { phone, amount, reference })
+mpesa.checkTransactionStatus(checkoutRequestId: string)
+mpesa.registerC2BConfirmationUrl(url: string)
+mpesa.registerC2BValidationUrl(url: string)
+```
+
+---
+
+## **FRONTEND PAGES & COMPONENTS**
+
+### **Page 1: Authentication**
+**File:** `src/pages/AuthLogin.tsx`
+
+**Features:**
+- Email/password login
+- OAuth buttons (Google, Apple, Microsoft)
+- Phone OTP verification (5-digit code, 5-min expiry)
+- Email verification flow
+- "Forgot password" → 4-step reset (email → code → new password → success)
+- 2FA TOTP setup (QR code generation)
+
+**UI Components:**
+```typescript
+<AuthCard>
+  <OAuthButtons />
+  <LoginForm />
+  <PhoneOTPInput />
+  <EmailVerificationBanner />
+  <TwoFactorSetup />
+</AuthCard>
+```
+
+---
+
+### **Page 2: Dashboard (Home)**
+**File:** `src/pages/Home.tsx`
+
+**Layout:**
+- **Header:** Station selector (dropdown with "Combined View" option), user profile, notifications
+- **Tab Navigation:** Dashboard, POS, Sales, Inventory, Finance, Operations, Reports, Settings
+- **Mobile Bottom Nav:** Quick access to POS, Sales, Inventory, Reports
+
+**Dashboard Tab Content:**
+```typescript
+<DashboardTab>
+  <KPICards>
+    <MetricCard title="Total Revenue" value={revenue} trend={+12%} />
+    <MetricCard title="Total Sales" value={salesCount} />
+    <MetricCard title="Fuel Sold" value={`${litres}L`} />
+    <MetricCard title="Net Profit" value={profit} margin={margin%} />
+  </KPICards>
+  
+  <SalesTrendChart period="7d" /> {/* Recharts line chart */}
+  
+  <FuelDistributionPie /> {/* PMS vs AGO split */}
+  
+  <ExpenseBreakdownChart /> {/* Category-wise */}
+  
+  <TankLevelsGauge /> {/* Visual tank fill levels */}
+  
+  <PumpStatusGrid /> {/* Active/inactive pumps */}
+  
+  <RecentActivityFeed /> {/* Last 10 transactions */}
+  
+  <WeatherWidget /> {/* OpenWeatherMap API */}
+  
+  <RegulatoryAlerts /> {/* KRA/EPRA compliance reminders */}
+</DashboardTab>
+```
+
+**Lazy Loading Implementation:**
+```typescript
+// Home.tsx - All tab content lazy-loaded
+const Dashboard = lazy(() => import('./tabs/Dashboard'));
+const PointOfSale = lazy(() => import('./tabs/PointOfSale'));
+const SalesTracking = lazy(() => import('./tabs/SalesTracking'));
+const Inventory = lazy(() => import('./tabs/Inventory'));
+const Finance = lazy(() => import('./tabs/Finance'));
+const Operations = lazy(() => import('./tabs/Operations'));
+const Reports = lazy(() => import('./tabs/Reports'));
+const Settings = lazy(() => import('./tabs/Settings'));
+
+// Wrap in Suspense
+<Suspense fallback={<LoadingSpinner />}>
+  {renderTabContent()}
+</Suspense>
+```
+
+---
+
+### **Page 3: Point of Sale (POS)**
+**File:** `src/tabs/PointOfSale.tsx`
+
+**Features:**
+- Quick fuel sale (select fuel type → enter litres → auto-calculate total)
+- Custom item addition (non-fuel products)
+- Customer info (name, KRA PIN for B2B)
+- Tax breakdown (16% VAT for Kenya)
+- Payment method selection (Cash, M-PESA, Card, Bank)
+- ETR receipt generation (KRA-compliant format)
+- Recent transactions list
+
+**UI Flow:**
+```typescript
+<PointOfSale>
+  <FuelSaleQuickEntry>
+    <FuelTypeSelector options={['Petrol PMS', 'Diesel AGO']} />
+    <LitresInput onChange={calculateTotal} />
+    <UnitPriceDisplay price={currentPrice} />
+    <SubtotalDisplay />
+  </FuelSaleQuickEntry>
+  
+  <CustomItemsList>
+    <AddCustomItemButton />
+    {items.map(item => <ItemRow key={item.id} {...item} />)}
+  </CustomItemsList>
+  
+  <CustomerInfoSection>
+    <CustomerNameInput optional />
+    <KRAPinInput forB2B />
+  </CustomerInfoSection>
+  
+  <PaymentSummary>
+    <TaxableAmount />
+    <VATAmount rate={16%} />
+    <TotalAmount />
+  </PaymentSummary>
+  
+  <PaymentMethodSelector>
+    <CashOption />
+    <MpesaOption>
+      <STKPushButton /> {/* Triggers Daraja API */}
+    </MpesaOption>
+    <CardOption />
+    <BankTransferOption />
+  </PaymentMethodSelector>
+  
+  <CompleteSaleButton onSubmit={handleSale} />
+  
+  <RecentTransactionsList limit={10} />
+</PointOfSale>
+```
+
+**KRA eTIMS Integration:**
+```typescript
+// Generate ETR-compliant receipt
+const generateETRReceipt = (sale: Sale) => {
+  const receiptNumber = `ETR-${sale.station_id}-${sale.date}-${sale.id}`;
+  const qrCodeData = {
+    kraPin: station.kra_pin,
+    receiptNumber,
+    date: sale.date,
+    total: sale.total_amount,
+    vat: sale.vat_amount
+  };
+  return { receiptNumber, qrCodeData };
+};
+```
+
+---
+
+### **Page 4: Sales Tracking**
+**File:** `src/tabs/SalesTracking.tsx`
+
+**Features:**
+- Daily sales entry form (opening/closing meter readings)
+- Per-pump tracking (multiple pumps per fuel type)
+- AI-powered handwritten record scanning (OCR)
+- Daily expenses entry
+- Till/M-PESA payment reconciliation
+- Print daily report
+
+**UI Structure:**
+```typescript
+<SalesTracking>
+  <DateAndShiftSelector>
+    <DatePicker />
+    <ShiftSelector options={['Day', 'Night', 'Full Day']} />
+  </DateAndShiftSelector>
+  
+  <FuelTankInventory>
+    <PetrolTankSection>
+      <OpeningMeterInput />
+      <ClosingMeterInput />
+      <CalculatedLitres /> {/* closing - opening */}
+    </PetrolTankSection>
+    
+    <DieselTankSection>
+      {/* Same structure */}
+    </DieselTankSection>
+  </FuelTankInventory>
+  
+  <FuelPricing>
+    <PetrolPriceInput value={180} unit="Ksh/L" />
+    <DieselPriceInput value={170} unit="Ksh/L" />
+  </FuelPricing>
+  
+  <PumpReadingsGrid>
+    <PetrolPumpsList>
+      {pumps.map(pump => (
+        <PumpRow
+          key={pump.id}
+          pumpId={pump.id}
+          openingMeter={pump.opening}
+          closingMeter={pump.closing}
+          litresSold={pump.closing - pump.opening}
+          salesAmount={litresSold * pricePerLitre}
+        />
+      ))}
+      <AddPumpButton />
+    </PetrolPumpsList>
+    
+    <DieselPumpsList>
+      {/* Same structure */}
+    </DieselPumpsList>
+  </PumpReadingsGrid>
+  
+  <DailyExpensesSection>
+    <ExpenseRow description="Generator Fuel" amount={500} />
+    <AddExpenseButton />
+  </DailyExpensesSection>
+  
+  <TillMobilePaymentSection>
+    <TotalTillPaymentInput />
+    <PaymentSourceList>
+      <MpesaSource tillNumber="589252" />
+      <BankSource accountNumber="1234567890" />
+    </PaymentSourceList>
+  </TillMobilePaymentSection>
+  
+  <SalesSummary>
+    <TotalPetrolSales />
+    <TotalDieselSales />
+    <TotalRevenue />
+    <TotalExpenses />
+    <NetIncome />
+  </SalesSummary>
+  
+  <PrintReportButton />
+</SalesTracking>
+```
+
+**AI-Powered OCR:**
+```typescript
+const scanHandwrittenRecord = async (imageFile: File) => {
+  // Use Tesseract.js or AI API
+  const text = await extractTextFromImage(imageFile);
+  
+  // Parse structured data
+  const parsed = {
+    openingMeter: extractNumber(text, /opening[:\s]*(\d+)/i),
+    closingMeter: extractNumber(text, /closing[:\s]*(\d+)/i),
+    litres: extractNumber(text, /litres[:\s]*(\d+)/i),
+    amount: extractNumber(text, /amount[:\s]*([\d,]+)/i)
+  };
+  
+  return parsed;
+};
+```
+
+---
+
+### **Page 5: Inventory Management**
+**File:** `src/tabs/Inventory.tsx`
+
+**Features:**
+- Current stock levels (litres) per fuel type
+- Tank capacity and fill percentage
+- Unit cost and selling price
+- Low stock alerts (configurable threshold)
+- Fuel offloading tracker (delivery records)
+- Stock movement history
+
+**UI Components:**
+```typescript
+<InventoryManagement>
+  <InventoryStats>
+    <StatCard title="Total SKUs" value={2} />
+    <StatCard title="Inventory Value" value={totalValue} currency="Ksh" />
+    <StatCard title="Low Stock Alerts" value={alertCount} trend="up" />
+    <StatCard title="Fuel Available" value={`${totalLitres}L`} />
+  </InventoryStats>
+  
+  <LowStockAlerts>
+    {alerts.map(alert => (
+      <AlertBanner
+        key={alert.id}
+        fuelType={alert.fuel_type}
+        currentStock={alert.current_stock}
+        threshold={alert.alert_threshold}
+        message={`${alert.fuel_type} - Tank: ${alert.current_stock}L (reorder at ${alert.alert_threshold})`}
+      />
+    ))}
+  </LowStockAlerts>
+  
+  <InventoryTable>
+    <TableHeader>
+      <Column>Item</Column>
+      <Column>Category</Column>
+      <Column>Stock</Column>
+      <Column>Unit Cost</Column>
+      <Column>Selling Price</Column>
+      <Column>Value</Column>
+      <Column>Status</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {inventory.map(item => (
+        <TableRow key={item.id}>
+          <Cell>{item.fuel_type} - {item.tank_name}</Cell>
+          <Cell>Fuel</Cell>
+          <Cell>{item.current_stock} Litres</Cell>
+          <Cell>Ksh {item.unit_cost}</Cell>
+          <Cell>Ksh {item.selling_price}</Cell>
+          <Cell>Ksh {item.current_stock * item.unit_cost}</Cell>
+          <Cell>
+            <StatusBadge status={item.status} /> {/* normal/low/critical */}
+          </Cell>
+          <Cell>
+            <EditButton onClick={() => editItem(item.id)} />
+            <DeleteButton onClick={() => deleteItem(item.id)} />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </InventoryTable>
+  
+  <AddItemButton onClick={openAddItemModal} />
+  
+  <FuelOffloadingTracker>
+    <OffloadingStats>
+      <StatCard title="Total Quantity" value={`${totalLitres}L`} />
+      <StatCard title="Total Value" value={totalValue} currency="Ksh" />
+      <StatCard title="PMS" value={`${pmsLitres}L`} />
+      <StatCard title="AGO" value={`${agoLitres}L`} />
+    </OffloadingStats>
+    
+    <OffloadingTable>
+      <TableHeader>
+        <Column>Date/Time</Column>
+        <Column>Truck Reg</Column>
+        <Column>Driver</Column>
+        <Column>Fuel Type</Column>
+        <Column>Quantity (L)</Column>
+        <Column>Rate</Column>
+        <Column>Total Amount</Column>
+        <Column>Supplier</Column>
+        <Column>Actions</Column>
+      </TableHeader>
+      
+      <TableBody>
+        {offloadingRecords.map(record => (
+          <TableRow key={record.id}>
+            <Cell>{formatDate(record.date)}</Cell>
+            <Cell>{record.truck_reg}</Cell>
+            <Cell>{record.driver_name}</Cell>
+            <Cell>{record.fuel_type}</Cell>
+            <Cell>{record.quantity_litres}</Cell>
+            <Cell>Ksh {record.unit_rate}</Cell>
+            <Cell>Ksh {record.total_amount}</Cell>
+            <Cell>{record.supplier_name}</Cell>
+            <Cell>
+              <ViewButton />
+              <EditButton />
+            </Cell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </OffloadingTable>
+    
+    <NewOffloadingButton onClick={openOffloadingModal} />
+  </FuelOffloadingTracker>
+</InventoryManagement>
+```
+
+---
+
+### **Page 6: Finance (Payroll, Expenses, M-PESA Analyzer)**
+**File:** `src/tabs/Finance.tsx`
+
+**Sub-tabs:** Payroll, Expenses, M-PESA Analyzer
+
+#### **Sub-tab 6.1: Payroll System**
+```typescript
+<PayrollSystem>
+  <PayrollStats>
+    <StatCard title="Total Employees" value={employeeCount} />
+    <StatCard title="Gross Pay" value={grossPay} currency="KES" />
+    <StatCard title="Total Deductions" value={deductions} currency="KES" />
+    <StatCard title="Net Pay" value={netPay} currency="KES" />
+  </PayrollStats>
+  
+  <PayrollTable>
+    <TableHeader>
+      <Column>No.</Column>
+      <Column>Name</Column>
+      <Column>Role</Column>
+      <Column>Dept</Column>
+      <Column>Basic Salary</Column>
+      <Column>SHA</Column>
+      <Column>NSSF</Column>
+      <Column>Advance</Column>
+      <Column>Net Pay</Column>
+      <Column>Bank</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {employees.map((emp, idx) => (
+        <TableRow key={emp.id}>
+          <Cell>{idx + 1}</Cell>
+          <Cell>{emp.name}</Cell>
+          <Cell>{emp.role}</Cell>
+          <Cell>{emp.department}</Cell>
+          <Cell>KES {emp.basic_salary}</Cell>
+          <Cell>KES {emp.sha_deduction}</Cell>
+          <Cell>KES {emp.nssf_deduction}</Cell>
+          <Cell>KES {emp.advance_balance}</Cell>
+          <Cell>KES {emp.net_pay}</Cell>
+          <Cell>{emp.bank_name}</Cell>
+          <Cell>
+            <EditButton />
+            <GeneratePayslipButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </PayrollTable>
+  
+  <BulkActions>
+    <EditSHAForAllButton />
+    <EditNSSFForAllButton />
+    <ExportSHAListButton />
+    <ExportNSSFListButton />
+    <ExportPayrollListButton /> {/* Generates Excel/PDF */}
+  </BulkActions>
+  
+  <AddEmployeeButton onClick={openEmployeeModal} />
+  <ImportFromExcelButton />
+</PayrollSystem>
+```
+
+**Kenya Payroll Calculations:**
+```typescript
+// SHA (Social Health Authority) - 2.75% of gross
+const calculateSHA = (grossPay: number) => grossPay * 0.0275;
+
+// NSSF (National Social Security Fund) - Tier I: 6% of first 7,000, Tier II: 6% of 7,001-36,000
+const calculateNSSF = (grossPay: number) => {
+  const tier1 = Math.min(grossPay, 7000) * 0.06;
+  const tier2 = Math.max(0, Math.min(grossPay - 7000, 29000)) * 0.06;
+  return tier1 + tier2;
+};
+
+// PAYE (Pay As You Earn) - Progressive tax rates
+const calculatePAYE = (taxableIncome: number) => {
+  if (taxableIncome <= 24000) return taxableIncome * 0.10;
+  if (taxableIncome <= 32333) return 2400 + (taxableIncome - 24000) * 0.25;
+  if (taxableIncome <= 50000) return 4458 + (taxableIncome - 32333) * 0.30;
+  return 9813 + (taxableIncome - 50000) * 0.325;
+};
+
+const calculateNetPay = (employee: Employee) => {
+  const gross = employee.basic_salary + employee.allowances;
+  const sha = calculateSHA(gross);
+  const nssf = calculateNSSF(gross);
+  const paye = calculatePAYE(gross - nssf);
+  const deductions = sha + nssf + paye + employee.advance_balance;
+  return gross - deductions;
+};
+```
+
+#### **Sub-tab 6.2: Expense Tracker**
+```typescript
+<ExpenseTracker>
+  <ExpenseStats>
+    <StatCard title="Total Expenses" value={totalExpenses} currency="KES" />
+    <StatCard title="Approved" value={approvedExpenses} currency="KES" />
+    <StatCard title="Pending" value={pendingExpenses} currency="KES" />
+  </ExpenseStats>
+  
+  <ExpenseTable>
+    <TableHeader>
+      <Column>Date</Column>
+      <Column>Category</Column>
+      <Column>Description</Column>
+      <Column>Amount</Column>
+      <Column>Status</Column>
+      <Column>Reference</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {expenses.map(expense => (
+        <TableRow key={expense.id}>
+          <Cell>{formatDate(expense.date)}</Cell>
+          <Cell>{expense.category}</Cell>
+          <Cell>{expense.description}</Cell>
+          <Cell>KES {expense.amount}</Cell>
+          <Cell>
+            <StatusBadge status={expense.status} /> {/* pending/approved/rejected */}
+          </Cell>
+          <Cell>{expense.reference_number}</Cell>
+          <Cell>
+            {expense.status === 'pending' && (
+              <ApproveButton onClick={() => approveExpense(expense.id)} />
+            )}
+            <EditButton />
+            <DeleteButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </ExpenseTable>
+  
+  <AddExpenseButton onClick={openExpenseModal} />
+  
+  <ExpenseAnalytics>
+    <ExpenseByCategoryChart /> {/* Pie chart */}
+    <MonthlyTrendChart /> {/* Line chart */}
+  </ExpenseAnalytics>
+</ExpenseTracker>
+```
+
+#### **Sub-tab 6.3: M-PESA Inflow Analyzer**
+**File:** `src/tabs/MpesaAnalyzer.tsx`
+
+**Features:**
+- Upload M-PESA PDF statement
+- AI-powered pattern extraction ("Merchant Payment from" transactions)
+- Filter out non-revenue items (loans, charges, transfers)
+- Reconcile with recorded sales
+- Show discrepancy rate
+
+**UI Flow:**
+```typescript
+<MpesaAnalyzer>
+  <UploadSection>
+    <PDFUploadZone
+      onDrop={handlePDFUpload}
+      accept="application/pdf"
+      multiple
+    />
+    <ManualPasteFallback>
+      <TextArea placeholder="Paste M-PESA statement text here..." />
+    </ManualPasteFallback>
+  </UploadSection>
+  
+  <ExtractionProgress>
+    <ProgressBar value={extractionProgress} />
+    <StatusText>Extracting {currentPage}/{totalPages} pages...</StatusText>
+  </ExtractionProgress>
+  
+  <ExtractionResults>
+    <StatsCards>
+      <StatCard title="Total Inflows" value={inflowCount} />
+      <StatCard title="Total Received" value={totalInflow} currency="Ksh" />
+      <StatCard title="Excluded (loans, charges)" value={excludedCount} />
+    </StatsCards>
+    
+    <CleanRevenueBreakdown>
+      <RevenueCard title="Merchant Payments" value={merchantPayments} />
+      <RevenueCard title="Excluded (Loans)" value={loanPayments} />
+      <RevenueCard title="Excluded (Charges)" value={charges} />
+      <RevenueCard title="Excluded (Transfers)" value={transfers} />
+    </CleanRevenueBreakdown>
+    
+    <InflowsTable>
+      <TableHeader>
+        <Column>Details</Column>
+        <Column>Paid In</Column>
+        <Column>Balance</Column>
+        <Column>Receipt No</Column>
+        <Column>Date</Column>
+        <Column>Actions</Column>
+      </TableHeader>
+      
+      <TableBody>
+        {inflows.map(inflow => (
+          <TableRow key={inflow.id}>
+            <Cell>{inflow.details}</Cell>
+            <Cell>Ksh {inflow.paid_in}</Cell>
+            <Cell>Ksh {inflow.balance}</Cell>
+            <Cell>{inflow.receipt_number}</Cell>
+            <Cell>{formatDate(inflow.date)}</Cell>
+            <Cell>
+              <MatchToSaleButton />
+              <ExcludeButton />
+            </Cell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </InflowsTable>
+  </ExtractionResults>
+  
+  <ReconciliationSection>
+    <BalanceAnalysis>
+      <StatCard title="True Inflow (High-confidence)" value={trueInflow} currency="Ksh" />
+      <StatCard title="Recorded Sales" value={recordedSales} currency="Ksh" />
+      <StatCard title="Unreconciled" value={unreconciled} currency="Ksh" />
+      <StatCard title="Discrepancy Rate" value={`${discrepancyRate}%`} />
+    </BalanceAnalysis>
+    
+    <AIReconciliation>
+      <AutoMatchButton onClick={autoMatchInflowsToSales} />
+      <ManualMatchInterface />
+    </AIReconciliation>
+  </ReconciliationSection>
+  
+  <ExportButtons>
+    <ExportCSVButton />
+    <ExportPDFButton />
+  </ExportButtons>
+</MpesaAnalyzer>
+```
+
+**PDF Extraction Logic:**
+```typescript
+const extractMpesaInflows = async (pdfBuffer: Buffer) => {
+  // Use pdf-parse library
+  const pdfData = await pdfParse(pdfBuffer);
+  const text = pdfData.text;
+  
+  // Pattern matching for "Merchant Payment from"
+  const merchantPattern = /Merchant Payment from\s+([\d\*]+)-([A-Z\s]+)/g;
+  const amountPattern = /Ksh\s+([\d,]+\.\d{2})/g;
+  const datePattern = /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/g;
+  const receiptPattern = /([A-Z]{2}\d+[A-Z0-9]+)/g;
+  
+  const inflows = [];
+  let match;
+  
+  while ((match = merchantPattern.exec(text)) !== null) {
+    const phone = match[1];
+    const name = match[2].trim();
+    
+    // Extract amount (next occurrence after this match)
+    const amountMatch = amountPattern.exec(text.substring(match.index));
+    const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : 0;
+    
+    // Extract date
+    const dateMatch = datePattern.exec(text.substring(match.index));
+    const date = dateMatch ? dateMatch[1] : '';
+    
+    // Extract receipt number
+    const receiptMatch = receiptPattern.exec(text.substring(match.index));
+    const receipt = receiptMatch ? receiptMatch[1] : '';
+    
+    inflows.push({
+      details: `Payment from ${phone}-${name}`,
+      paid_in: amount,
+      date,
+      receipt_number: receipt,
+      type: 'merchant_payment'
+    });
+  }
+  
+  // Filter out loans, charges, transfers
+  const validInflows = inflows.filter(inflow => 
+    !inflow.details.includes('Loan') &&
+    !inflow.details.includes('Charge') &&
+    !inflow.details.includes('Transfer')
+  );
+  
+  return validInflows;
+};
+```
+
+---
+
+### **Page 7: Operations (Shifts, Delivery, Maintenance, Quality)**
+**File:** `src/tabs/Operations.tsx`
+
+**Sub-tabs:** Shifts, Delivery Tracker, Maintenance, Fuel Quality
+
+#### **Sub-tab 7.1: Shift Management**
+```typescript
+<ShiftManagement>
+  <ShiftStats>
+    <StatCard title="Total Staff" value={staffCount} />
+    <StatCard title="Active Now" value={activeNow} />
+    <StatCard title="Scheduled Today" value={scheduledToday} />
+    <StatCard title="Shifts Today" value={shiftsToday} />
+  </ShiftStats>
+  
+  <ShiftCalendar date={selectedDate}>
+    <ShiftList>
+      {shifts.map(shift => (
+        <ShiftCard
+          key={shift.id}
+          employee={shift.employee_name}
+          role={shift.role}
+          startTime={shift.start_time}
+          endTime={shift.end_time}
+          status={shift.status} {/* scheduled/active/completed */}
+        />
+      ))}
+    </ShiftList>
+  </ShiftCalendar>
+  
+  <ScheduleShiftButton onClick={openShiftModal} />
+  <AddEmployeeButton />
+  
+  <EmployeeRoster>
+    <RosterTable>
+      <TableHeader>
+        <Column>Name</Column>
+        <Column>Role</Column>
+        <Column>Phone</Column>
+        <Column>Rate/hr</Column>
+        <Column>Status</Column>
+        <Column>Actions</Column>
+      </TableHeader>
+      
+      <TableBody>
+        {employees.map(emp => (
+          <TableRow key={emp.id}>
+            <Cell>{emp.name}</Cell>
+            <Cell>{emp.role}</Cell>
+            <Cell>{emp.phone}</Cell>
+            <Cell>Ksh {emp.hourly_rate}</Cell>
+            <Cell>
+              <StatusBadge status={emp.status} />
+            </Cell>
+            <Cell>
+              <EditButton />
+              <DeleteButton />
+            </Cell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </RosterTable>
+  </EmployeeRoster>
+</ShiftManagement>
+```
+
+#### **Sub-tab 7.2: Delivery Tracker**
+```typescript
+<DeliveryTracker>
+  <DeliveryForm>
+    <ClientNameInput />
+    <FuelTypeSelector options={['Petrol', 'Diesel']} />
+    <LitresInput />
+    <PricePerLitreInput />
+    <DeliveryDateInput />
+    <VehicleRegInput />
+    <AddDeliveryButton />
+  </DeliveryForm>
+  
+  <DeliveryTable>
+    <TableHeader>
+      <Column>Date</Column>
+      <Column>Client</Column>
+      <Column>Fuel Type</Column>
+      <Column>Litres</Column>
+      <Column>Price/L</Column>
+      <Column>Amount</Column>
+      <Column>Vehicle Reg</Column>
+      <Column>Payment Status</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {deliveries.map(delivery => (
+        <TableRow key={delivery.id}>
+          <Cell>{formatDate(delivery.date)}</Cell>
+          <Cell>{delivery.client_name}</Cell>
+          <Cell>{delivery.fuel_type}</Cell>
+          <Cell>{delivery.litres}</Cell>
+          <Cell>Ksh {delivery.price_per_litre}</Cell>
+          <Cell>Ksh {delivery.total_amount}</Cell>
+          <Cell>{delivery.vehicle_reg}</Cell>
+          <Cell>
+            <PaymentStatusBadge status={delivery.payment_status} />
+          </Cell>
+          <Cell>
+            <RecordPaymentButton />
+            <EditButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </DeliveryTable>
+  
+  <DeliverySummary>
+    <StatCard title="Total Supplied" value={`${totalLitres}L`} />
+    <StatCard title="Total Payments" value={totalPayments} currency="Ksh" />
+    <StatCard title="Balance Due" value={balanceDue} currency="Ksh" />
+  </DeliverySummary>
+</DeliveryTracker>
+```
+
+#### **Sub-tab 7.3: Maintenance Tracker**
+```typescript
+<MaintenanceTracker>
+  <MaintenanceStats>
+    <StatCard title="Total Tasks" value={totalTasks} />
+    <StatCard title="Scheduled" value={scheduledTasks} />
+    <StatCard title="In Progress" value={inProgressTasks} />
+    <StatCard title="Completed" value={completedTasks} />
+    <StatCard title="Overdue" value={overdueTasks} />
+    <StatCard title="Critical" value={criticalTasks} />
+  </MaintenanceStats>
+  
+  <MaintenanceTable>
+    <TableHeader>
+      <Column>Equipment</Column>
+      <Column>Task</Column>
+      <Column>Priority</Column>
+      <Column>Assigned To</Column>
+      <Column>Start Date</Column>
+      <Column>Next Service</Column>
+      <Column>Estimated Cost</Column>
+      <Column>Status</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {tasks.map(task => (
+        <TableRow key={task.id}>
+          <Cell>{task.equipment_name}</Cell>
+          <Cell>{task.task_description}</Cell>
+          <Cell>
+            <PriorityBadge priority={task.priority} /> {/* low/medium/high/critical */}
+          </Cell>
+          <Cell>{task.assigned_to}</Cell>
+          <Cell>{formatDate(task.start_date)}</Cell>
+          <Cell>{formatDate(task.next_service_date)}</Cell>
+          <Cell>Ksh {task.estimated_cost}</Cell>
+          <Cell>
+            <StatusBadge status={task.status} />
+          </Cell>
+          <Cell>
+            <StartButton onClick={() => startTask(task.id)} />
+            <CompleteButton onClick={() => completeTask(task.id)} />
+            <DetailsButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </MaintenanceTable>
+  
+  <NewTaskButton onClick={openTaskModal} />
+</MaintenanceTracker>
+```
+
+#### **Sub-tab 7.4: Fuel Quality Testing**
+```typescript
+<FuelQualityTesting>
+  <QualityStandards display="Kenya">
+    <StandardCard fuelType="PMS (Petrol)">
+      <StandardRow label="Density" value="720-775 kg/m³" />
+      <StandardRow label="Sulfur" value="max 50 ppm" />
+      <StandardRow label="Flash Point" value="min 38°C" />
+    </StandardCard>
+    
+    <StandardCard fuelType="AGO (Diesel)">
+      <StandardRow label="Density" value="820-860 kg/m³" />
+      <StandardRow label="Sulfur" value="max 50 ppm" />
+      <StandardRow label="Flash Point" value="min 52°C" />
+    </StandardCard>
+  </QualityStandards>
+  
+  <QualityStats>
+    <StatCard title="Total Tests" value={totalTests} />
+    <StatCard title="Passed" value={passedTests} />
+    <StatCard title="Failed" value={failedTests} />
+  </QualityStats>
+  
+  <QualityTestTable>
+    <TableHeader>
+      <Column>Date</Column>
+      <Column>Batch</Column>
+      <Column>Fuel Type</Column>
+      <Column>Density</Column>
+      <Column>Sulfur</Column>
+      <Column>Flash Point</Column>
+      <Column>Appearance</Column>
+      <Column>Result</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {tests.map(test => (
+        <TableRow key={test.id}>
+          <Cell>{formatDate(test.date)}</Cell>
+          <Cell>{test.batch_number}</Cell>
+          <Cell>{test.fuel_type}</Cell>
+          <Cell>{test.density} kg/m³</Cell>
+          <Cell>{test.sulfur} ppm</Cell>
+          <Cell>{test.flash_point}°C</Cell>
+          <Cell>{test.appearance}</Cell>
+          <Cell>
+            <ResultBadge result={test.result} /> {/* pass/fail */}
+          </Cell>
+          <Cell>
+            <ViewCertificateButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </QualityTestTable>
+  
+  <RecordTestButton onClick={openTestModal} />
+</FuelQualityTesting>
+```
+
+---
+
+### **Page 8: Reports Center**
+**File:** `src/tabs/Reports.tsx`
+
+**Report Types:**
+1. Overall Report (Profit & Loss)
+2. Expenses Report
+3. VAT Return (KRA)
+4. KRA Daily Sales
+5. KRA Summary
+6. Fuel Sales Report (Monthly)
+
+**UI Structure:**
+```typescript
+<ReportsCenter>
+  <ReportSelector>
+    <ReportOption value="overall" label="Overall Report" />
+    <ReportOption value="profit_loss" label="Profit & Loss" />
+    <ReportOption value="expenses" label="Expenses Report" />
+    <ReportOption value="vat_return" label="VAT Return (KRA)" />
+    <ReportOption value="kra_daily" label="KRA Daily Sales" />
+    <ReportOption value="kra_summary" label="KRA Summary" />
+    <ReportOption value="fuel_sales" label="Fuel Sales Report" />
+  </ReportSelector>
+  
+  <ReportFilters>
+    <CurrencySelector options={['Ksh', 'USD']} />
+    <PeriodSelector options={['Daily', 'Weekly', 'Monthly', 'Yearly']} />
+    <DateRangePicker />
+  </ReportFilters>
+  
+  <ReportContent>
+    {selectedReport === 'overall' && (
+      <OverallReport>
+        <ReportHeader>
+          <StatCard title="Gross Revenue" value={grossRevenue} currency="Ksh" />
+          <StatCard title="Net Profit" value={netProfit} currency="Ksh" />
+          <StatCard title="Profit Margin" value={`${profitMargin}%`} />
+          <StatCard title="Fuel Sold" value={`${fuelSold}L`} />
+        </ReportHeader>
+        
+        <RevenueBreakdown>
+          <BreakdownRow label="Sales Revenue" value={salesRevenue} />
+          <BreakdownRow label="Delivery Revenue" value={deliveryRevenue} />
+          <BreakdownRow label="Total Revenue" value={totalRevenue} bold />
+        </RevenueBreakdown>
+        
+        <CostBreakdown>
+          <BreakdownRow label="Operating Expenses" value={operatingExpenses} />
+          <BreakdownRow label="Fuel Purchase Costs" value={fuelPurchaseCosts} />
+          <BreakdownRow label="Total Costs" value={totalCosts} bold />
+        </CostBreakdown>
+        
+        <OperationalMetrics>
+          <MetricRow label="Sales Records" value={salesCount} />
+          <MetricRow label="Deliveries" value={deliveryCount} />
+          <MetricRow label="Offloading Records" value={offloadingCount} />
+          <MetricRow label="Till/Mobile Payments" value={tillPayments} currency="Ksh" />
+          <MetricRow label="Fuel Inventory Change" value={`${inventoryChange}L`} />
+        </OperationalMetrics>
+      </OverallReport>
+    )}
+    
+    {selectedReport === 'fuel_sales' && (
+      <FuelSalesReport month={selectedMonth} year={selectedYear}>
+        <ReportHeader>
+          <StatCard title="Petrol Sales" value={petrolSales} currency="Ksh" />
+          <StatCard title="Diesel Sales" value={dieselSales} currency="Ksh" />
+          <StatCard title="Total Revenue" value={totalRevenue} currency="Ksh" />
+        </ReportHeader>
+        
+        <SalesTable>
+          <TableHeader>
+            <Column>Date</Column>
+            <Column>Petrol (L)</Column>
+            <Column>Petrol Revenue</Column>
+            <Column>Diesel (L)</Column>
+            <Column>Diesel Revenue</Column>
+            <Column>Total Revenue</Column>
+          </TableHeader>
+          
+          <TableBody>
+            {dailySales.map(sale => (
+              <TableRow key={sale.date}>
+                <Cell>{formatDate(sale.date)}</Cell>
+                <Cell>{sale.petrol_litres}</Cell>
+                <Cell>Ksh {sale.petrol_revenue}</Cell>
+                <Cell>{sale.diesel_litres}</Cell>
+                <Cell>Ksh {sale.diesel_revenue}</Cell>
+                <Cell>Ksh {sale.total_revenue}</Cell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </SalesTable>
+      </FuelSalesReport>
+    )}
+  </ReportContent>
+  
+  <ExportButtons>
+    <SaveReportButton />
+    <PrintReportButton />
+    <ExportPDFButton />
+    <ExportExcelButton />
+  </ExportButtons>
+</ReportsCenter>
+```
+
+---
+
+### **Page 9: Settings**
+**File:** `src/tabs/Settings.tsx`
+
+**Sub-sections:**
+1. Organization Profile
+2. Team Management
+3. Compliance (Kenya-specific)
+4. Integrations (KRA, M-PESA, Banks)
+5. Fuel Types & Pricing
+6. Documents
+7. Data Management
+
+#### **Sub-section 9.1: Organization Profile**
+```typescript
+<OrganizationSettings>
+  <ProfileForm>
+    <InputField label="Organization Name" value={orgName} />
+    <InputField label="Address" value={address} />
+    <InputField label="Phone" value={phone} />
+    <InputField label="Email" value={email} />
+    <ImageUpload label="Organization Logo" />
+  </ProfileForm>
+  
+  <CompanyProfile>
+    <InputField label="Company Name" value={companyName} />
+    <InputField label="P.O. Box" value={poBox} />
+    <InputField label="Contacts" value={contacts} />
+    <InputField label="Email Address" value={email} />
+    <SelectField label="Currency" options={['Ksh - Kenyan Shilling', 'USD - US Dollar']} />
+    <InputField label="VAT Registration No" value={vatRegNo} />
+    
+    <BankDetailsSection>
+      <InputField label="Bank Name" value={bankName} />
+      <InputField label="Branch Name" value={branchName} />
+      <InputField label="Account Holder Name" value={accountHolder} />
+      <InputField label="Account Number" value={accountNumber} />
+    </BankDetailsSection>
+    
+    <SaveButton />
+    <DownloadQRCodeButton /> {/* For invoices */}
+  </CompanyProfile>
+</OrganizationSettings>
+```
+
+#### **Sub-section 9.2: Team Management**
+```typescript
+<TeamManager>
+  <TeamHierarchy>
+    <HierarchyDisplay>Owner → Manager → Staff → Auditor</HierarchyDisplay>
+  </TeamHierarchy>
+  
+  <TeamMembersTable>
+    <TableHeader>
+      <Column>Name</Column>
+      <Column>Email</Column>
+      <Column>Role</Column>
+      <Column>Station Access</Column>
+      <Column>Status</Column>
+      <Column>Actions</Column>
+    </TableHeader>
+    
+    <TableBody>
+      {teamMembers.map(member => (
+        <TableRow key={member.id}>
+          <Cell>{member.name}</Cell>
+          <Cell>{member.email}</Cell>
+          <Cell>{member.role}</Cell>
+          <Cell>{member.stations.join(', ')}</Cell>
+          <Cell>
+            <StatusBadge status={member.status} />
+          </Cell>
+          <Cell>
+            <EditButton />
+            <RevokeAccessButton />
+          </Cell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </TeamMembersTable>
+  
+  <InviteMemberButton onClick={openInviteModal} />
+  
+  <FeatureAccessControl>
+    <AccessControlTable>
+      <TableHeader>
+        <Column>Feature/Tab</Column>
+        <Column>Owner</Column>
+        <Column>Manager</Column>
+        <Column>Staff</Column>
+        <Column>Auditor</Column>
+      </TableHeader>
+      
+      <TableBody>
+        {features.map(feature => (
+          <TableRow key={feature.id}>
+            <Cell>{feature.name}</Cell>
+            <Cell><Checkbox checked={feature.owner_access} /></Cell>
+            <Cell><Checkbox checked={feature.manager_access} /></Cell>
+            <Cell><Checkbox checked={feature.staff_access} /></Cell>
+            <Cell><Checkbox checked={feature.auditor_access} /></Cell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </AccessControlTable>
+  </FeatureAccessControl>
+</TeamManager>
+```
+
+#### **Sub-section 9.3: Compliance (Kenya)**
+```typescript
+<ComplianceSettings country="KE">
+  <CountrySelector>
+    <SelectField
+      label="Select Country/Region"
+      value="KE"
+      options={countries}
+      onChange={handleCountryChange}
+    />
+  </CountrySelector>
+  
+  <ComplianceOverview country="Kenya">
+    <InfoCard title="Country Code" value="KE" />
+    <InfoCard title="Currency" value="KES (KSh)" />
+    <InfoCard title="Timezone" value="Africa/Nairobi" />
+    <InfoCard title="VAT/GST Rate" value="16.0%" />
+    <InfoCard title="Tax Authority" value="KRA" />
+    <InfoCard title="Fuel Regulator" value="EPRA" />
+    <InfoCard title="Reporting" value="Monthly" />
+    <InfoCard title="ETR Required" value="Yes" />
+    <InfoCard title="Permits Required" value="4" />
+  </ComplianceOverview>
+  
+  <ComplianceSummary>
+    <AlertBanner type="info">
+      Operating a fuel station in Kenya requires 4 permits, compliance with KRA regulations,
+      and adherence to EPRA fuel quality standards. All sales must use ETR for invoicing.
+    </AlertBanner>
+  </ComplianceSummary>
+  
+  <RequiredPermits>
+    <PermitCard title="EPRA License" status="active" expiry="2026-12-31" />
+    <PermitCard title="KRA PIN Certificate" status="active" />
+    <PermitCard title="County Government Permit" status="active" expiry="2026-06-30" />
+    <PermitCard title="NEMA Environmental License" status="pending" />
+  </RequiredPermits>
+  
+  <TaxCompliance>
+    <ETRComplianceCard>
+      <CardHeader>ETR Compliance Required</CardHeader>
+      <CardBody>
+        All fuel sales in Kenya must be invoiced through the KRA registered ETR system.
+        Format: ETR-[station]-[date]-[sequence]. Ensure your ETR device is connected via
+        the Integration Hub.
+      </CardBody>
+    </ETRComplianceCard>
+  </TaxCompliance>
+  
+  <DataResidency>
+    <AlertBanner type="warning">
+      Per Kenya's data protection regulations, all transaction data, audit logs, and customer
+      records are stored and processed within Kenya's jurisdiction. Cross-border data transfers
+      require explicit consent and follow KRA guidelines.
+    </AlertBanner>
+  </DataResidency>
+</ComplianceSettings>
+```
+
+#### **Sub-section 9.4: Integrations Hub**
+```typescript
+<IntegrationHub country="KE">
+  <IntegrationStats>
+    <StatCard title="Connectors" value={13} />
+    <StatCard title="Connected" value={connectedCount} />
+    <StatCard title="Webhooks" value={webhookCount} />
+    <StatCard title="API Keys" value={apiKeyCount} />
+  </IntegrationStats>
+  
+  <IntegrationGrid>
+    <IntegrationCard
+      name="KRA eTIMS Portal"
+      status="disconnected"
+      icon={KRALogo}
+      onConnect={() => openKRASetupModal()}
+    />
+    
+    <IntegrationCard
+      name="KRA iTax Portal"
+      status="disconnected"
+      icon={KRALogo}
+      onConnect={() => openiT axSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="EPRA Fuel Compliance"
+      status="disconnected"
+      icon={EPRALogo}
+      onConnect={() => openEPRASetupModal()}
+    />
+    
+    <IntegrationCard
+      name="M-PESA Daraja API"
+      status="connected"
+      icon={MpesaLogo}
+      onDisconnect={() => disconnectMpesa()}
+    />
+    
+    <IntegrationCard
+      name="KCB Bank Kenya API"
+      status="disconnected"
+      icon={KCBLogo}
+      onConnect={() => openKCBSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="Equity Bank Jenga API"
+      status="disconnected"
+      icon={EquityLogo}
+      onConnect={() => openEquitySetupModal()}
+    />
+    
+    <IntegrationCard
+      name="Co-operative Bank API"
+      status="disconnected"
+      icon={CoopLogo}
+      onConnect={() => openCoopSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="NCBA Bank Kenya API"
+      status="disconnected"
+      icon={NCBALogo}
+      onConnect={() => openNCBASetupModal()}
+    />
+    
+    <IntegrationCard
+      name="Absa Bank Kenya API"
+      status="disconnected"
+      icon={AbsaLogo}
+      onConnect={() => openAbsaSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="eCitizen Kenya"
+      status="disconnected"
+      icon={eCitizenLogo}
+      onConnect={() => openeCitizenSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="Airtel Money Kenya"
+      status="disconnected"
+      icon={AirtelLogo}
+      onConnect={() => openAirtelSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="eTIMS ETR Device"
+      status="disconnected"
+      icon={ETRLogo}
+      onConnect={() => openETRSetupModal()}
+    />
+    
+    <IntegrationCard
+      name="Safaricom Business API"
+      status="disconnected"
+      icon={SafaricomLogo}
+      onConnect={() => openSafaricomSetupModal()}
+    />
+  </IntegrationGrid>
+</IntegrationHub>
+```
+
+**M-PESA Daraja Integration:**
+```typescript
+// Safaricom Daraja API configuration
+const darajaConfig = {
+  consumerKey: process.env.MPESA_CONSUMER_KEY,
+  consumerSecret: process.env.MPESA_CONSUMER_SECRET,
+  shortcode: process.env.MPESA_SHORTCODE, // e.g., 174379 (sandbox)
+  passkey: process.env.MPESA_PASSKEY,
+  callbackUrl: process.env.MPESA_CALLBACK_URL,
+  environment: process.env.MPESA_ENV || 'sandbox' // 'sandbox' or 'production'
+};
+
+// Generate OAuth token
+const generateDarajaToken = async () => {
+  const auth = Buffer.from(`${darajaConfig.consumerKey}:${darajaConfig.consumerSecret}`).toString('base64');
+  
+  const response = await fetch(
+    `https://${darajaConfig.environment === 'sandbox' ? 'sandbox' : 'api'}.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials`,
+    {
+      headers: { Authorization: `Basic ${auth}` }
+    }
+  );
+  
+  const data = await response.json();
+  return data.access_token;
+};
+
+// STK Push (Lipa Na M-PESA Online)
+const initiateSTKPush = async (phone: string, amount: number, reference: string) => {
+  const token = await generateDarajaToken();
+  const timestamp = new Date().
+
+Hello LEON. Based on the provided document, I have reverse-engineered the entire architecture of the **FuelPro / ISPLedger** platform. 
+
+Per your instruction to **never present/provide simulations**, I will not simulate the app's behavior. Instead, I have structured the complete extraction into **10 Comprehensive Development Prompts/Specifications**. You can feed each of these directly to an AI coding assistant or development team to build, refine, or document each specific module.
+
+---
+
+### **DOMAIN 1: Authentication & User Management**
+**Prompt/Specification:**
+*   **Objective:** Build a secure, role-based authentication system with multi-factor verification.
+*   **Logic:** Users must verify email before platform access. Support OAuth (Google, Apple), Phone OTP (5 digits, 5 min expiry), and optional TOTP 2FA.
+*   **UI Format:** Clean login/signup screens with "Forgot Password", OAuth buttons, and OTP input fields. Admin panel for user listing.
+*   **Data Schema:** `User { id, name, email, phone, role (Owner/Manager/Staff/Auditor), status (Active/Locked), twoFactorEnabled, createdAt }`.
+*   **Steps:** 
+    1. User registers → System sends Email Verification & Phone OTP.
+    2. User verifies both → Account created with default "Staff" or invited role.
+    3. Admin can lock/unlock users or reset passwords from the User Management table.
+*   **Validation:** Block access if email/phone is unverified. Enforce min 6-character passwords.
+
+---
+
+### **DOMAIN 2: Dashboard & Business Intelligence**
+**Prompt/Specification:**
+*   **Objective:** Provide a real-time, at-a-glance overview of station performance.
+*   **Logic:** Aggregate data from Sales, Inventory, and Expenses. Calculate 7-day growth, conversion rates, and product mix (PMS vs. AGO).
+*   **UI Format:** Grid layout with KPI cards (Total Revenue, Total Sales, Avg Sale, Inventory Items). Line charts for Revenue Trend (Last 7/30/90 Days). Sidebar for Recent Activity feed.
+*   **Data Schema:** `DashboardMetrics { totalRevenue, totalSales, avgSale, inventoryItems, activeSessions, pageViews, apiCalls, errorRate }`.
+*   **Steps:** 
+    1. Fetch aggregated sales and expense data for the selected date range.
+    2. Calculate Net Profit and Profit Margin.
+    3. Render charts using a library (e.g., Chart.js/Recharts).
+    4. Display localized weather and regulatory alerts at the top.
+*   **Validation:** Handle zero-data states gracefully ("No sales recorded yet"). Auto-refresh every 60s.
+
+---
+
+### **DOMAIN 3: Point of Sale (POS) & Sales Tracking**
+**Prompt/Specification:**
+*   **Objective:** Enable quick, tax-compliant fuel sales recording with real-time meter tracking.
+*   **Logic:** Calculate sales based on Opening/Closing meter readings or manual litre entry. Apply 16% VAT automatically for Kenya.
+*   **UI Format:** Split screen: Left side for item selection (Petrol/Diesel, custom items), Right side for Cart, Customer Info (KRA PIN), Tax breakdown, and Payment Method selection (Cash, M-Pesa, Card, Bank).
+*   **Data Schema:** `Sale { id, date, shift, fuelType, openingMeter, closingMeter, litresSold, unitPrice, totalAmount, vatAmount, paymentMethod, kraPin }`.
+*   **Steps:** 
+    1. Cashier selects fuel type and inputs litres or meter readings.
+    2. System calculates Total = (Litres * Price) + 16% VAT.
+    3. Cashier selects payment method and completes sale.
+    4. System generates ETR-compliant receipt format: `ETR-[station]-[date]-[sequence]`.
+*   **Validation:** Prevent closing meter from being less than opening meter. Validate KRA PIN format for B2B sales.
+
+---
+
+### **DOMAIN 4: Inventory & Fuel Offloading Management**
+**Prompt/Specification:**
+*   **Objective:** Track fuel stock levels, manage deliveries, and trigger low-stock alerts.
+*   **Logic:** Stock = Previous Stock + Offloaded Quantity - Sales Quantity. Alert when stock drops below defined threshold (e.g., 500L).
+*   **UI Format:** Table view showing Fuel Type, Stock (L), Capacity (L), Fill %, Price/L, and Alert Status. "New Offloading" modal form.
+*   **Data Schema:** `InventoryItem { id, fuelType (PMS/AGO), currentStock, capacity, unitCost, sellingPrice, alertThreshold, status (Normal/Critical) }`.
+*   **Steps:** 
+    1. Admin views current tank levels.
+    2. When a delivery arrives, admin clicks "New Offloading", enters Truck Reg, Driver, Fuel Type, Quantity, Rate, and Supplier.
+    3. System updates `currentStock` and logs the transaction in the Offloading Tracker.
+*   **Validation:** Reject offloading entries that exceed tank capacity. Flag negative stock as "Critical".
+
+---
+
+### **DOMAIN 5: Financial Management (Payroll, Expenses, M-PESA Analyzer)**
+**Prompt/Specification:**
+*   **Objective:** Automate financial reconciliation, payroll calculation, and expense tracking.
+*   **Logic:** 
+    *   *Payroll:* Net Pay = Gross Salary - (SHA + NSSF + Advances).
+    *   *M-PESA Analyzer:* Parse PDF statements, extract "Merchant Payment from" transactions, exclude loans/charges, and reconcile with sales.
+*   **UI Format:** 
+    *   Payroll: Data table with columns for Name, Role, Gross, SHA, NSSF, Advance, Net Pay.
+    *   M-PESA: Drag-and-drop PDF upload zone, AI extraction progress bar, Clean Revenue Breakdown cards.
+*   **Data Schema:** `Expense { id, date, category, description, amount, status (Pending/Approved), ref }`. `PayrollEntry { id, employeeId, gross, sha, nssf, advance, net }`.
+*   **Steps (M-PESA):** 
+    1. User uploads M-PESA PDF.
+    2. AI runs pattern extraction for "Merchant Payment from".
+    3. System filters out non-revenue items (loans, charges).
+    4. Displays Total Valid Inflow and discrepancy rate against recorded sales.
+*   **Validation:** Ensure payroll totals match bank disbursement files. Flag M-PESA extraction failures for manual paste fallback.
+
+---
+
+### **DOMAIN 6: Credit, Debt & Invoicing**
+**Prompt/Specification:**
+*   **Objective:** Manage B2B customer credit limits, track overdue balances, and generate professional invoices.
+*   **Logic:** Balance Used = Total Limit - Payments Made. Trigger reminders when balance exceeds 80% of limit or is overdue.
+*   **UI Format:** Credit dashboard showing Total Accounts, Total Limit, Balance Used, Overdue count. Invoice generator with "Add Item", "Edit Bank Details", and "Export Invoice" (PDF/Excel) buttons.
+*   **Data Schema:** `CreditAccount { id, customerName, contact, totalLimit, balanceUsed, status, tier }`. `Invoice { id, clientName, date, items[], totalDue, bankDetails, signature }`.
+*   **Steps:** 
+    1. Create a new credit account with a defined limit.
+    2. Record sales against this account.
+    3. Generate an invoice, add bank details, and save.
+    4. Use "Debt Reminder" module to send WhatsApp/Email alerts with payment details.
+*   **Validation:** Block new credit sales if `balanceUsed` >= `totalLimit`.
+
+---
+
+### **DOMAIN 7: Station Operations (Shifts, Delivery, Maintenance, Quality)**
+**Prompt/Specification:**
+*   **Objective:** Streamline daily station operations, staff scheduling, and regulatory compliance checks.
+*   **Logic:** 
+    *   *Shifts:* Track attendance and scheduled hours.
+    *   *Maintenance:* Track equipment status (Scheduled, In Progress, Completed, Overdue, Critical).
+    *   *Quality:* Validate fuel against Kenya standards (PMS Density: 720-775 kg/m³, Sulfur: max 50ppm; AGO Density: 820-860 kg/m³).
+*   **UI Format:** Kanban or list views for Maintenance tasks. Tabular forms for Fuel Quality Testing (Date, Batch, Fuel, Density, Sulfur, Flash Point, Result).
+*   **Data Schema:** `MaintenanceTask { id, equipment, status, priority, assignedTo, startDate, nextDate, cost }`. `QualityTest { id, date, batch, fuelType, density, sulfur, flashPoint, result (Pass/Fail) }`.
+*   **Steps:** 
+    1. Manager schedules a shift or assigns a maintenance task.
+    2. Technician updates task status and adds notes.
+    3. For new fuel batches, lab/manager records quality metrics; system flags if out of EPRA bounds.
+*   **Validation:** Prevent marking a task "Completed" without a cost or note. Flag quality tests failing EPRA standards immediately.
+
+---
+
+### **DOMAIN 8: Compliance & Third-Party Integrations (Kenya Specific)**
+**Prompt/Specification:**
+*   **Objective:** Ensure strict adherence to Kenyan tax and fuel regulations while enabling seamless API integrations.
+*   **Logic:** All sales must route through KRA eTIMS. Data must reside in Kenya. Integrate with Safaricom Daraja for C2B/B2C.
+*   **UI Format:** "Integration Hub" dashboard showing connection status (Connected/Disconnected) for KRA eTIMS, EPRA, M-PESA Daraja, Banks (KCB, Equity, Co-op, NCBA, Absa), and eCitizen.
+*   **Data Schema:** `IntegrationConfig { provider, apiKey, consumerSecret, shortcode, passkey, webhookUrl, status }`.
+*   **Steps:** 
+    1. Admin navigates to Integration Hub.
+    2. Enters Daraja Consumer Key, Secret, Shortcode, and Passkey.
+    3. System pings the API to validate credentials.
+    4. Webhooks are registered for `transaction.created` and `transaction.completed`.
+*   **Validation:** Mask all API keys and secrets in the UI. Require HTTPS for all webhook URLs.
+
+---
+
+### **DOMAIN 9: Founder/Admin System Configuration & Backend**
+**Prompt/Specification:**
+*   **Objective:** Provide super-admin controls for platform-wide configuration, feature toggling, and system health.
+*   **Logic:** Allow dynamic enabling/disabling of features (e.g., Loyalty Program, AI Assistant) without code deployment. Manage database backups and cache.
+*   **UI Format:** Sidebar with: DB Manager, Routes, Theme Editor, Notifications, Environment, Webhooks, Cache Control, Trial Manager, Company Profile, Subscriptions, AI Batch Update.
+*   **Data Schema:** `SystemConfig { siteName, currency, timezone, language, maxStations, cloudSyncEnabled, autoBackupEnabled }`. `TabConfig { tabId, label, order, enabled }`.
+*   **Steps:** 
+    1. Founder accesses "Feature Manager" to toggle a module ON/OFF.
+    2. Uses "AI Batch Update" to type plain English (e.g., "Set Petrol price to 180.50 for station S1"), and AI executes the DB update.
+    3. "Backups" module allows manual "Create Backup" or views auto-backup history.
+*   **Validation:** Restrict Founder access via strict role checks. Log all Founder actions in the "Access Logs" and "Update History" audit trails.
+
+---
+
+### **DOMAIN 10: Document Management & AI Utilities**
+**Prompt/Specification:**
+*   **Objective:** Centralize document storage with AI-powered OCR and format conversion.
+*   **Logic:** Support 30+ input formats. Extract text from images/PDFs using AI fallback if primary OCR fails.
+*   **UI Format:** Drag-and-drop zone. Dropdown for "Convert to" (PDF, Word, Excel, PPT, Text, CSV, JPEG, PNG). Toggle for "Enable OCR for images".
+*   **Data Schema:** `Document { id, name, category (M-PESA Receipt, Invoice, Delivery Note, Payroll, etc.), uploadDate, size, ocrText, url }`.
+*   **Steps:** 
+    1. User drags a file into the Document Center.
+    2. System uploads to AWS S3 (or local storage).
+    3. If "Enable OCR" is checked, AI processes the image and extracts text.
+    4. User can search documents by category or extracted text.
+*   **Validation:** Enforce 100MB max file size. Sanitize all uploaded files to prevent malware execution.
+
+---
+
+### **Next Steps for Implementation**
+If you are building this, I recommend copying **one domain at a time** and feeding it to your development stack (e.g., "Act as a Senior React/Node.js developer. Implement Domain 3: Point of Sale based on this exact specification..."). 
+
+Let me know which specific domain you want to expand into actual code structures, database schemas, or API endpoint definitions next, LEON.

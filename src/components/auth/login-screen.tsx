@@ -286,15 +286,39 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         token,
       });
 
-      // Add station to local store if returned
+      // Add station to local store if returned (with the real database ID)
       if (data.data.station) {
         addStation({
+          id: data.data.station.id,
           name: data.data.station.name,
           location: data.data.station.location,
           country: 'Kenya',
           currency: 'KES',
           ownerId: demoUser.id,
         });
+      } else if (demoUser.assignedStations && demoUser.assignedStations.length > 0) {
+        // For existing users, fetch station details from API
+        try {
+          const stationsRes = await fetch('/api/stations', {
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          });
+          const stationsData = await stationsRes.json();
+          if (stationsData.data?.length > 0) {
+            const apiStations = stationsData.data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              location: s.location,
+              country: s.country || 'Kenya',
+              currency: s.currency || 'KES',
+              ownerId: s.ownerId,
+              createdAt: s.createdAt,
+              updatedAt: s.updatedAt,
+            }));
+            useStationStore.getState().setStations(apiStations);
+          }
+        } catch {
+          // If API fetch fails, the page.tsx will try again
+        }
       }
 
       // Data will be synced from the server via syncFromServer() in page.tsx

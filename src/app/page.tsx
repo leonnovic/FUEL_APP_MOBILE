@@ -63,6 +63,8 @@ const StationPerformance = dynamic(() => import('@/components/fuel/station-perfo
 const FuelPricePredictor = dynamic(() => import('@/components/fuel/fuel-price-predictor').then(m => ({ default: m.FuelPricePredictor })), { loading: TabLoader });
 const StationLocator = dynamic(() => import('@/components/fuel/station-locator').then(m => ({ default: m.StationLocator })), { loading: TabLoader });
 const FleetManager = dynamic(() => import('@/components/fuel/fleet-manager').then(m => ({ default: m.FleetManager })), { loading: TabLoader });
+const FounderPanel = dynamic(() => import('@/components/fuel/founder-panel').then(m => ({ default: m.FounderPanel })), { loading: TabLoader });
+const CompanyProfile = dynamic(() => import('@/components/fuel/company-profile').then(m => ({ default: m.CompanyProfile })), { loading: TabLoader });
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -100,14 +102,14 @@ export default function Home() {
 
   // Fetch user's stations from API after login
   useEffect(() => {
-    if (isAuthenticated && token && stations.length === 0) {
+    if (isAuthenticated && token) {
       fetch('/api/stations', {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       })
         .then(res => res.json())
         .then(data => {
-          if (data.success && data.data?.length > 0) {
-            setStations(data.data.map((s: any) => ({
+          if (data.data?.length > 0) {
+            const apiStations = data.data.map((s: any) => ({
               id: s.id,
               name: s.name,
               location: s.location,
@@ -116,7 +118,13 @@ export default function Home() {
               ownerId: s.ownerId,
               createdAt: s.createdAt,
               updatedAt: s.updatedAt,
-            })));
+            }));
+            // Only update if API data differs from local data (e.g., different IDs)
+            const localIds = stations.map(s => s.id).sort().join(',');
+            const apiIds = apiStations.map((s: any) => s.id).sort().join(',');
+            if (localIds !== apiIds) {
+              setStations(apiStations);
+            }
           }
         })
         .catch(() => {});
@@ -236,6 +244,10 @@ export default function Home() {
         return <StationLocator />;
       case 'fleet':
         return <FleetManager />;
+      case 'founder':
+        return <FounderPanel />;
+      case 'company':
+        return <CompanyProfile />;
       default:
         return <Dashboard />;
     }

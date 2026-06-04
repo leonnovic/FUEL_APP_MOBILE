@@ -10,7 +10,7 @@ interface StationState {
   error: string | null;
 
   // Actions
-  addStation: (station: Omit<Station, 'id' | 'createdAt' | 'updatedAt'>) => Station;
+  addStation: (station: Omit<Station, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Station;
   updateStation: (id: string, data: Partial<Station>) => void;
   deleteStation: (id: string) => void;
   switchStation: (stationId: string) => void;
@@ -38,7 +38,7 @@ export const useStationStore = create<StationState>()(
 
       addStation: (stationData): Station => {
         const station: Station = {
-          id: generateId(),
+          id: stationData.id || generateId(),
           name: stationData.name,
           location: stationData.location,
           country: stationData.country,

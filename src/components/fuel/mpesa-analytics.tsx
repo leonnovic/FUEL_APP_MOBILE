@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import {
   Smartphone,
   ArrowDownLeft,
@@ -14,6 +14,24 @@ import {
   RefreshCw,
   CreditCard,
   TrendingUp,
+  Upload,
+  FileText,
+  Search,
+  Download,
+  Sparkles,
+  Zap,
+  Eye,
+  X,
+  Loader2,
+  Lock,
+  ChevronDown,
+  Users,
+  BarChart3,
+  Shield,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
+  Copy,
 } from 'lucide-react';
 import {
   Card,
@@ -26,6 +44,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -65,10 +85,12 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/auth-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 type MpesaTransactionType = 'C2B' | 'B2C' | 'Paybill' | 'Till';
 type MpesaTransactionStatus = 'completed' | 'pending' | 'failed' | 'reversed';
+type ExtractionMode = 'auto' | 'pattern' | 'ai';
 
 interface MpesaTransaction {
   id: string;
@@ -81,9 +103,49 @@ interface MpesaTransaction {
   description?: string;
 }
 
+interface ParsedInflow {
+  receipt: string;
+  date: string;
+  time: string;
+  details: string;
+  paidIn: number;
+  withdrawal: number;
+  balance: number;
+  category: string;
+}
+
+interface ParseResult {
+  inflows: ParsedInflow[];
+  excluded: ParsedInflow[];
+  totalValid: number;
+  totalExcluded: number;
+  uniqueCustomers: number;
+  avgPayment: number;
+  lineCount: number;
+  rawTextLength: number;
+  processingLog: string[];
+  topCustomer: {
+    name: string;
+    total: number;
+    payments: number;
+    period: string;
+  } | null;
+  balanceAnalysis: {
+    trueInflow: number;
+    recordedNet: number;
+    balanceDelta: number;
+    unrecordedInflow: number;
+    discrepancyRate: number;
+  };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function formatKsh(val: number): string {
   return `Ksh ${val.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function formatKshDecimal(val: number): string {
+  return `Ksh ${val.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatPhone(phone: string): string {
@@ -162,6 +224,7 @@ const STATUS_COLORS: Record<MpesaTransactionStatus, string> = {
 // ─── Component ────────────────────────────────────────────────────────────
 export function MpesaAnalytics() {
   const { toast } = useToast();
+  const token = useAuthStore((s) => s.token);
   const [transactions, setTransactions] = useState<MpesaTransaction[]>(generateMockTransactions);
   const [filterType, setFilterType] = useState<MpesaTransactionType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<MpesaTransactionStatus | 'all'>('all');
@@ -172,7 +235,208 @@ export function MpesaAnalytics() {
   const [addType, setAddType] = useState<MpesaTransactionType>('C2B');
   const [addReference, setAddReference] = useState('');
 
+  // PDF Analyzer state
+  const [analyzerTab, setAnalyzerTab] = useState('pdf-upload');
+  const [extractionMode, setExtractionMode] = useState<ExtractionMode>('auto');
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPassword, setPdfPassword] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingLog, setProcessingLog] = useState<string[]>([]);
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [manualText, setManualText] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [inflowSearch, setInflowSearch] = useState('');
+  const [pdfDragActive, setPdfDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
+
+  // ─── PDF Upload Handler ────────────────────────────────────────────────
+  const handlePdfUpload = useCallback(async () => {
+    if (!pdfFile && !manualText) {
+      toast({ title: 'Error', description: 'Please upload a PDF or paste text', variant: 'destructive' });
+      return;
+    }
+
+    setIsProcessing(true);
+    setProcessingProgress(10);
+    setProcessingLog(['Starting extraction...']);
+    setParseResult(null);
+
+    try {
+      const formData = new FormData();
+      if (pdfFile) {
+        formData.append('file', pdfFile);
+      }
+      if (manualText) {
+        formData.append('text', manualText);
+      }
+      formData.append('mode', extractionMode);
+      if (pdfPassword) {
+        formData.append('password', pdfPassword);
+      }
+
+      setProcessingProgress(30);
+      setProcessingLog((prev) => [...prev, 'Uploading to server...']);
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/mpesa/parse', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      setProcessingProgress(70);
+      setProcessingLog((prev) => [...prev, 'Processing response...']);
+
+      const data = await res.json();
+
+      setProcessingProgress(90);
+      setProcessingLog((prev) => [...prev, 'Parsing results...']);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      if (data.success && data.data) {
+        setParseResult(data.data);
+        setProcessingLog(data.data.processingLog || ['Complete']);
+        toast({
+          title: 'Extraction Complete',
+          description: `Found ${data.data.inflows.length} inflows, ${data.data.excluded.length} excluded items`,
+        });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setProcessingLog((prev) => [...prev, `Error: ${msg}`]);
+      toast({ title: 'Extraction Failed', description: msg, variant: 'destructive' });
+    } finally {
+      setProcessingProgress(100);
+      setIsProcessing(false);
+    }
+  }, [pdfFile, manualText, extractionMode, pdfPassword, token, toast]);
+
+  // ─── AI Only Extraction ────────────────────────────────────────────────
+  const handleAiExtraction = useCallback(async () => {
+    if (!manualText.trim()) {
+      toast({ title: 'Error', description: 'Please paste M-PESA statement text', variant: 'destructive' });
+      return;
+    }
+
+    setIsAiProcessing(true);
+    setAiResponse('');
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: `Analyze this M-PESA statement text and extract all transactions. For each transaction, identify: receipt number, date, time, details/description, amount paid in, withdrawal amount, and balance. Also classify each as either "operating revenue" (merchant payments, received from customers) or "excluded" (loans, charges, fees, transfers). Provide a summary with total operating revenue, total excluded, unique customers, and any discrepancies.\n\nM-PESA Statement Text:\n${manualText}`,
+          context: 'mpesa-extraction',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.response) {
+        setAiResponse(data.response);
+      } else if (data.error) {
+        throw new Error(data.error);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: 'AI Extraction Failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }, [manualText, token, toast]);
+
+  // ─── Reconcile with AI ────────────────────────────────────────────────
+  const handleReconcileWithAi = useCallback(async () => {
+    if (!parseResult) return;
+
+    setIsAiProcessing(true);
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const summary = {
+        totalInflows: parseResult.totalValid,
+        totalExcluded: parseResult.totalExcluded,
+        uniqueCustomers: parseResult.uniqueCustomers,
+        discrepancyRate: parseResult.balanceAnalysis.discrepancyRate,
+        topCustomer: parseResult.topCustomer?.name,
+        inflowCount: parseResult.inflows.length,
+        excludedCount: parseResult.excluded.length,
+      };
+
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: `Reconcile this M-PESA data and identify any anomalies, missing transactions, or discrepancies. Provide actionable recommendations:\n\n${JSON.stringify(summary, null, 2)}`,
+          context: 'mpesa-reconciliation',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.response) {
+        setAiResponse(data.response);
+        toast({ title: 'AI Reconciliation Complete' });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: 'Reconciliation Failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }, [parseResult, token, toast]);
+
+  // ─── CSV Export ────────────────────────────────────────────────────────
+  const handleCsvExport = useCallback(() => {
+    const rows = parseResult
+      ? [
+          ['Receipt', 'Date', 'Customer', 'Paid In', 'Balance', 'Category'].join(','),
+          ...parseResult.inflows.map((i) =>
+            [i.receipt, i.date, `"${i.details}"`, i.paidIn, i.balance, i.category].join(',')
+          ),
+          ...parseResult.excluded.map((i) =>
+            [i.receipt, i.date, `"${i.details}"`, i.paidIn, i.balance, i.category].join(',')
+          ),
+        ]
+      : [
+          ['ID', 'Time', 'Phone', 'Amount', 'Type', 'Status', 'Reference'].join(','),
+          ...transactions.map((t) =>
+            [t.id, t.time, t.phone, t.amount, t.type, t.status, t.reference].join(',')
+          ),
+        ];
+
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mpesa-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV Exported', description: 'File downloaded successfully' });
+  }, [parseResult, transactions, toast]);
 
   // ─── Filtered Transactions ────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -228,6 +492,31 @@ export function MpesaAnalytics() {
     return days;
   }, [transactions]);
 
+  // ─── Type Breakdown ──────────────────────────────────────────────────
+  const typeBreakdown = useMemo(() => {
+    const completed = transactions.filter((t) => t.status === 'completed');
+    return {
+      C2B: completed.filter((t) => t.type === 'C2B').reduce((s, t) => s + t.amount, 0),
+      B2C: completed.filter((t) => t.type === 'B2C').reduce((s, t) => s + t.amount, 0),
+      Paybill: completed.filter((t) => t.type === 'Paybill').reduce((s, t) => s + t.amount, 0),
+      Till: completed.filter((t) => t.type === 'Till').reduce((s, t) => s + t.amount, 0),
+    };
+  }, [transactions]);
+
+  // ─── Filtered inflow table ─────────────────────────────────────────────
+  const filteredInflows = useMemo(() => {
+    if (!parseResult) return [];
+    if (!inflowSearch) return parseResult.inflows;
+    const q = inflowSearch.toLowerCase();
+    return parseResult.inflows.filter(
+      (i) =>
+        i.receipt.toLowerCase().includes(q) ||
+        i.details.toLowerCase().includes(q) ||
+        i.date.includes(q) ||
+        i.category.toLowerCase().includes(q)
+    );
+  }, [parseResult, inflowSearch]);
+
   // ─── Add Transaction Handler ──────────────────────────────────────────
   const handleAddTransaction = () => {
     if (!addPhone || !addAmount) {
@@ -252,19 +541,566 @@ export function MpesaAnalytics() {
     setAddReference('');
   };
 
-  // ─── Type Breakdown for quick stats ──────────────────────────────────
-  const typeBreakdown = useMemo(() => {
-    const completed = transactions.filter((t) => t.status === 'completed');
-    return {
-      C2B: completed.filter((t) => t.type === 'C2B').reduce((s, t) => s + t.amount, 0),
-      B2C: completed.filter((t) => t.type === 'B2C').reduce((s, t) => s + t.amount, 0),
-      Paybill: completed.filter((t) => t.type === 'Paybill').reduce((s, t) => s + t.amount, 0),
-      Till: completed.filter((t) => t.type === 'Till').reduce((s, t) => s + t.amount, 0),
-    };
-  }, [transactions]);
+  // ─── Drag handlers ────────────────────────────────────────────────────
+  const handlePdfDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setPdfDragActive(true);
+  };
+
+  const handlePdfDragLeave = () => setPdfDragActive(false);
+
+  const handlePdfDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setPdfDragActive(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type === 'application/pdf') {
+      setPdfFile(files[0]);
+      toast({ title: 'PDF Loaded', description: files[0].name });
+    } else {
+      toast({ title: 'Invalid File', description: 'Please upload a PDF file', variant: 'destructive' });
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 1: M-PESA PDF ANALYZER
+         ══════════════════════════════════════════════════════════════════ */}
+      <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="size-4 text-amber-400" />
+                M-PESA PDF Analyzer
+              </CardTitle>
+              <CardDescription className="text-slate-400 text-xs mt-1">
+                Upload M-PESA statements to extract and analyze inflows
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-slate-400 text-xs">Mode:</Label>
+              <Select value={extractionMode} onValueChange={(v) => setExtractionMode(v as ExtractionMode)}>
+                <SelectTrigger className={`${inputClass} w-32 h-8 text-xs`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectItem value="auto">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="size-3 text-amber-400" /> Auto
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="pattern">
+                    <div className="flex items-center gap-1.5">
+                      <Search className="size-3 text-cyan-400" /> Pattern
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ai">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="size-3 text-purple-400" /> AI Only
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs value={analyzerTab} onValueChange={setAnalyzerTab}>
+            <TabsList className="bg-slate-700/50">
+              <TabsTrigger value="pdf-upload" className="data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 text-xs">
+                <Upload className="size-3 mr-1" /> PDF Upload
+              </TabsTrigger>
+              <TabsTrigger value="manual-paste" className="data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-400 text-xs">
+                <Copy className="size-3 mr-1" /> Manual Paste
+              </TabsTrigger>
+              <TabsTrigger value="ai-only" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400 text-xs">
+                <Sparkles className="size-3 mr-1" /> AI Only
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ── PDF Upload Tab ──────────────────────────────────────────── */}
+            <TabsContent value="pdf-upload" className="mt-4 space-y-4">
+              <div
+                onDragOver={handlePdfDragOver}
+                onDragLeave={handlePdfDragLeave}
+                onDrop={handlePdfDrop}
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+                  pdfDragActive
+                    ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
+                    : 'border-slate-600 hover:border-slate-500'
+                }`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setPdfFile(f);
+                      toast({ title: 'PDF Loaded', description: f.name });
+                    }
+                  }}
+                />
+                <Upload className={`size-10 mx-auto mb-3 ${pdfDragActive ? 'text-amber-400' : 'text-slate-500'}`} />
+                <p className="text-sm text-slate-300 mb-1">Drag & drop M-PESA PDF statement here</p>
+                <p className="text-xs text-slate-500 mb-3">Supports encrypted and plain M-PESA statements</p>
+                {pdfFile ? (
+                  <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    <FileText className="size-3 mr-1" /> {pdfFile.name} ({(pdfFile.size / 1024).toFixed(1)} KB)
+                    <button
+                      className="ml-2 hover:text-white"
+                      onClick={(e) => { e.stopPropagation(); setPdfFile(null); }}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-slate-600 text-slate-500">Click to browse</Badge>
+                )}
+              </div>
+
+              {/* Password field */}
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <Label className="text-slate-400 text-xs flex items-center gap-1">
+                    <Lock className="size-3" /> PDF Password (optional)
+                  </Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter password for encrypted statements"
+                    value={pdfPassword}
+                    onChange={(e) => setPdfPassword(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <Button
+                  onClick={handlePdfUpload}
+                  disabled={isProcessing || !pdfFile}
+                  className="bg-amber-500 hover:bg-amber-600 text-black font-semibold shrink-0"
+                >
+                  {isProcessing ? (
+                    <><Loader2 className="size-4 mr-2 animate-spin" /> Processing...</>
+                  ) : (
+                    <><ArrowDownLeft className="size-4 mr-2" /> Extract Inflows</>
+                  )}
+                </Button>
+              </div>
+            </TabsContent>
+
+            {/* ── Manual Paste Tab ────────────────────────────────────────── */}
+            <TabsContent value="manual-paste" className="mt-4 space-y-4">
+              <div>
+                <Label className="text-slate-400 text-xs">Paste M-PESA Statement Text</Label>
+                <textarea
+                  className="w-full h-40 rounded-lg bg-slate-700/50 border border-slate-600 text-white text-xs p-3 placeholder:text-slate-500 resize-y font-mono"
+                  placeholder="Paste your M-PESA statement text here...&#10;&#10;Example:&#10;QJK4R2V7G6  1/3/25 9:30 AM  Merchant Payment from John Mwangi  5,000.00  252,850.00&#10;QJK4R2V7G7  1/3/25 10:15 AM  Received from Akinyi Odhiambo  3,200.00  256,050.00"
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                />
+              </div>
+              <Button
+                onClick={handlePdfUpload}
+                disabled={isProcessing || !manualText.trim()}
+                className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+              >
+                {isProcessing ? (
+                  <><Loader2 className="size-4 mr-2 animate-spin" /> Processing...</>
+                ) : (
+                  <><ArrowDownLeft className="size-4 mr-2" /> Extract Inflows</>
+                )}
+              </Button>
+            </TabsContent>
+
+            {/* ── AI Only Tab ─────────────────────────────────────────────── */}
+            <TabsContent value="ai-only" className="mt-4 space-y-4">
+              <div>
+                <Label className="text-slate-400 text-xs flex items-center gap-1">
+                  <Sparkles className="size-3 text-purple-400" /> Paste text for AI-powered extraction
+                </Label>
+                <textarea
+                  className="w-full h-40 rounded-lg bg-slate-700/50 border border-slate-600 text-white text-xs p-3 placeholder:text-slate-500 resize-y font-mono"
+                  placeholder="Paste your M-PESA statement text for AI analysis...&#10;The AI will extract transactions, classify them, and provide insights."
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                />
+              </div>
+              <Button
+                onClick={handleAiExtraction}
+                disabled={isAiProcessing || !manualText.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+              >
+                {isAiProcessing ? (
+                  <><Loader2 className="size-4 mr-2 animate-spin" /> AI Processing...</>
+                ) : (
+                  <><Sparkles className="size-4 mr-2" /> Analyze with AI</>
+                )}
+              </Button>
+
+              {aiResponse && (
+                <div className="bg-slate-700/30 border border-slate-700/50 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="size-4 text-purple-400" />
+                    <span className="text-sm font-medium text-purple-400">AI Analysis</span>
+                  </div>
+                  <div className="text-xs text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                    {aiResponse}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          {/* ── Processing Progress ──────────────────────────────────────── */}
+          {isProcessing && (
+            <div className="mt-4 space-y-2">
+              <Progress value={processingProgress} className="h-2 bg-slate-700" />
+              <div className="max-h-24 overflow-y-auto space-y-0.5">
+                {processingLog.map((log, i) => (
+                  <div key={i} className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <ChevronDown className="size-2" /> {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 2: EXTRACTION RESULTS (shown when parseResult exists)
+         ══════════════════════════════════════════════════════════════════ */}
+      {parseResult && (
+        <>
+          {/* ── Revenue Breakdown Cards ────────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <Card className="bg-green-900/30 border-green-700/30 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-green-400 text-xs uppercase tracking-wider">Operating Revenue</CardDescription>
+                  <div className="size-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                    <CheckCircle2 className="size-4 text-green-400" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-400">{formatKshDecimal(parseResult.totalValid)}</div>
+                <div className="text-xs text-green-500/70 mt-1">{parseResult.inflows.length} transactions</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Excluded Loans</CardDescription>
+                  <div className="size-8 rounded-lg bg-slate-500/20 flex items-center justify-center">
+                    <XCircle className="size-4 text-slate-400" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-400">{formatKshDecimal(parseResult.excluded.filter((e) => e.category === 'loan').reduce((s, e) => s + e.paidIn, 0))}</div>
+                <div className="text-xs text-slate-500 mt-1">{parseResult.excluded.filter((e) => e.category === 'loan').length} items</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Excluded Charges</CardDescription>
+                  <div className="size-8 rounded-lg bg-slate-500/20 flex items-center justify-center">
+                    <XCircle className="size-4 text-slate-400" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-400">{formatKshDecimal(parseResult.excluded.filter((e) => e.category === 'charge').reduce((s, e) => s + e.paidIn, 0))}</div>
+                <div className="text-xs text-slate-500 mt-1">{parseResult.excluded.filter((e) => e.category === 'charge').length} items</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Excluded Transfers</CardDescription>
+                  <div className="size-8 rounded-lg bg-slate-500/20 flex items-center justify-center">
+                    <XCircle className="size-4 text-slate-400" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-400">{formatKshDecimal(parseResult.excluded.filter((e) => e.category === 'transfer').reduce((s, e) => s + e.paidIn, 0))}</div>
+                <div className="text-xs text-slate-500 mt-1">{parseResult.excluded.filter((e) => e.category === 'transfer').length} items</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Key Metrics ────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Total Inflows</CardDescription>
+                  <DollarSign className="size-4 text-green-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold">{formatKshDecimal(parseResult.totalValid + parseResult.totalExcluded)}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Total Received</CardDescription>
+                  <ArrowDownLeft className="size-4 text-amber-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-amber-400">{formatKshDecimal(parseResult.totalValid)}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Unique Customers</CardDescription>
+                  <Users className="size-4 text-cyan-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-cyan-400">{parseResult.uniqueCustomers}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Average Payment</CardDescription>
+                  <BarChart3 className="size-4 text-purple-400" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-purple-400">{formatKshDecimal(parseResult.avgPayment)}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Top Customer + Balance Analysis ─────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top Customer */}
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Users className="size-4 text-amber-400" /> Top Customer
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {parseResult.topCustomer ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="size-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
+                        {parseResult.topCustomer.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">{parseResult.topCustomer.name}</div>
+                        <div className="text-xs text-slate-400">{parseResult.topCustomer.payments} payments in period</div>
+                      </div>
+                    </div>
+                    <Separator className="bg-slate-700/50" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Total Spent</div>
+                        <div className="text-sm font-bold text-amber-400">{formatKshDecimal(parseResult.topCustomer.total)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase">Period</div>
+                        <div className="text-sm font-medium">{parseResult.topCustomer.period || 'N/A'}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-slate-500 text-sm py-4">No customer data found</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Balance Analysis */}
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Shield className="size-4 text-cyan-400" /> Balance Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-700/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-slate-500 uppercase">True Inflow</div>
+                      <div className="text-sm font-bold text-green-400">{formatKshDecimal(parseResult.balanceAnalysis.trueInflow)}</div>
+                    </div>
+                    <div className="bg-slate-700/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-slate-500 uppercase">Recorded Net</div>
+                      <div className="text-sm font-bold">{formatKshDecimal(parseResult.balanceAnalysis.recordedNet)}</div>
+                    </div>
+                    <div className="bg-slate-700/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-slate-500 uppercase">Balance Delta</div>
+                      <div className="text-sm font-bold text-amber-400">{formatKshDecimal(parseResult.balanceAnalysis.balanceDelta)}</div>
+                    </div>
+                    <div className="bg-slate-700/30 rounded-lg p-2.5">
+                      <div className="text-[10px] text-slate-500 uppercase">Unrecorded Inflow</div>
+                      <div className="text-sm font-bold text-orange-400">{formatKshDecimal(parseResult.balanceAnalysis.unrecordedInflow)}</div>
+                    </div>
+                  </div>
+                  <Separator className="bg-slate-700/50" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Discrepancy Rate</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${parseResult.balanceAnalysis.discrepancyRate > 10 ? 'bg-red-500' : parseResult.balanceAnalysis.discrepancyRate > 5 ? 'bg-amber-500' : 'bg-green-500'}`}
+                          style={{ width: `${Math.min(parseResult.balanceAnalysis.discrepancyRate, 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm font-bold ${parseResult.balanceAnalysis.discrepancyRate > 10 ? 'text-red-400' : parseResult.balanceAnalysis.discrepancyRate > 5 ? 'text-amber-400' : 'text-green-400'}`}>
+                        {parseResult.balanceAnalysis.discrepancyRate.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Inflow Table ───────────────────────────────────────────── */}
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="size-4 text-amber-400" /> Inflow Details
+                  </CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">
+                    {filteredInflows.length} operating revenue transactions
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-slate-500" />
+                    <Input
+                      className={`${inputClass} pl-8 h-8 w-48 text-xs`}
+                      placeholder="Search inflows..."
+                      value={inflowSearch}
+                      onChange={(e) => setInflowSearch(e.target.value)}
+                    />
+                  </div>
+                  <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700 h-8 text-xs" onClick={handleCsvExport}>
+                    <Download className="size-3 mr-1" /> CSV
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white h-8 text-xs"
+                    onClick={handleReconcileWithAi}
+                    disabled={isAiProcessing}
+                  >
+                    {isAiProcessing ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Sparkles className="size-3 mr-1" />}
+                    Reconcile with AI
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredInflows.length === 0 ? (
+                <div className="text-center text-slate-500 text-sm py-8">No inflow data available</div>
+              ) : (
+                <div className="max-h-72 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-slate-700 hover:bg-transparent">
+                        <TableHead className="text-slate-400 text-xs">Receipt No</TableHead>
+                        <TableHead className="text-slate-400 text-xs">Date</TableHead>
+                        <TableHead className="text-slate-400 text-xs">Customer</TableHead>
+                        <TableHead className="text-slate-400 text-xs text-right">Paid In</TableHead>
+                        <TableHead className="text-slate-400 text-xs text-right">Balance</TableHead>
+                        <TableHead className="text-slate-400 text-xs">Category</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInflows.map((inflow, idx) => (
+                        <TableRow key={idx} className="border-slate-700/50">
+                          <TableCell className="text-slate-300 text-xs font-mono">{inflow.receipt}</TableCell>
+                          <TableCell className="text-slate-300 text-xs">{inflow.date} {inflow.time}</TableCell>
+                          <TableCell className="text-slate-200 text-xs max-w-[200px] truncate">{inflow.details}</TableCell>
+                          <TableCell className="text-xs font-semibold text-right text-green-400">{formatKshDecimal(inflow.paidIn)}</TableCell>
+                          <TableCell className="text-xs text-right text-slate-400">{formatKshDecimal(inflow.balance)}</TableCell>
+                          <TableCell>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${
+                              inflow.category === 'operating'
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                            }`}>
+                              {inflow.category}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── AI Reconciliation Response ──────────────────────────────── */}
+          {aiResponse && analyzerTab !== 'ai-only' && (
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="size-4 text-purple-400" /> AI Reconciliation Report
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xs text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto bg-slate-700/20 rounded-lg p-4">
+                  {aiResponse}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Processing Log ──────────────────────────────────────────── */}
+          {processingLog.length > 0 && !isProcessing && (
+            <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-semibold text-slate-400 flex items-center gap-2">
+                  <Eye className="size-3" /> Processing Log
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  {processingLog.map((log, i) => (
+                    <div key={i} className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                      <ArrowRight className="size-2 text-slate-600" /> {log}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          SECTION 3: ORIGINAL M-PESA ANALYTICS (existing transaction data)
+         ══════════════════════════════════════════════════════════════════ */}
+      <div className="border-t border-slate-700/50 pt-6">
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Smartphone className="size-4 text-amber-400" /> Live Transaction Analytics
+        </h3>
+      </div>
+
       {/* ── Summary Cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card className="bg-slate-800/60 border-slate-700/50 text-white">
@@ -515,9 +1351,14 @@ export function MpesaAnalytics() {
               <CardTitle className="text-base">Recent M-PESA Transactions</CardTitle>
               <CardDescription className="text-slate-400 text-xs">{filtered.length} transactions found</CardDescription>
             </div>
-            <Badge className="bg-slate-700/50 text-slate-300 text-xs">
-              <Clock className="size-3 mr-1" /> Live
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-slate-700/50 text-slate-300 text-xs">
+                <Clock className="size-3 mr-1" /> Live
+              </Badge>
+              <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700 h-8 text-xs" onClick={handleCsvExport}>
+                <Download className="size-3 mr-1" /> CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

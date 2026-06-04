@@ -121,6 +121,12 @@ model Station {
   auditLogs    AuditLog[]
   auditLogsSoc2 AuditLogSoc2[]
   documents    Document[]
+  payrolls        Payroll[]
+  creditAccounts  CreditAccount[]
+  paymentMethods  PaymentMethod[]
+  qualityTests    QualityTest[]
+  appSettings     AppSetting[]
+  smsCampaigns    SmsCampaign[]
 }
 
 // ─── StationBinding (many-to-many User <-> Station) ─────────────────────────
@@ -230,6 +236,7 @@ model Employee {
   createdAt  DateTime  @default(now())
 
   station Station @relation(fields: [stationId], references: [id])
+  payrolls Payroll[]
 }
 
 // ─── Expense ────────────────────────────────────────────────────────────────
@@ -392,4 +399,130 @@ model AppVersion {
   releaseNotes String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+}
+
+// ─── Payroll (Kenya Compliance) ──────────────────────────────────────
+model Payroll {
+  id                String   @id @default(cuid())
+  stationId         String
+  employeeId        String
+  payPeriodStart    DateTime
+  payPeriodEnd      DateTime
+  basicSalary       Float    @default(0)
+  allowances        Float    @default(0)
+  overtimeHours     Float    @default(0)
+  overtimeRate      Float    @default(0)
+  grossPay          Float    @default(0)
+  shaDeduction      Float    @default(0)  // Social Health Authority - 2.75% of gross
+  nssfDeduction     Float    @default(0)  // National Social Security Fund
+  payeDeduction     Float    @default(0)  // Pay As You Earn tax
+  advanceDeduction  Float    @default(0)
+  otherDeductions   Float    @default(0)
+  totalDeductions   Float    @default(0)
+  netPay            Float    @default(0)
+  paymentMethod     String   @default("bank_transfer") // bank_transfer, mpesa, cash
+  paymentReference  String?
+  status            String   @default("pending") // pending, processed, paid
+  paidAt            DateTime?
+  createdBy         String?
+  createdAt         DateTime @default(now())
+
+  station  Station  @relation(fields: [stationId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+}
+
+// ─── CreditAccount (B2B Customers) ────────────────────────────────────
+model CreditAccount {
+  id              String   @id @default(cuid())
+  stationId       String
+  customerName    String
+  contactPerson   String?
+  phone           String?
+  email           String?
+  kraPin          String?
+  creditLimit     Float    @default(0)
+  balanceUsed     Float    @default(0)
+  paymentTermsDays Int    @default(30)
+  bankName        String?
+  bankAccount     String?
+  mpesaTill       String?
+  status          String   @default("active") // active, suspended, closed
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── PaymentMethod (Multi-Country) ────────────────────────────────────
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  stationId     String
+  type          String   // bank, mobile_money, card, digital_wallet, cash
+  providerName  String   // Equity Bank, M-PESA, Visa, etc.
+  accountNumber String?
+  accountName   String?
+  branchName    String?
+  swiftCode     String?
+  tillNumber    String?
+  paybillNumber String?
+  isActive      Boolean  @default(true)
+  countryCode   String   @default("KE")
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── QualityTest (EPRA Standards) ─────────────────────────────────────
+model QualityTest {
+  id          String   @id @default(cuid())
+  stationId   String
+  date        DateTime
+  batchNo     String?
+  fuelType    String   // PMS, AGO, DPK
+  density     Float?
+  sulfur      Float?   // ppm
+  flashPoint  Float?   // °C
+  appearance  String?
+  result      String   @default("pass") // pass, fail
+  testedBy    String?
+  notes       String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+}
+
+// ─── AppSetting (Dynamic Configuration) ───────────────────────────────
+model AppSetting {
+  id        String   @id @default(cuid())
+  stationId String
+  category  String   // general, mpesa, sms, email, auth, compliance
+  key       String
+  value     String   // JSON string for complex values
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
+
+  @@unique([stationId, category, key])
+}
+
+// ─── SmsCampaign ──────────────────────────────────────────────────────
+model SmsCampaign {
+  id          String   @id @default(cuid())
+  stationId   String
+  type        String   @default("sms") // sms, email
+  recipient   String
+  subject     String?
+  content     String
+  status      String   @default("pending") // pending, sent, delivered, failed
+  providerRef String?
+  sentAt      DateTime?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  station Station @relation(fields: [stationId], references: [id])
 }
