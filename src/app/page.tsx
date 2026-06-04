@@ -39,6 +39,8 @@ import { RegionalCompliance } from '@/components/fuel/regional-compliance';
 import { DocumentManager } from '@/components/fuel/document-manager';
 import { PayrollSystem } from '@/components/fuel/payroll-system';
 import { SettingsPage } from '@/components/fuel/settings-page';
+import { FuelOrderRequest } from '@/components/fuel/fuel-order-request';
+import { ProfitCalculator } from '@/components/fuel/profit-calculator';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
@@ -149,6 +151,10 @@ export default function Home() {
         return <PriceBoard />;
       case 'settings':
         return <SettingsPage />;
+      case 'fuel-orders':
+        return <FuelOrderRequest />;
+      case 'profit-calc':
+        return <ProfitCalculator />;
       default:
         return <Dashboard />;
     }

@@ -50,6 +50,8 @@ import {
   Receipt,
   Monitor,
   CheckCheck,
+  Calculator,
+  ClipboardList,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -125,6 +127,8 @@ const allTabs = [
   { id: 'maintenance', label: 'Maintenance', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Price Board', icon: Monitor },
+  { id: 'fuel-orders', label: 'Fuel Orders', icon: ClipboardList },
+  { id: 'profit-calc', label: 'Profit Calculator', icon: Calculator },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

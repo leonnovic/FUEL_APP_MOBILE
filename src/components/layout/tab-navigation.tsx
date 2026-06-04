@@ -35,6 +35,9 @@ import {
   Monitor,
   ChevronLeft,
   ChevronRight,
+  Calculator,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
@@ -53,7 +56,7 @@ const tabBadges: Record<string, { count?: number; alert?: boolean }> = {
 
 // Separator positions — indices AFTER which a dot separator appears
 // Group 1: Core (0-7), Group 2: Management (8-14), Group 3: Operations (15-22), Group 4: Admin (23-30)
-const separatorAfter = new Set([7, 14, 22]);
+const separatorAfter = new Set([7, 14, 22, 30]);
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -87,6 +90,9 @@ const tabs = [
   { id: 'maintenance', label: 'Maintenance', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Price Board', icon: Monitor },
+  { id: 'fuel-orders', label: 'Orders', icon: ClipboardList },
+  { id: 'profit-calc', label: 'Profit Calc', icon: Calculator },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {

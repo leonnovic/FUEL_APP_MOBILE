@@ -682,20 +682,20 @@ export function Dashboard() {
       {/* ══════════════════════════════════════════════════════════════════════
           3. KPI Cards (enhanced with gradient)
          ══════════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 stagger-children">
         {/* Total Revenue */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-green-500/30 transition-colors">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 via-transparent to-transparent pointer-events-none" />
+        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-green-500/30">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
               <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Total Revenue</CardDescription>
-              <div className="size-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+              <div className="size-8 rounded-lg bg-green-500/20 flex items-center justify-center animate-float">
                 <DollarSign className="size-4 text-green-400" />
               </div>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold">{formatKsh(totalRevenue)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up">{formatKsh(totalRevenue)}</div>
             <div className="flex items-center gap-1 mt-1">
               <ArrowUpRight className="size-3 text-green-400" />
               <span className="text-xs text-green-400">{formatKsh(todaySales)} today</span>
@@ -704,8 +704,8 @@ export function Dashboard() {
         </Card>
 
         {/* Net Profit */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-transparent to-transparent pointer-events-none" />
+        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-emerald-500/30">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
               <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Net Profit</CardDescription>
@@ -715,14 +715,14 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold">{formatKsh(netProfit)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '80ms' }}>{formatKsh(netProfit)}</div>
             <div className="text-xs text-slate-400 mt-1">Expenses: {formatKsh(totalExpenses)}</div>
           </CardContent>
         </Card>
 
         {/* Fuel Sold */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-amber-500/30 transition-colors">
-          <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-transparent to-transparent pointer-events-none" />
+        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-amber-500/30">
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
               <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Fuel Sold (L)</CardDescription>
@@ -732,7 +732,7 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold">{totalFuelL.toLocaleString()} L</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '160ms' }}>{totalFuelL.toLocaleString()} L</div>
             <div className="flex items-center gap-2 mt-1 text-xs">
               <span className="text-green-400">PMS @{pmsPrice || 0}</span>
               <span className="text-amber-400">AGO @{agoPrice || 0}</span>
@@ -741,8 +741,8 @@ export function Dashboard() {
         </Card>
 
         {/* Balance Due */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-red-500/30 transition-colors">
-          <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-transparent to-transparent pointer-events-none" />
+        <Card className="fuel-card bg-slate-800/60 border-slate-700/50 text-white relative overflow-hidden group hover:border-red-500/30">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-red-500/5 to-transparent pointer-events-none" />
           <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center justify-between">
               <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Balance Due</CardDescription>
@@ -752,7 +752,7 @@ export function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-bold">{formatKsh(totalBalanceDue)}</div>
+            <div className="text-2xl font-bold metric-value animate-count-up" style={{ animationDelay: '240ms' }}>{formatKsh(totalBalanceDue)}</div>
             <div className="flex items-center gap-1 mt-1">
               {totalBalanceDue > 0 && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Overdue</Badge>}
               <span className="text-xs text-slate-400">{clientsArr.length} clients</span>
@@ -1197,7 +1197,7 @@ export function Dashboard() {
       {/* ── Quick Actions (Enhanced) ───────────────────────────────────── */}
       <Card className="bg-slate-800/60 border-slate-700/50 text-white backdrop-blur-sm">
         <CardContent className="py-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
             <button
               onClick={() => dispatchTab('pos')}
               className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-600/5 border border-blue-500/20 hover:from-blue-500/25 hover:to-blue-600/10 hover:border-blue-500/40 hover:scale-105 transition-all duration-200"
@@ -1255,6 +1255,22 @@ export function Dashboard() {
             >
               <Wallet className="size-5 text-orange-400 group-hover:text-orange-300 transition-colors" />
               <span className="text-[10px] font-medium text-orange-300 group-hover:text-orange-200 transition-colors">Add Expense</span>
+            </button>
+            {/* NEW: Fuel Orders */}
+            <button
+              onClick={() => dispatchTab('fuel-orders')}
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-teal-500/15 to-teal-600/5 border border-teal-500/20 hover:from-teal-500/25 hover:to-teal-600/10 hover:border-teal-500/40 hover:scale-105 transition-all duration-200"
+            >
+              <Truck className="size-5 text-teal-400 group-hover:text-teal-300 transition-colors" />
+              <span className="text-[10px] font-medium text-teal-300 group-hover:text-teal-200 transition-colors">Fuel Orders</span>
+            </button>
+            {/* NEW: Profit Calculator */}
+            <button
+              onClick={() => dispatchTab('profit-calc')}
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-gradient-to-br from-lime-500/15 to-lime-600/5 border border-lime-500/20 hover:from-lime-500/25 hover:to-lime-600/10 hover:border-lime-500/40 hover:scale-105 transition-all duration-200"
+            >
+              <BarChart3 className="size-5 text-lime-400 group-hover:text-lime-300 transition-colors" />
+              <span className="text-[10px] font-medium text-lime-300 group-hover:text-lime-200 transition-colors">Profit Calc</span>
             </button>
           </div>
         </CardContent>

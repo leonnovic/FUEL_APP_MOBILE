@@ -34,6 +34,9 @@ import {
   Wrench,
   Receipt,
   Monitor,
+  Calculator,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -86,6 +89,9 @@ const moreTabs = [
   { id: 'maintenance', label: 'Maintain', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Prices', icon: Monitor },
+  { id: 'fuel-orders', label: 'Orders', icon: ClipboardList },
+  { id: 'profit-calc', label: 'Profit', icon: Calculator },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
