@@ -43,9 +43,12 @@ model Station {
   deliveries  Delivery[]
   reconciliations Reconciliation[]
   expenses    Expense[]
-  invoices    Invoice[]
-  employees   Employee[]
-  documents   Document[]
+  invoices         Invoice[]
+  employees        Employee[]
+  documents        Document[]
+  mpesaTransactions MpesaTransaction[]
+  debts             Debt[]
+  pumps             Pump[]
 }
 
 model StationMember {
@@ -281,4 +284,85 @@ model Document {
   updatedAt   DateTime @updatedAt
 
   station     Station? @relation(fields: [stationId], references: [id])
+}
+
+model MpesaTransaction {
+  id              String   @id @default(cuid())
+  phoneNumber     String   // +254 format
+  amount          Float
+  receiptNumber   String?  // M-Pesa receipt e.g. QKR3L5M7X9
+  checkoutRequestId String?
+  status          String   @default("pending") // pending, success, failed, cancelled
+  resultDesc      String?
+  stationId       String?
+  saleId          String?  // Link to sale if created from sale
+  merchantRequestId String?
+  initiatedAt     DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  station         Station? @relation(fields: [stationId], references: [id])
+}
+
+model Debt {
+  id            String   @id @default(cuid())
+  customerName  String
+  customerPhone String?
+  amount        Float    // outstanding amount in KES
+  fuelType      String?  // Petrol, Diesel, Kerosene
+  stationId     String?
+  status        String   @default("pending") // pending, partial, paid
+  tillNumber    String?  // M-Pesa till for payment
+  bankName      String?
+  branchName    String?
+  accountHolder String?
+  accountNumber String?
+  contactMethod String?  // phone, email, sms
+  contactDetail String?  // actual phone/email
+  dueDate       DateTime?
+  notes         String?
+  paidAmount    Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  station       Station? @relation(fields: [stationId], references: [id])
+}
+
+model Pump {
+  id              String   @id @default(cuid())
+  stationId       String
+  pumpLabel       String   // e.g. "Pump 1", "Pump A"
+  fuelType        String   // Petrol, Diesel, Kerosene
+  openingReading  Float    @default(0)  // in KES
+  closingReading  Float    @default(0)  // in KES
+  openingLiters   Float    @default(0)  // in Liters
+  closingLiters   Float    @default(0)  // in Liters
+  salesKsh        Float    @default(0)  // calculated: closing - opening in KES
+  salesLiters     Float    @default(0)  // calculated: closing - opening in L
+  shiftId         String?  // link to shift
+  status          String   @default("idle") // idle, active, closed
+  lastResetAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  station         Station  @relation(fields: [stationId], references: [id])
+}
+
+model CompanyProfile {
+  id            String   @id @default(cuid())
+  name          String   @default("FuelPro")
+  logo          String?  // base64 or URL
+  poBox         String?
+  contacts      String?  // phone numbers
+  email         String?
+  bankName      String?
+  branchName    String?
+  accountHolder String?
+  accountNumber String?
+  currency      String   @default("KES")
+  taxRate       Float    @default(16)  // VAT %
+  receiptFooter String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

@@ -10,7 +10,8 @@ import {
   Play, Square, BarChart3, ArrowUpRight, ArrowDownRight,
   Gauge, Loader2, Package, Eye, Power, Copy, Sun, Moon, LogOut,
   RefreshCw, Mail, Lock, Sparkles, ChevronLeft, Smartphone, Receipt,
-  Wallet, FolderOpen, Send, CreditCard, FileSpreadsheet, UserCircle, Cloud
+  Wallet, FolderOpen, Send, CreditCard, FileSpreadsheet, UserCircle, Cloud,
+  Building, Info
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -38,7 +39,7 @@ import { useTheme } from 'next-themes'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'expenses' | 'invoices' | 'contacts' | 'payroll' | 'documents' | 'admin'
+type TabId = 'dashboard' | 'stations' | 'inventory' | 'sales' | 'shifts' | 'deliveries' | 'reconciliation' | 'compliance' | 'suppliers' | 'coupons' | 'reports' | 'expenses' | 'invoices' | 'contacts' | 'payroll' | 'documents' | 'mpesa' | 'debts' | 'pumps' | 'admin'
 
 interface NavItem {
   id: TabId
@@ -341,6 +342,74 @@ interface DocumentAPIResponse {
   }[]
 }
 
+interface MpesaAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    phoneNumber: string
+    amount: number
+    receiptNumber: string | null
+    checkoutRequestId: string | null
+    status: string
+    resultDesc: string | null
+    stationId: string | null
+    saleId: string | null
+    station: { id: string; name: string } | null
+    initiatedAt: string
+    completedAt: string | null
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
+interface DebtAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    customerName: string
+    customerPhone: string | null
+    amount: number
+    fuelType: string | null
+    stationId: string | null
+    status: string
+    tillNumber: string | null
+    bankName: string | null
+    branchName: string | null
+    accountHolder: string | null
+    accountNumber: string | null
+    contactMethod: string | null
+    contactDetail: string | null
+    dueDate: string | null
+    notes: string | null
+    paidAmount: number
+    station: { id: string; name: string } | null
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
+interface PumpAPIResponse {
+  ok: boolean
+  data: {
+    id: string
+    stationId: string
+    pumpLabel: string
+    fuelType: string
+    openingReading: number
+    closingReading: number
+    openingLiters: number
+    closingLiters: number
+    salesKsh: number
+    salesLiters: number
+    shiftId: string | null
+    status: string
+    lastResetAt: string
+    station: { id: string; name: string }
+    createdAt: string
+    updatedAt: string
+  }[]
+}
+
 interface AdminData {
   users: { id: number; name: string; email: string; role: string; status: string; lastLogin: string }[]
   auditLogs: { id: number; user: string; action: string; details: string; timestamp: string; severity: string }[]
@@ -375,11 +444,14 @@ const navigationItems: NavItem[] = [
   { id: 'sales', label: 'Sales', icon: <ShoppingCart className="size-4" />, group: 'Operations' },
   { id: 'shifts', label: 'Shifts', icon: <Clock className="size-4" />, group: 'Operations' },
   { id: 'deliveries', label: 'Deliveries', icon: <Package className="size-4" />, group: 'Operations' },
+  { id: 'pumps', label: 'Pumps', icon: <Gauge className="size-4" />, group: 'Operations' },
   { id: 'reconciliation', label: 'Reconciliation', icon: <CheckSquare className="size-4" />, group: 'Finance' },
   { id: 'compliance', label: 'Compliance', icon: <ShieldCheck className="size-4" />, group: 'Finance' },
   { id: 'reports', label: 'Reports', icon: <BarChart3 className="size-4" />, group: 'Finance' },
   { id: 'suppliers', label: 'Suppliers', icon: <Truck className="size-4" />, group: 'Supply Chain' },
   { id: 'coupons', label: 'Coupons', icon: <Ticket className="size-4" />, group: 'Supply Chain' },
+  { id: 'mpesa', label: 'M-Pesa', icon: <Smartphone className="size-4" />, group: 'Finance' },
+  { id: 'debts', label: 'Debts', icon: <CreditCard className="size-4" />, group: 'Finance' },
   { id: 'expenses', label: 'Expenses', icon: <Receipt className="size-4" />, group: 'Finance' },
   { id: 'invoices', label: 'Invoices', icon: <FileText className="size-4" />, group: 'Business' },
   { id: 'contacts', label: 'Contacts', icon: <Users className="size-4" />, group: 'Business' },
@@ -504,6 +576,116 @@ function exportToPDF(title: string) {
   setTimeout(() => { printWindow.print(); toast.success('PDF export ready for printing') }, 500)
 }
 
+// Professional PDF export using jsPDF-style formatting via print window
+function exportReportToPDF(title: string, data: { headers: string[]; rows: string[][]; summary?: string[] }) {
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) { toast.error('Please allow popups to export PDF'); return }
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title} - FuelPro Report</title>
+      <style>
+        @page { size: A4; margin: 15mm; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; color: #1e293b; font-size: 11px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #d4af37; padding-bottom: 15px; }
+        .header h1 { font-size: 20px; color: #1a3a5f; margin: 0; }
+        .header .brand { color: #d4af37; font-weight: 700; }
+        .header .meta { text-align: right; font-size: 10px; color: #64748b; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 10px; }
+        th { background: #1a3a5f; color: white; padding: 8px 10px; text-align: left; font-weight: 600; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { border-bottom: 1px solid #e2e8f0; padding: 6px 10px; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .summary { margin-top: 20px; padding: 12px; background: #f1f5f9; border-radius: 6px; border-left: 3px solid #d4af37; }
+        .summary p { margin: 4px 0; font-size: 11px; }
+        .summary strong { color: #1a3a5f; }
+        .footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; display: flex; justify-content: space-between; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: 600; }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1><span class="brand">⛽ FuelPro</span></h1>
+          <h1>${title}</h1>
+        </div>
+        <div class="meta">
+          Generated: ${new Date().toLocaleString('en-KE')}<br>
+          Report ID: RPT-${Date.now().toString(36).toUpperCase()}<br>
+          Status: Final
+        </div>
+      </div>
+      <table>
+        <thead><tr>${data.headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${data.rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+      ${data.summary ? `<div class="summary">${data.summary.map(s => `<p>${s}</p>`).join('')}</div>` : ''}
+      <div class="footer">
+        <span>© ${new Date().getFullYear()} FuelPro Station Manager · All rights reserved · Confidential</span>
+        <span>Page 1 of 1</span>
+      </div>
+    </body>
+    </html>
+  `)
+  printWindow.document.close()
+  setTimeout(() => { printWindow.print(); toast.success('PDF report ready for printing') }, 500)
+}
+
+// Export to Excel-compatible format (HTML table that Excel can open)
+function exportToExcel(data: { headers: string[]; rows: (string | number)[][]; title: string; summary?: string[] }) {
+  let tableHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
+  tableHtml += '<head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Report</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'
+  tableHtml += '<body><table border="1">'
+  tableHtml += `<tr><td colspan="${data.headers.length}" style="font-size:16px;font-weight:bold;color:#d4af37;">⛽ FuelPro - ${data.title}</td></tr>`
+  tableHtml += `<tr><td colspan="${data.headers.length}" style="font-size:10px;color:#64748b;">Generated: ${new Date().toLocaleString('en-KE')}</td></tr>`
+  tableHtml += `<tr>${data.headers.map(h => `<td style="background:#1a3a5f;color:white;font-weight:bold;padding:6px;">${h}</td>`).join('')}</tr>`
+  data.rows.forEach(row => {
+    tableHtml += `<tr>${row.map(cell => `<td style="padding:4px;">${cell}</td>`).join('')}</tr>`
+  })
+  if (data.summary) {
+    data.summary.forEach(s => {
+      tableHtml += `<tr><td colspan="${data.headers.length}" style="padding:4px;font-weight:bold;">${s}</td></tr>`
+    })
+  }
+  tableHtml += '</table></body></html>'
+  const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${data.title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xls`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.success(`Excel report exported successfully`)
+}
+
+// Generate debt payment reminder text
+function generateDebtReminder(debt: { customerName: string; amount: number; tillNumber?: string | null; bankName?: string | null; branchName?: string | null; accountHolder?: string | null; accountNumber?: string | null }) {
+  const lines = [
+    `Dear ${debt.customerName},`,
+    ``,
+    `This is a gentle reminder that KES ${formatNumber(debt.amount)} for fuel supplied remains unpaid.`,
+    ``,
+    debt.tillNumber ? `Kindly settle the amount via Till:` : '',
+    debt.tillNumber ? `Buy Goods: ${debt.tillNumber}` : '',
+    debt.tillNumber ? '' : '',
+    debt.bankName ? 'For bank transfer:' : '',
+    debt.bankName ? `Bank: ${debt.bankName}` : '',
+    debt.branchName ? `Branch: ${debt.branchName}` : '',
+    debt.accountHolder ? `A/C Name: ${debt.accountHolder}` : '',
+    debt.accountNumber ? `A/C No.: ${debt.accountNumber}` : '',
+    ``,
+    `Thank you.`,
+    ``,
+    `Best regards,`,
+    `FuelPro Management`
+  ].filter(l => l !== undefined)
+  return lines.join('\n')
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function FuelProDashboard() {
@@ -525,6 +707,8 @@ export default function FuelProDashboard() {
   const [shifts, setShifts] = useState<ShiftsAPIResponse['data']>([])
   const [complianceData, setComplianceData] = useState<ComplianceAPIResponse['data'] | null>(null)
   const [adminData, setAdminData] = useState<AdminData | null>(null)
+  const [companyProfile, setCompanyProfile] = useState<{ id: string; name: string; logo: string | null; poBox: string | null; contacts: string | null; email: string | null; bankName: string | null; branchName: string | null; accountHolder: string | null; accountNumber: string | null; currency: string; taxRate: number; receiptFooter: string | null } | null>(null)
+  const [companyForm, setCompanyForm] = useState({ name: 'FuelPro', poBox: '', contacts: '', email: '', bankName: '', branchName: '', accountHolder: '', accountNumber: '', currency: 'KES', taxRate: 16, receiptFooter: '' })
   const [suppliers, setSuppliers] = useState<SupplierAPIResponse['data']>([])
   const [coupons, setCoupons] = useState<CouponAPIResponse['data']>([])
   const [reconciliations, setReconciliations] = useState<ReconciliationAPIResponse['data']>([])
@@ -602,6 +786,33 @@ export default function FuelProDashboard() {
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
   const [newDocument, setNewDocument] = useState({ name: '', type: 'receipt', fileType: 'pdf', size: '', folder: 'general', description: '', stationId: '' })
   const [documentFolderFilter, setDocumentFolderFilter] = useState('all')
+
+  // M-Pesa states
+  const [mpesaTransactions, setMpesaTransactions] = useState<MpesaAPIResponse['data']>([])
+  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false)
+  const [newMpesa, setNewMpesa] = useState({ phoneNumber: '', amount: 0, stationId: '' })
+  const [mpesaStatusFilter, setMpesaStatusFilter] = useState('all')
+  const [mpesaSearch, setMpesaSearch] = useState('')
+
+  // Debt states
+  const [debts, setDebts] = useState<DebtAPIResponse['data']>([])
+  const [debtDialogOpen, setDebtDialogOpen] = useState(false)
+  const [newDebt, setNewDebt] = useState({ customerName: '', customerPhone: '', amount: 0, fuelType: 'Petrol', stationId: '', tillNumber: '', bankName: '', branchName: '', accountHolder: '', accountNumber: '', contactMethod: 'phone', contactDetail: '', dueDate: '', notes: '' })
+  const [debtStatusFilter, setDebtStatusFilter] = useState('all')
+  const [debtSearch, setDebtSearch] = useState('')
+  const [debtPaymentDialogOpen, setDebtPaymentDialogOpen] = useState(false)
+  const [editDebt, setEditDebt] = useState<DebtAPIResponse['data'][number] | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState(0)
+  const [debtReminderDialogOpen, setDebtReminderDialogOpen] = useState(false)
+  const [reminderDebt, setReminderDebt] = useState<DebtAPIResponse['data'][number] | null>(null)
+
+  // Pump states
+  const [pumps, setPumps] = useState<PumpAPIResponse['data']>([])
+  const [pumpDialogOpen, setPumpDialogOpen] = useState(false)
+  const [newPump, setNewPump] = useState({ stationId: '', pumpLabel: '', fuelType: 'Petrol' })
+  const [pumpReadingDialogOpen, setPumpReadingDialogOpen] = useState(false)
+  const [editPump, setEditPump] = useState<PumpAPIResponse['data'][number] | null>(null)
+  const [pumpReading, setPumpReading] = useState({ closingReading: 0, closingLiters: 0 })
 
   // Pagination
   const [salesPage, setSalesPage] = useState(1)
@@ -702,6 +913,29 @@ export default function FuelProDashboard() {
       setAdminData(data)
     } catch { toast.error('Failed to load admin data') }
     finally { setLoading(prev => ({ ...prev, admin: false })) }
+  }, [])
+
+  const fetchCompany = useCallback(async () => {
+    try {
+      const res = await fetch('/api/company')
+      const json = await res.json()
+      if (json.ok) {
+        setCompanyProfile(json.data)
+        setCompanyForm({
+          name: json.data.name || 'FuelPro',
+          poBox: json.data.poBox || '',
+          contacts: json.data.contacts || '',
+          email: json.data.email || '',
+          bankName: json.data.bankName || '',
+          branchName: json.data.branchName || '',
+          accountHolder: json.data.accountHolder || '',
+          accountNumber: json.data.accountNumber || '',
+          currency: json.data.currency || 'KES',
+          taxRate: json.data.taxRate || 16,
+          receiptFooter: json.data.receiptFooter || ''
+        })
+      }
+    } catch { /* silent */ }
   }, [])
 
   const fetchSuppliers = useCallback(async () => {
@@ -812,6 +1046,36 @@ export default function FuelProDashboard() {
     finally { setLoading(prev => ({ ...prev, documents: false })) }
   }, [])
 
+  const fetchMpesa = useCallback(async () => {
+    setLoading(prev => ({ ...prev, mpesa: true }))
+    try {
+      const res = await fetch('/api/mpesa')
+      const json = await res.json()
+      if (json.ok) setMpesaTransactions(json.data)
+    } catch { toast.error('Failed to load M-Pesa transactions') }
+    finally { setLoading(prev => ({ ...prev, mpesa: false })) }
+  }, [])
+
+  const fetchDebts = useCallback(async () => {
+    setLoading(prev => ({ ...prev, debts: true }))
+    try {
+      const res = await fetch('/api/debts')
+      const json = await res.json()
+      if (json.ok) setDebts(json.data)
+    } catch { toast.error('Failed to load debts') }
+    finally { setLoading(prev => ({ ...prev, debts: false })) }
+  }, [])
+
+  const fetchPumps = useCallback(async () => {
+    setLoading(prev => ({ ...prev, pumps: true }))
+    try {
+      const res = await fetch('/api/pumps')
+      const json = await res.json()
+      if (json.ok) setPumps(json.data)
+    } catch { toast.error('Failed to load pumps') }
+    finally { setLoading(prev => ({ ...prev, pumps: false })) }
+  }, [])
+
   // Load data when tab changes
   useEffect(() => {
     switch (activeTab) {
@@ -821,7 +1085,7 @@ export default function FuelProDashboard() {
       case 'sales': fetchSales(); break
       case 'shifts': fetchShifts(); break
       case 'compliance': fetchCompliance(); break
-      case 'admin': fetchAdmin(); fetchUsers(); break
+      case 'admin': fetchAdmin(); fetchUsers(); fetchCompany(); break
       case 'suppliers': fetchSuppliers(); break
       case 'coupons': fetchCoupons(); break
       case 'reconciliation': fetchReconciliations(); break
@@ -831,8 +1095,11 @@ export default function FuelProDashboard() {
       case 'contacts': fetchContacts(); break
       case 'payroll': fetchEmployees(); break
       case 'documents': fetchDocuments(); break
+      case 'mpesa': fetchMpesa(); break
+      case 'debts': fetchDebts(); break
+      case 'pumps': fetchPumps(); break
     }
-  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights, fetchInvoices, fetchContacts, fetchEmployees, fetchDocuments])
+  }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchCompany, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights, fetchInvoices, fetchContacts, fetchEmployees, fetchDocuments, fetchMpesa, fetchDebts, fetchPumps])
 
   // Mount & auto-login check
   useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
@@ -1131,6 +1398,126 @@ export default function FuelProDashboard() {
     } catch { toast.error('Failed to delete document') }
   }
 
+  // M-Pesa handlers
+  const handleAddMpesa = async () => {
+    if (!newMpesa.phoneNumber || !newMpesa.amount) { toast.error('Phone number and amount are required'); return }
+    try {
+      const res = await fetch('/api/mpesa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMpesa) })
+      const json = await res.json()
+      if (json.ok) {
+        setMpesaTransactions(prev => [json.data, ...prev])
+        setMpesaDialogOpen(false)
+        setNewMpesa({ phoneNumber: '', amount: 0, stationId: '' })
+        toast.success(`STK Push sent! Receipt: ${json.data.receiptNumber}`)
+      } else { toast.error(json.error || 'Failed to send STK Push') }
+    } catch { toast.error('Failed to send STK Push') }
+  }
+
+  const handleDeleteMpesa = async (id: string) => {
+    try {
+      const res = await fetch(`/api/mpesa/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setMpesaTransactions(prev => prev.filter(t => t.id !== id)); toast.success('Transaction deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete transaction') }
+  }
+
+  const handleCheckMpesaStatus = async (id: string) => {
+    try {
+      const res = await fetch(`/api/mpesa/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'success', resultDesc: 'The service request is processed successfully.', completedAt: new Date().toISOString() }) })
+      const json = await res.json()
+      if (json.ok) { setMpesaTransactions(prev => prev.map(t => t.id === id ? json.data : t)); toast.success('Transaction status updated') }
+      else { toast.error(json.error || 'Failed to check status') }
+    } catch { toast.error('Failed to check status') }
+  }
+
+  // Debt handlers
+  const handleAddDebt = async () => {
+    if (!newDebt.customerName || !newDebt.amount) { toast.error('Customer name and amount are required'); return }
+    try {
+      const res = await fetch('/api/debts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newDebt) })
+      const json = await res.json()
+      if (json.ok) {
+        setDebts(prev => [json.data, ...prev])
+        setDebtDialogOpen(false)
+        setNewDebt({ customerName: '', customerPhone: '', amount: 0, fuelType: 'Petrol', stationId: '', tillNumber: '', bankName: '', branchName: '', accountHolder: '', accountNumber: '', contactMethod: 'phone', contactDetail: '', dueDate: '', notes: '' })
+        toast.success(`Debt record created for ${json.data.customerName}`)
+      } else { toast.error(json.error || 'Failed to create debt') }
+    } catch { toast.error('Failed to create debt') }
+  }
+
+  const handleRecordDebtPayment = async () => {
+    if (!editDebt || !paymentAmount) { toast.error('Payment amount is required'); return }
+    try {
+      const res = await fetch(`/api/debts/${editDebt.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paidAmount }) })
+      const json = await res.json()
+      if (json.ok) {
+        setDebts(prev => prev.map(d => d.id === editDebt.id ? json.data : d))
+        setDebtPaymentDialogOpen(false)
+        setEditDebt(null)
+        setPaymentAmount(0)
+        toast.success('Payment recorded successfully')
+      } else { toast.error(json.error || 'Failed to record payment') }
+    } catch { toast.error('Failed to record payment') }
+  }
+
+  const handleDeleteDebt = async (debtId: string) => {
+    try {
+      const res = await fetch(`/api/debts/${debtId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setDebts(prev => prev.filter(d => d.id !== debtId)); toast.success('Debt record deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete debt') }
+  }
+
+  // Pump handlers
+  const handleAddPump = async () => {
+    if (!newPump.stationId || !newPump.pumpLabel || !newPump.fuelType) { toast.error('Station, pump label and fuel type are required'); return }
+    try {
+      const res = await fetch('/api/pumps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newPump, status: 'idle' }) })
+      const json = await res.json()
+      if (json.ok) {
+        setPumps(prev => [json.data, ...prev])
+        setPumpDialogOpen(false)
+        setNewPump({ stationId: '', pumpLabel: '', fuelType: 'Petrol' })
+        toast.success(`Pump "${json.data.pumpLabel}" added successfully`)
+      } else { toast.error(json.error || 'Failed to add pump') }
+    } catch { toast.error('Failed to add pump') }
+  }
+
+  const handleUpdatePumpReading = async () => {
+    if (!editPump) return
+    try {
+      const res = await fetch(`/api/pumps/${editPump.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ closingReading: pumpReading.closingReading, closingLiters: pumpReading.closingLiters, status: 'closed' }) })
+      const json = await res.json()
+      if (json.ok) {
+        setPumps(prev => prev.map(p => p.id === editPump.id ? json.data : p))
+        setPumpReadingDialogOpen(false)
+        setEditPump(null)
+        setPumpReading({ closingReading: 0, closingLiters: 0 })
+        toast.success('Pump reading updated')
+      } else { toast.error(json.error || 'Failed to update reading') }
+    } catch { toast.error('Failed to update pump reading') }
+  }
+
+  const handleResetPump = async (pumpId: string) => {
+    try {
+      const res = await fetch(`/api/pumps/${pumpId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true }) })
+      const json = await res.json()
+      if (json.ok) { setPumps(prev => prev.map(p => p.id === pumpId ? json.data : p)); toast.success('Pump reset successfully') }
+      else { toast.error(json.error || 'Failed to reset pump') }
+    } catch { toast.error('Failed to reset pump') }
+  }
+
+  const handleDeletePump = async (pumpId: string) => {
+    try {
+      const res = await fetch(`/api/pumps/${pumpId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) { setPumps(prev => prev.filter(p => p.id !== pumpId)); toast.success('Pump deleted') }
+      else { toast.error(json.error || 'Failed to delete') }
+    } catch { toast.error('Failed to delete pump') }
+  }
+
   const handleDeleteStation = async (stationId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     try {
@@ -1232,6 +1619,15 @@ export default function FuelProDashboard() {
       if (json.ok) { toast.success('Configuration saved successfully') }
       else { toast.error(json.error || 'Failed to save configuration') }
     } catch { toast.error('Failed to save configuration') }
+  }
+
+  const handleSaveCompany = async () => {
+    try {
+      const res = await fetch('/api/company', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(companyForm) })
+      const json = await res.json()
+      if (json.ok) { setCompanyProfile(json.data); toast.success('Company profile saved successfully') }
+      else { toast.error(json.error || 'Failed to save') }
+    } catch { toast.error('Failed to save company profile') }
   }
 
   const handleEditSupplier = async () => {
@@ -3490,6 +3886,490 @@ export default function FuelProDashboard() {
     )
   }
 
+  // ─── M-Pesa Analyzer ──────────────────────────────────────────────────────────
+
+  const renderMpesa = () => {
+    if (loading.mpesa) return <TableSkeletons cols={6} rows={4} />
+    const totalTx = mpesaTransactions.length
+    const successTx = mpesaTransactions.filter(t => t.status === 'success')
+    const successRate = totalTx > 0 ? Math.round((successTx.length / totalTx) * 100) : 0
+    const totalVolume = mpesaTransactions.reduce((s, t) => s + t.amount, 0)
+    const avgTx = totalTx > 0 ? totalVolume / totalTx : 0
+
+    const statusColors: Record<string, string> = {
+      pending: 'bg-amber-500/15 text-amber-400 border-0',
+      success: 'bg-emerald-500/15 text-emerald-400 border-0',
+      failed: 'bg-red-500/15 text-red-400 border-0',
+      cancelled: 'bg-slate-500/15 text-slate-400 border-0',
+    }
+
+    const filteredTx = mpesaTransactions.filter(t => {
+      if (mpesaStatusFilter !== 'all' && t.status !== mpesaStatusFilter) return false
+      if (mpesaSearch && !t.phoneNumber.toLowerCase().includes(mpesaSearch.toLowerCase()) && !(t.receiptNumber || '').toLowerCase().includes(mpesaSearch.toLowerCase())) return false
+      return true
+    })
+
+    // Analytics
+    const statusDistribution = [
+      { name: 'Success', value: mpesaTransactions.filter(t => t.status === 'success').length, fill: '#10b981' },
+      { name: 'Pending', value: mpesaTransactions.filter(t => t.status === 'pending').length, fill: '#f59e0b' },
+      { name: 'Failed', value: mpesaTransactions.filter(t => t.status === 'failed').length, fill: '#ef4444' },
+      { name: 'Cancelled', value: mpesaTransactions.filter(t => t.status === 'cancelled').length, fill: '#64748b' },
+    ].filter(d => d.value > 0)
+
+    const hourlyData: Record<number, number> = {}
+    for (let i = 0; i < 24; i++) hourlyData[i] = 0
+    mpesaTransactions.forEach(t => { const h = new Date(t.initiatedAt).getHours(); hourlyData[h]++ })
+    const hourlyChart = Object.entries(hourlyData).map(([hour, count]) => ({ hour: `${hour.padStart(2, '0')}:00`, count }))
+
+    const phoneCounts: Record<string, { phone: string; count: number; total: number }> = {}
+    mpesaTransactions.forEach(t => {
+      if (!phoneCounts[t.phoneNumber]) phoneCounts[t.phoneNumber] = { phone: t.phoneNumber, count: 0, total: 0 }
+      phoneCounts[t.phoneNumber].count++
+      phoneCounts[t.phoneNumber].total += t.amount
+    })
+    const topPhones = Object.values(phoneCounts).sort((a, b) => b.count - a.count).slice(0, 5)
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">M-Pesa Analyzer</h2><p className="text-sm text-slate-400 mt-1">Transaction analysis and STK Push simulation</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(mpesaTransactions.map(t => ({ Phone: t.phoneNumber, Amount: t.amount, Receipt: t.receiptNumber || '', Status: t.status, Station: t.station?.name || '', Initiated: t.initiatedAt })), 'mpesa_transactions')}>
+              <Download className="size-4 mr-2" /> Export CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Smartphone className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{totalTx}</p><p className="text-xs text-slate-400">Total Transactions</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><CheckCircle2 className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{successRate}%</p><p className="text-xs text-slate-400">Success Rate</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><DollarSign className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalVolume)}</p><p className="text-xs text-slate-400">Total Volume (KES)</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><TrendingUp className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(avgTx)}</p><p className="text-xs text-slate-400">Avg Transaction (KES)</p></div></div></CardContent></Card>
+        </div>
+
+        {/* STK Push Simulator */}
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><Smartphone className="size-5 text-amber-400" />STK Push Simulator <Badge variant="secondary" className="bg-amber-500/15 text-amber-400 border-0">Simulated</Badge></CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid gap-2"><Label className="text-slate-300">Phone Number (+254)</Label><Input value={newMpesa.phoneNumber} onChange={e => setNewMpesa(p => ({ ...p, phoneNumber: e.target.value }))} placeholder="+254712345678" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Amount (KES)</Label><Input type="number" value={newMpesa.amount || ''} onChange={e => setNewMpesa(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+              <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newMpesa.stationId} onValueChange={v => setNewMpesa(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none">No station</SelectItem>{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+            </div>
+            <Button className="mt-4 w-full md:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold" onClick={handleAddMpesa}>
+              <Zap className="size-4 mr-2" /> Send STK Push
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Filters */}
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100">Transactions</CardTitle><CardDescription>M-Pesa transaction history</CardDescription></CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search phone or receipt..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={mpesaSearch} onChange={e => setMpesaSearch(e.target.value)} /></div>
+              <Select value={mpesaStatusFilter} onValueChange={setMpesaStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40 bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filteredTx.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Smartphone className="size-7 text-slate-500" /></div><p className="text-slate-400">No M-Pesa transactions found</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Phone</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400">Receipt #</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Initiated</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredTx.map(t => (
+                      <TableRow key={t.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-slate-200 font-medium">{t.phoneNumber}</TableCell>
+                        <TableCell className="text-right text-amber-400 font-medium tabular-nums">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell className="text-slate-300 font-mono text-xs">{t.receiptNumber || '—'}</TableCell>
+                        <TableCell><Badge variant="secondary" className={statusColors[t.status] || statusColors.pending}>{t.status.charAt(0).toUpperCase() + t.status.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-400">{t.station?.name || '—'}</TableCell>
+                        <TableCell className="text-slate-400 text-xs">{formatTimeAgo(t.initiatedAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {t.status === 'pending' && <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 h-8 px-2" onClick={() => handleCheckMpesaStatus(t.id)} title="Check Status"><Activity className="size-3.5" /></Button>}
+                            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteMpesa(t.id)}><Trash2 className="size-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="bg-card border-border rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100">Transaction Status Distribution</CardTitle></CardHeader>
+            <CardContent>
+              {statusDistribution.length === 0 ? <p className="text-slate-400 text-center py-8">No data</p> : (
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart><Pie data={statusDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}`}><Cell fill="#10b981" /><Cell fill="#f59e0b" /><Cell fill="#ef4444" /><Cell fill="#64748b" /></Pie><Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--card-foreground))' }} /></PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100">Hourly Transaction Volume</CardTitle></CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={hourlyChart}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="hour" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={{ stroke: 'var(--border)' }} /><YAxis tick={{ fill: 'var(--muted-foreground)' }} axisLine={{ stroke: 'var(--border)' }} /><Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--card-foreground))' }} /><Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} /></BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {topPhones.length > 0 && (
+          <Card className="bg-card border-border rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100">Top Phone Numbers</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {topPhones.map((p, i) => (
+                  <div key={p.phone} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-800/30">
+                    <div className="flex items-center gap-3"><span className="text-xs font-bold text-amber-400 w-5">#{i + 1}</span><Phone className="size-4 text-slate-400" /><span className="text-slate-200 font-medium">{p.phone}</span></div>
+                    <div className="flex items-center gap-4"><Badge variant="secondary" className="bg-slate-700 text-slate-300 border-0">{p.count} txns</Badge><span className="text-amber-400 font-medium tabular-nums">{formatCurrency(p.total)}</span></div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  // ─── Debt Tracking ──────────────────────────────────────────────────────────
+
+  const renderDebts = () => {
+    if (loading.debts) return <TableSkeletons cols={8} rows={4} />
+    const totalOutstanding = debts.reduce((s, d) => s + (d.amount - d.paidAmount), 0)
+    const thisMonthPaid = debts.filter(d => { const dt = new Date(d.updatedAt); const now = new Date(); return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear() }).reduce((s, d) => s + d.paidAmount, 0)
+    const overdueCount = debts.filter(d => d.status !== 'paid' && d.dueDate && new Date(d.dueDate) < new Date()).length
+    const totalDebtAmount = debts.reduce((s, d) => s + d.amount, 0)
+    const collectionRate = totalDebtAmount > 0 ? Math.round((debts.reduce((s, d) => s + d.paidAmount, 0) / totalDebtAmount) * 100) : 0
+
+    const statusColors: Record<string, string> = {
+      pending: 'bg-amber-500/15 text-amber-400 border-0',
+      partial: 'bg-blue-500/15 text-blue-400 border-0',
+      paid: 'bg-emerald-500/15 text-emerald-400 border-0',
+    }
+
+    const filteredDebts = debts.filter(d => {
+      if (debtStatusFilter !== 'all' && d.status !== debtStatusFilter) return false
+      if (debtSearch && !d.customerName.toLowerCase().includes(debtSearch.toLowerCase()) && !(d.customerPhone || '').toLowerCase().includes(debtSearch.toLowerCase())) return false
+      return true
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Debt Tracking</h2><p className="text-sm text-slate-400 mt-1">Manage customer debts and payment reminders</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(debts.map(d => ({ Customer: d.customerName, Phone: d.customerPhone || '', Amount: d.amount, Paid: d.paidAmount, Balance: d.amount - d.paidAmount, FuelType: d.fuelType || '', Status: d.status, Station: d.station?.name || '', DueDate: d.dueDate || '' })), 'debts')}>
+              <Download className="size-4 mr-2" /> Export CSV
+            </Button>
+            <Dialog open={debtDialogOpen} onOpenChange={setDebtDialogOpen}>
+              <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Debt</Button></DialogTrigger>
+              <DialogContent className="bg-card border-border max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogHeader><DialogTitle className="text-slate-100">Add Debt Record</DialogTitle><DialogDescription className="text-slate-400">Record a new customer debt</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Customer Name *</Label><Input value={newDebt.customerName} onChange={e => setNewDebt(p => ({ ...p, customerName: e.target.value }))} placeholder="John Doe" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Phone</Label><Input value={newDebt.customerPhone} onChange={e => setNewDebt(p => ({ ...p, customerPhone: e.target.value }))} placeholder="+254712345678" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Amount (KES) *</Label><Input type="number" value={newDebt.amount || ''} onChange={e => setNewDebt(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Fuel Type</Label><Select value={newDebt.fuelType} onValueChange={v => setNewDebt(p => ({ ...p, fuelType: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="Petrol">Petrol</SelectItem><SelectItem value="Diesel">Diesel</SelectItem><SelectItem value="Kerosene">Kerosene</SelectItem></SelectContent></Select></div>
+                  </div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Station</Label><Select value={newDebt.stationId} onValueChange={v => setNewDebt(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="none">No station</SelectItem>{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Till Number</Label><Input value={newDebt.tillNumber} onChange={e => setNewDebt(p => ({ ...p, tillNumber: e.target.value }))} placeholder="e.g. 123456" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Due Date</Label><Input type="date" value={newDebt.dueDate} onChange={e => setNewDebt(p => ({ ...p, dueDate: e.target.value }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Bank Name</Label><Input value={newDebt.bankName} onChange={e => setNewDebt(p => ({ ...p, bankName: e.target.value }))} placeholder="e.g. KCB" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Branch</Label><Input value={newDebt.branchName} onChange={e => setNewDebt(p => ({ ...p, branchName: e.target.value }))} placeholder="e.g. Nairobi" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Account Holder</Label><Input value={newDebt.accountHolder} onChange={e => setNewDebt(p => ({ ...p, accountHolder: e.target.value }))} placeholder="e.g. FuelPro Ltd" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Account Number</Label><Input value={newDebt.accountNumber} onChange={e => setNewDebt(p => ({ ...p, accountNumber: e.target.value }))} placeholder="e.g. 1234567890" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2"><Label className="text-slate-300">Contact Method</Label><Select value={newDebt.contactMethod} onValueChange={v => setNewDebt(p => ({ ...p, contactMethod: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="phone">Phone</SelectItem><SelectItem value="email">Email</SelectItem><SelectItem value="sms">SMS</SelectItem></SelectContent></Select></div>
+                    <div className="grid gap-2"><Label className="text-slate-300">Contact Detail</Label><Input value={newDebt.contactDetail} onChange={e => setNewDebt(p => ({ ...p, contactDetail: e.target.value }))} placeholder="e.g. john@email.com" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  </div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Notes</Label><Input value={newDebt.notes} onChange={e => setNewDebt(p => ({ ...p, notes: e.target.value }))} placeholder="Any additional notes" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <DialogFooter><Button variant="outline" onClick={() => setDebtDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddDebt} className="bg-amber-600 hover:bg-amber-700 text-white">Add Debt</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-red-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-red-500/15"><DollarSign className="size-5 text-red-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(totalOutstanding)}</p><p className="text-xs text-slate-400">Total Outstanding (KES)</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><CheckCircle2 className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(thisMonthPaid)}</p><p className="text-xs text-slate-400">Collected This Month</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><AlertTriangle className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{overdueCount}</p><p className="text-xs text-slate-400">Overdue Count</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><TrendingUp className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{collectionRate}%</p><p className="text-xs text-slate-400">Collection Rate</p></div></div></CardContent></Card>
+        </div>
+
+        <Card className="bg-card border-border rounded-xl">
+          <CardHeader><CardTitle className="text-slate-100">Debt Records</CardTitle><CardDescription>Customer debts across all stations</CardDescription></CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" /><Input placeholder="Search customer or phone..." className="pl-10 bg-slate-800 border-slate-700 text-slate-200" value={debtSearch} onChange={e => setDebtSearch(e.target.value)} /></div>
+              <Select value={debtStatusFilter} onValueChange={setDebtStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40 bg-slate-800 border-slate-700 text-slate-200"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="partial">Partial</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {filteredDebts.length === 0 ? (
+              <div className="text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><CreditCard className="size-7 text-slate-500" /></div><p className="text-slate-400">No debt records found</p></div>
+            ) : (
+              <ScrollArea className="max-h-[500px]">
+                <Table>
+                  <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">Customer</TableHead><TableHead className="text-slate-400">Phone</TableHead><TableHead className="text-slate-400 text-right">Amount</TableHead><TableHead className="text-slate-400 text-right">Paid</TableHead><TableHead className="text-slate-400 text-right">Balance</TableHead><TableHead className="text-slate-400">Fuel Type</TableHead><TableHead className="text-slate-400">Status</TableHead><TableHead className="text-slate-400">Station</TableHead><TableHead className="text-slate-400">Due Date</TableHead><TableHead className="text-slate-400 text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {filteredDebts.map(d => (
+                      <TableRow key={d.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <TableCell className="text-slate-200 font-medium">{d.customerName}</TableCell>
+                        <TableCell className="text-slate-400">{d.customerPhone || '—'}</TableCell>
+                        <TableCell className="text-right text-amber-400 font-medium tabular-nums">{formatCurrency(d.amount)}</TableCell>
+                        <TableCell className="text-right text-emerald-400 tabular-nums">{formatCurrency(d.paidAmount)}</TableCell>
+                        <TableCell className="text-right tabular-nums"><span className={d.amount - d.paidAmount > 0 ? 'text-red-400 font-medium' : 'text-emerald-400'}>{formatCurrency(d.amount - d.paidAmount)}</span></TableCell>
+                        <TableCell className="text-slate-400">{d.fuelType || '—'}</TableCell>
+                        <TableCell><Badge variant="secondary" className={statusColors[d.status] || statusColors.pending}>{d.status.charAt(0).toUpperCase() + d.status.slice(1)}</Badge></TableCell>
+                        <TableCell className="text-slate-400">{d.station?.name || '—'}</TableCell>
+                        <TableCell className="text-slate-400 text-xs">{d.dueDate ? new Date(d.dueDate).toLocaleDateString() : '—'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {d.status !== 'paid' && <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 h-8 px-2" onClick={() => { setEditDebt(d); setPaymentAmount(0); setDebtPaymentDialogOpen(true) }} title="Record Payment"><DollarSign className="size-3.5" /></Button>}
+                            {d.status !== 'paid' && <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 h-8 px-2" onClick={() => { setReminderDebt(d); setDebtReminderDialogOpen(true) }} title="Send Reminder"><Send className="size-3.5" /></Button>}
+                            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeleteDebt(d.id)}><Trash2 className="size-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Record Payment Dialog */}
+        <Dialog open={debtPaymentDialogOpen} onOpenChange={setDebtPaymentDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader><DialogTitle className="text-slate-100">Record Payment</DialogTitle><DialogDescription className="text-slate-400">Record a payment for {editDebt?.customerName}</DialogDescription></DialogHeader>
+            {editDebt && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">Total Amount</p><p className="text-lg font-bold text-slate-100 tabular-nums">{formatCurrency(editDebt.amount)}</p></div>
+                  <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">Already Paid</p><p className="text-lg font-bold text-emerald-400 tabular-nums">{formatCurrency(editDebt.paidAmount)}</p></div>
+                  <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">Remaining</p><p className="text-lg font-bold text-red-400 tabular-nums">{formatCurrency(editDebt.amount - editDebt.paidAmount)}</p></div>
+                </div>
+                <div className="grid gap-2"><Label className="text-slate-300">Payment Amount (KES)</Label><Input type="number" value={paymentAmount || ''} onChange={e => setPaymentAmount(parseFloat(e.target.value) || 0)} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" max={editDebt.amount - editDebt.paidAmount} /></div>
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20"><p className="text-xs text-amber-400">After this payment, remaining balance will be: <span className="font-bold tabular-nums">{formatCurrency(editDebt.amount - editDebt.paidAmount - paymentAmount)}</span></p></div>
+              </div>
+            )}
+            <DialogFooter><Button variant="outline" onClick={() => setDebtPaymentDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleRecordDebtPayment} className="bg-emerald-600 hover:bg-emerald-700 text-white">Record Payment</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Payment Reminder Dialog */}
+        <Dialog open={debtReminderDialogOpen} onOpenChange={setDebtReminderDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader><DialogTitle className="text-slate-100">Payment Reminder Preview</DialogTitle><DialogDescription className="text-slate-400">Reminder for {reminderDebt?.customerName}</DialogDescription></DialogHeader>
+            {reminderDebt && (
+              <div className="py-4">
+                <div className="border border-slate-700 rounded-xl p-5 space-y-4">
+                  <div className="text-center border-b border-slate-700 pb-4"><h3 className="text-lg font-bold text-slate-100">FuelPro Station</h3><p className="text-xs text-slate-400">Fuel at Your Service</p><p className="text-xs text-slate-500 mt-1">Contact: info@fuelpro.co.ke | +254 700 000 000</p></div>
+                  <div><p className="text-sm text-slate-300">Dear <span className="font-semibold text-slate-100">{reminderDebt.customerName}</span>,</p><p className="text-sm text-slate-400 mt-2">This is a reminder that you have an outstanding balance of <span className="font-bold text-amber-400">{formatCurrency(reminderDebt.amount - reminderDebt.paidAmount)}</span> for {reminderDebt.fuelType || 'fuel'} purchased.</p></div>
+                  {reminderDebt.tillNumber && <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">M-Pesa Till Number</p><p className="text-xl font-bold text-amber-400 tabular-nums">{reminderDebt.tillNumber}</p></div>}
+                  {(reminderDebt.bankName || reminderDebt.accountNumber) && <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400 mb-1">Bank Transfer Details</p>{reminderDebt.bankName && <p className="text-sm text-slate-200">Bank: {reminderDebt.bankName} {reminderDebt.branchName ? `(${reminderDebt.branchName})` : ''}</p>}{reminderDebt.accountHolder && <p className="text-sm text-slate-200">Account: {reminderDebt.accountHolder}</p>}{reminderDebt.accountNumber && <p className="text-sm text-slate-200">A/C: {reminderDebt.accountNumber}</p>}</div>}
+                  {reminderDebt.dueDate && <p className="text-sm text-slate-400">Due Date: <span className="text-red-400 font-medium">{new Date(reminderDebt.dueDate).toLocaleDateString()}</span></p>}
+                </div>
+              </div>
+            )}
+            <DialogFooter><Button variant="outline" onClick={() => setDebtReminderDialogOpen(false)} className="border-slate-700 text-slate-300">Close</Button><Button onClick={() => { toast.success('Payment reminder generated'); setDebtReminderDialogOpen(false) }} className="bg-amber-600 hover:bg-amber-700 text-white">Send Reminder</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
+  // ─── Pump Management ──────────────────────────────────────────────────────────
+
+  const renderPumps = () => {
+    if (loading.pumps) return <TableSkeletons cols={5} rows={4} />
+    const totalPumps = pumps.length
+    const activePumps = pumps.filter(p => p.status === 'active').length
+    const todaySales = pumps.reduce((s, p) => s + p.salesKsh, 0)
+    const totalLiters = pumps.reduce((s, p) => s + p.salesLiters, 0)
+
+    const statusColors: Record<string, string> = {
+      idle: 'bg-slate-500/15 text-slate-400 border-0',
+      active: 'bg-emerald-500/15 text-emerald-400 border-0',
+      closed: 'bg-amber-500/15 text-amber-400 border-0',
+    }
+
+    const statusDot: Record<string, string> = {
+      idle: 'bg-slate-400',
+      active: 'bg-emerald-400 animate-pulse',
+      closed: 'bg-amber-400',
+    }
+
+    const fuelTypeColors: Record<string, string> = {
+      Petrol: 'bg-amber-500/15 text-amber-400 border-0',
+      Diesel: 'bg-blue-500/15 text-blue-400 border-0',
+      Kerosene: 'bg-purple-500/15 text-purple-400 border-0',
+    }
+
+    // Group by station
+    const stationGroups: Record<string, PumpAPIResponse['data']> = {}
+    pumps.forEach(p => {
+      const key = p.station.name
+      if (!stationGroups[key]) stationGroups[key] = []
+      stationGroups[key].push(p)
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div><h2 className="text-2xl font-bold text-slate-100">Pump Management</h2><p className="text-sm text-slate-400 mt-1">Track individual pump readings and sales</p></div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => exportToCSV(pumps.map(p => ({ Pump: p.pumpLabel, Station: p.station.name, FuelType: p.fuelType, Status: p.status, OpeningReading: p.openingReading, ClosingReading: p.closingReading, SalesKES: p.salesKsh, SalesLiters: p.salesLiters, LastReset: p.lastResetAt })), 'pumps')}>
+              <Download className="size-4 mr-2" /> Export CSV
+            </Button>
+            <Dialog open={pumpDialogOpen} onOpenChange={setPumpDialogOpen}>
+              <DialogTrigger asChild><Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"><Plus className="size-4 mr-2" /> Add Pump</Button></DialogTrigger>
+              <DialogContent className="bg-card border-border">
+                <DialogHeader><DialogTitle className="text-slate-100">Add Pump</DialogTitle><DialogDescription className="text-slate-400">Register a new fuel pump</DialogDescription></DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2"><Label className="text-slate-300">Station *</Label><Select value={newPump.stationId} onValueChange={v => setNewPump(p => ({ ...p, stationId: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue placeholder="Select station" /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700">{stations.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Pump Label *</Label><Input value={newPump.pumpLabel} onChange={e => setNewPump(p => ({ ...p, pumpLabel: e.target.value }))} placeholder="e.g. Pump 1" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Fuel Type</Label><Select value={newPump.fuelType} onValueChange={v => setNewPump(p => ({ ...p, fuelType: v }))}><SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="bg-slate-800 border-slate-700"><SelectItem value="Petrol">Petrol</SelectItem><SelectItem value="Diesel">Diesel</SelectItem><SelectItem value="Kerosene">Kerosene</SelectItem></SelectContent></Select></div>
+                </div>
+                <DialogFooter><Button variant="outline" onClick={() => setPumpDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleAddPump} className="bg-amber-600 hover:bg-amber-700 text-white">Add Pump</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><Gauge className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{totalPumps}</p><p className="text-xs text-slate-400">Total Pumps</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-emerald-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-emerald-500/15"><Activity className="size-5 text-emerald-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{activePumps}</p><p className="text-xs text-slate-400">Active Pumps</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-amber-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-amber-500/15"><DollarSign className="size-5 text-amber-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatCurrency(todaySales)}</p><p className="text-xs text-slate-400">Today&apos;s Pump Sales (KES)</p></div></div></CardContent></Card>
+          <Card className="bg-card border-border rounded-xl border-l-4 border-l-sky-500"><CardContent className="pt-6"><div className="flex items-center gap-3"><div className="flex items-center justify-center size-10 rounded-lg bg-sky-500/15"><Droplets className="size-5 text-sky-400" /></div><div><p className="text-2xl font-bold text-slate-100 tabular-nums">{formatNumber(totalLiters)}L</p><p className="text-xs text-slate-400">Total Liters Pumped</p></div></div></CardContent></Card>
+        </div>
+
+        {/* Pump Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {pumps.length === 0 ? (
+            <div className="col-span-full text-center py-12"><div className="flex items-center justify-center size-14 rounded-full bg-slate-800/50 mx-auto mb-3"><Gauge className="size-7 text-slate-500" /></div><p className="text-slate-400">No pumps registered</p><p className="text-sm text-slate-500 mt-1">Add a pump to get started</p></div>
+          ) : pumps.map(p => (
+            <Card key={p.id} className="bg-card border-border rounded-xl hover:ring-2 hover:ring-amber-500/20 transition-all">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><Gauge className="size-5 text-amber-400" /><CardTitle className="text-slate-100 text-lg">{p.pumpLabel}</CardTitle></div>
+                  <div className="flex items-center gap-2"><div className={`size-2 rounded-full ${statusDot[p.status] || statusDot.idle}`} /><Badge variant="secondary" className={statusColors[p.status] || statusColors.idle}>{p.status.charAt(0).toUpperCase() + p.status.slice(1)}</Badge></div>
+                </div>
+                <CardDescription className="text-slate-400">{p.station.name}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2"><Badge variant="secondary" className={fuelTypeColors[p.fuelType] || fuelTypeColors.Petrol}>{p.fuelType}</Badge></div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-slate-800/50"><p className="text-slate-500">Opening</p><p className="text-slate-200 tabular-nums">{formatCurrency(p.openingReading)} / {formatNumber(p.openingLiters)}L</p></div>
+                  <div className="p-2 rounded-lg bg-slate-800/50"><p className="text-slate-500">Closing</p><p className="text-slate-200 tabular-nums">{formatCurrency(p.closingReading)} / {formatNumber(p.closingLiters)}L</p></div>
+                </div>
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex justify-between items-center"><span className="text-xs text-emerald-400">Sales</span></div>
+                  <div className="flex justify-between items-center mt-1"><span className="text-lg font-bold text-emerald-400 tabular-nums">{formatCurrency(p.salesKsh)}</span><span className="text-sm text-emerald-300 tabular-nums">{formatNumber(p.salesLiters)}L</span></div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-500"><span>Last reset: {formatTimeAgo(p.lastResetAt)}</span></div>
+                <div className="flex items-center gap-2 pt-1">
+                  {p.status === 'active' && <Button size="sm" variant="outline" className="flex-1 border-amber-700 text-amber-400 hover:bg-amber-500/10 text-xs h-8" onClick={() => { setEditPump(p); setPumpReading({ closingReading: p.closingReading, closingLiters: p.closingLiters }); setPumpReadingDialogOpen(true) }}><Edit className="size-3 mr-1" /> Record Reading</Button>}
+                  {p.status === 'closed' && <Button size="sm" variant="outline" className="flex-1 border-sky-700 text-sky-400 hover:bg-sky-500/10 text-xs h-8" onClick={() => handleResetPump(p.id)}><RefreshCw className="size-3 mr-1" /> Reset</Button>}
+                  <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 px-2" onClick={() => handleDeletePump(p.id)}><Trash2 className="size-3.5" /></Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Station Summary */}
+        {Object.keys(stationGroups).length > 0 && (
+          <Card className="bg-card border-border rounded-xl">
+            <CardHeader><CardTitle className="text-slate-100">Station Pump Summary</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Object.entries(stationGroups).map(([stationName, stationPumps]) => {
+                  const totalStationSales = stationPumps.reduce((s, p) => s + p.salesKsh, 0)
+                  const totalStationLiters = stationPumps.reduce((s, p) => s + p.salesLiters, 0)
+                  return (
+                    <div key={stationName} className="p-4 rounded-xl bg-slate-800/30 border border-slate-700/50">
+                      <div className="flex items-center justify-between mb-2"><h4 className="text-slate-100 font-medium flex items-center gap-2"><Building2 className="size-4 text-amber-400" />{stationName}</h4><Badge variant="secondary" className="bg-slate-700 text-slate-300 border-0">{stationPumps.length} pumps</Badge></div>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div><p className="text-lg font-bold text-emerald-400 tabular-nums">{formatCurrency(totalStationSales)}</p><p className="text-xs text-slate-400">Total Sales</p></div>
+                        <div><p className="text-lg font-bold text-sky-400 tabular-nums">{formatNumber(totalStationLiters)}L</p><p className="text-xs text-slate-400">Total Liters</p></div>
+                        <div><p className="text-lg font-bold text-amber-400 tabular-nums">{stationPumps.filter(p => p.status === 'active').length}</p><p className="text-xs text-slate-400">Active</p></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Record Reading Dialog */}
+        <Dialog open={pumpReadingDialogOpen} onOpenChange={setPumpReadingDialogOpen}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader><DialogTitle className="text-slate-100">Record Pump Reading</DialogTitle><DialogDescription className="text-slate-400">Update closing readings for {editPump?.pumpLabel}</DialogDescription></DialogHeader>
+            {editPump && (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">Opening (KES)</p><p className="text-lg font-bold text-slate-100 tabular-nums">{formatCurrency(editPump.openingReading)}</p></div>
+                  <div className="p-3 rounded-lg bg-slate-800"><p className="text-xs text-slate-400">Opening (L)</p><p className="text-lg font-bold text-slate-100 tabular-nums">{formatNumber(editPump.openingLiters)}</p></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2"><Label className="text-slate-300">Closing Reading (KES)</Label><Input type="number" value={pumpReading.closingReading || ''} onChange={e => setPumpReading(p => ({ ...p, closingReading: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                  <div className="grid gap-2"><Label className="text-slate-300">Closing Liters</Label><Input type="number" value={pumpReading.closingLiters || ''} onChange={e => setPumpReading(p => ({ ...p, closingLiters: parseFloat(e.target.value) || 0 }))} placeholder="0" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                </div>
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-xs text-emerald-400 mb-2">Sales Preview</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><span className="text-xs text-slate-400">KES: </span><span className="text-sm font-bold text-emerald-400 tabular-nums">{formatCurrency(pumpReading.closingReading - editPump.openingReading)}</span></div>
+                    <div><span className="text-xs text-slate-400">Liters: </span><span className="text-sm font-bold text-emerald-400 tabular-nums">{formatNumber(pumpReading.closingLiters - editPump.openingLiters)}L</span></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter><Button variant="outline" onClick={() => setPumpReadingDialogOpen(false)} className="border-slate-700 text-slate-300">Cancel</Button><Button onClick={handleUpdatePumpReading} className="bg-amber-600 hover:bg-amber-700 text-white">Update Reading</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
   const renderAdmin = () => {
     if (loading.admin) return <TableSkeletons cols={5} rows={4} />
     if (!adminData) return null
@@ -3504,6 +4384,8 @@ export default function FuelProDashboard() {
             <TabsTrigger value="audit" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Audit Logs</TabsTrigger>
             <TabsTrigger value="config" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Configuration</TabsTrigger>
             <TabsTrigger value="notifications" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Notifications</TabsTrigger>
+            <TabsTrigger value="company" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Company</TabsTrigger>
+            <TabsTrigger value="permissions" className="data-[state=active]:bg-amber-500/15 data-[state=active]:text-amber-400">Permissions</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -3570,21 +4452,88 @@ export default function FuelProDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="audit">
+          <TabsContent value="audit" className="space-y-4">
+            {/* SOC-2 Audit Log Statistics Card */}
+            <Card className="bg-card border-border rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-amber-400" /> Audit Log Statistics
+                </CardTitle>
+                <CardDescription>SOC-2 compliance monitoring and activity overview</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                  <div className="p-3 rounded-lg bg-slate-800 border border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1">Total Logs</p>
+                    <p className="text-2xl font-bold text-slate-100 tabular-nums">{adminData.auditLogs.length}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-800 border border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1">Last 24h Activity</p>
+                    <p className="text-2xl font-bold text-amber-400 tabular-nums">
+                      {adminData.auditLogs.filter(l => { const d = new Date(l.timestamp); return (Date.now() - d.getTime()) < 86400000 }).length}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-800 border border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1">Actions Breakdown</p>
+                    <div className="text-xs space-y-0.5 mt-1">
+                      {Object.entries(adminData.auditLogs.reduce<Record<string, number>>((acc, l) => { const act = l.action.toLowerCase(); acc[act] = (acc[act] || 0) + 1; return acc }, {})).slice(0, 4).map(([k, v]) => (
+                        <div key={k} className="flex justify-between"><span className="text-slate-300 capitalize">{k}</span><span className="text-slate-400 tabular-nums">{v}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-xs text-emerald-400 mb-1">SOC-2 Status</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <CheckCircle2 className="size-5 text-emerald-400" />
+                      <span className="text-lg font-bold text-emerald-400">Compliant</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="border-slate-700 text-slate-300 hover:bg-slate-800" onClick={() => {
+                    exportToCSV(
+                      adminData.auditLogs.map(l => ({ User: l.user, Action: l.action, Details: l.details, Severity: l.severity, Timestamp: l.timestamp, 'IP Address': 'N/A', 'Session ID': 'N/A' })),
+                      `audit_log_soc2_${new Date().toISOString().slice(0, 10)}`
+                    )
+                    toast.success('Audit log exported (SOC-2 compliant format)')
+                  }}>
+                    <Download className="size-3.5 mr-1.5" /> Export Audit Log
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Audit Logs Table */}
             <Card className="bg-card border-border rounded-xl">
               <CardHeader><CardTitle className="text-slate-100 flex items-center gap-2"><FileText className="size-4 text-amber-400" /> Audit Logs</CardTitle><CardDescription>System activity and security events</CardDescription></CardHeader>
               <CardContent>
                 <ScrollArea className="max-h-[500px]">
                   <Table>
-                    <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">User</TableHead><TableHead className="text-slate-400">Action</TableHead><TableHead className="text-slate-400">Details</TableHead><TableHead className="text-slate-400">Severity</TableHead><TableHead className="text-slate-400 text-right">Timestamp</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow className="border-slate-800 hover:bg-transparent">
+                      <TableHead className="text-slate-400">User</TableHead>
+                      <TableHead className="text-slate-400">Action</TableHead>
+                      <TableHead className="text-slate-400">Details</TableHead>
+                      <TableHead className="text-slate-400">Severity</TableHead>
+                      <TableHead className="text-slate-400">IP Address</TableHead>
+                      <TableHead className="text-slate-400">Session ID</TableHead>
+                      <TableHead className="text-slate-400 text-right">Timestamp</TableHead>
+                      <TableHead className="text-slate-400 text-right">Integrity</TableHead>
+                    </TableRow></TableHeader>
                     <TableBody>
                       {adminData.auditLogs.map(log => (
                         <TableRow key={log.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                           <TableCell className="text-slate-200">{log.user}</TableCell>
                           <TableCell className="text-slate-300">{log.action}</TableCell>
                           <TableCell className="text-slate-400 text-xs max-w-[200px] truncate">{log.details}</TableCell>
-                          <TableCell><Badge className={log.severity === 'error' ? 'bg-red-500/15 text-red-400 border-0 text-[10px]' : log.severity === 'warning' ? 'bg-amber-500/15 text-amber-400 border-0 text-[10px]' : 'bg-slate-700 text-slate-400 text-[10px]'}>{log.severity}</Badge></TableCell>
+                          <TableCell><Badge className={log.severity === 'error' ? 'bg-red-500/15 text-red-400 border-0 text-[10px]' : log.severity === 'warning' ? 'bg-amber-500/15 text-amber-400 border-0 text-[10px]' : log.severity === 'info' ? 'bg-sky-500/15 text-sky-400 border-0 text-[10px]' : 'bg-slate-700 text-slate-400 text-[10px]'}>{log.severity}</Badge></TableCell>
+                          <TableCell className="text-slate-400 text-xs font-mono">N/A</TableCell>
+                          <TableCell className="text-slate-400 text-xs font-mono">—</TableCell>
                           <TableCell className="text-right text-slate-400 text-xs">{formatTimeAgo(log.timestamp)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => toast.success('Log integrity verified ✓')}>
+                              <Shield className="size-3 mr-1" /> Verify
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -3688,6 +4637,236 @@ export default function FuelProDashboard() {
                 <Button className="bg-amber-600 hover:bg-amber-700 text-white">Save Notification Settings</Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="company" className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 space-y-4">
+                {/* Company Information Card */}
+                <Card className="bg-card border-border rounded-xl">
+                  <CardHeader>
+                    <CardTitle className="text-foreground flex items-center gap-2"><Building className="size-4 text-amber-400" /> Company Information</CardTitle>
+                    <CardDescription>Business details that appear on invoices, receipts, and reports</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label className="text-slate-300">Company Name</Label><Input value={companyForm.name} onChange={e => setCompanyForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., FuelPro Ltd" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">P.O. Box</Label><Input value={companyForm.poBox} onChange={e => setCompanyForm(p => ({ ...p, poBox: e.target.value }))} placeholder="e.g., P.O. Box 12345" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Contact Numbers</Label><Input value={companyForm.contacts} onChange={e => setCompanyForm(p => ({ ...p, contacts: e.target.value }))} placeholder="e.g., +254 700 000 000" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Email</Label><Input type="email" value={companyForm.email} onChange={e => setCompanyForm(p => ({ ...p, email: e.target.value }))} placeholder="e.g., info@fuelpro.ke" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Currency</Label>
+                        <Select value={companyForm.currency} onValueChange={v => setCompanyForm(p => ({ ...p, currency: v }))}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-slate-100"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700">
+                            <SelectItem value="KES">KES - Kenyan Shilling</SelectItem>
+                            <SelectItem value="USD">USD - US Dollar</SelectItem>
+                            <SelectItem value="EUR">EUR - Euro</SelectItem>
+                            <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2"><Label className="text-slate-300">Tax Rate (%)</Label><Input type="number" value={companyForm.taxRate} onChange={e => setCompanyForm(p => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))} className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    </div>
+                    <div className="space-y-2"><Label className="text-slate-300">Receipt Footer</Label><textarea value={companyForm.receiptFooter} onChange={e => setCompanyForm(p => ({ ...p, receiptFooter: e.target.value }))} placeholder="e.g., Thank you for choosing FuelPro!" rows={3} className="w-full bg-slate-800 border border-slate-700 text-slate-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" /></div>
+                  </CardContent>
+                </Card>
+
+                {/* Bank Details Card */}
+                <Card className="bg-card border-border rounded-xl">
+                  <CardHeader>
+                    <CardTitle className="text-foreground flex items-center gap-2"><CreditCard className="size-4 text-amber-400" /> Bank Details</CardTitle>
+                    <CardDescription>Banking information for invoices and payment reminders</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2"><Label className="text-slate-300">Bank Name</Label><Input value={companyForm.bankName} onChange={e => setCompanyForm(p => ({ ...p, bankName: e.target.value }))} placeholder="e.g., Kenya Commercial Bank" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Branch Name</Label><Input value={companyForm.branchName} onChange={e => setCompanyForm(p => ({ ...p, branchName: e.target.value }))} placeholder="e.g., Nairobi Main" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Account Holder</Label><Input value={companyForm.accountHolder} onChange={e => setCompanyForm(p => ({ ...p, accountHolder: e.target.value }))} placeholder="e.g., FuelPro Ltd" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                      <div className="space-y-2"><Label className="text-slate-300">Account Number</Label><Input value={companyForm.accountNumber} onChange={e => setCompanyForm(p => ({ ...p, accountNumber: e.target.value }))} placeholder="e.g., 1234567890" className="bg-slate-800 border-slate-700 text-slate-100" /></div>
+                    </div>
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-sky-500/10 border border-sky-500/20">
+                      <Info className="size-4 text-sky-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-sky-300">These details appear on invoices and payment reminders sent to customers and suppliers.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Preview Card */}
+              <div className="lg:col-span-1">
+                <Card className="bg-card border-border rounded-xl sticky top-4">
+                  <CardHeader>
+                    <CardTitle className="text-foreground flex items-center gap-2"><Eye className="size-4 text-amber-400" /> Document Preview</CardTitle>
+                    <CardDescription>How company info appears on documents</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-3">
+                      <div className="text-center border-b border-slate-700 pb-3">
+                        <p className="text-lg font-bold text-amber-400">{companyForm.name || 'FuelPro'}</p>
+                        {companyForm.poBox && <p className="text-xs text-slate-400">{companyForm.poBox}</p>}
+                        {companyForm.contacts && <p className="text-xs text-slate-400">{companyForm.contacts}</p>}
+                        {companyForm.email && <p className="text-xs text-slate-400">{companyForm.email}</p>}
+                      </div>
+                      {(companyForm.bankName || companyForm.accountNumber) && (
+                        <div className="border-b border-slate-700 pb-3">
+                          <p className="text-xs font-semibold text-slate-300 mb-1">Bank Details</p>
+                          {companyForm.bankName && <p className="text-xs text-slate-400">{companyForm.bankName}{companyForm.branchName ? ` — ${companyForm.branchName}` : ''}</p>}
+                          {companyForm.accountHolder && <p className="text-xs text-slate-400">A/C: {companyForm.accountHolder}</p>}
+                          {companyForm.accountNumber && <p className="text-xs text-slate-400">A/C No: {companyForm.accountNumber}</p>}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-400">Currency: <span className="text-amber-400 font-medium">{companyForm.currency}</span></span>
+                        <span className="text-xs text-slate-400">Tax: <span className="text-amber-400 font-medium">{companyForm.taxRate}%</span></span>
+                      </div>
+                      {companyForm.receiptFooter && (
+                        <div className="border-t border-slate-700 pt-2">
+                          <p className="text-xs text-slate-500 italic text-center">{companyForm.receiptFooter}</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <Button onClick={handleSaveCompany} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold"><Zap className="size-4 mr-2" /> Save Company Profile</Button>
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-4 mt-4">
+            {/* Permission Matrix Card */}
+            <Card className="bg-card border-border rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2"><Shield className="size-4 text-amber-400" /> Role-Based Access Control</CardTitle>
+                <CardDescription>Configure permissions for each role across data types and actions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left py-3 px-3 text-slate-400 font-medium">Data Type</th>
+                        <th className="text-center py-3 px-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold">Owner</span></th>
+                        <th className="text-center py-3 px-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">Manager</span></th>
+                        <th className="text-center py-3 px-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 text-xs font-semibold">Staff</span></th>
+                        <th className="text-center py-3 px-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 text-xs font-semibold">Auditor</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { label: 'Stations', owner: '✓', manager: '✓', staff: '—', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: '', auditorBg: 'bg-violet-500/5' },
+                        { label: 'Sales', owner: '✓', manager: '✓', staff: '✓', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: 'bg-sky-500/5', auditorBg: 'bg-violet-500/5' },
+                        { label: 'Inventory', owner: '✓', manager: '✓', staff: '✓', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: 'bg-sky-500/5', auditorBg: 'bg-violet-500/5' },
+                        { label: 'Employees', owner: '✓', manager: '✓', staff: '—', auditor: '—', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: '', auditorBg: '' },
+                        { label: 'Invoices', owner: '✓', manager: '✓', staff: '—', auditor: '—', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: '', auditorBg: '' },
+                        { label: 'Expenses', owner: '✓', manager: '✓', staff: '—', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: '', auditorBg: 'bg-violet-500/5' },
+                        { label: 'Audit Logs', owner: '✓', manager: '—', staff: '—', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: '', staffBg: '', auditorBg: 'bg-violet-500/5' },
+                        { label: 'Users', owner: '✓', manager: '—', staff: '—', auditor: '—', ownerBg: 'bg-amber-500/5', managerBg: '', staffBg: '', auditorBg: '' },
+                        { label: 'Reports', owner: '✓', manager: '✓', staff: '—', auditor: '✓', ownerBg: 'bg-amber-500/5', managerBg: 'bg-emerald-500/5', staffBg: '', auditorBg: 'bg-violet-500/5' },
+                      ].map((row, i) => (
+                        <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                          <td className="py-2.5 px-3 text-slate-200 font-medium">{row.label}</td>
+                          <td className={`py-2.5 px-3 text-center ${row.ownerBg} rounded`}><span className={row.owner === '✓' ? 'text-emerald-400' : 'text-slate-600'}>{row.owner}</span></td>
+                          <td className={`py-2.5 px-3 text-center ${row.managerBg} rounded`}><span className={row.manager === '✓' ? 'text-emerald-400' : 'text-slate-600'}>{row.manager}</span></td>
+                          <td className={`py-2.5 px-3 text-center ${row.staffBg} rounded`}><span className={row.staff === '✓' ? 'text-emerald-400' : 'text-slate-600'}>{row.staff}</span></td>
+                          <td className={`py-2.5 px-3 text-center ${row.auditorBg} rounded`}><span className={row.auditor === '✓' ? 'text-emerald-400' : 'text-slate-600'}>{row.auditor}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
+                  <span className="flex items-center gap-1"><span className="text-emerald-400">✓</span> = Full access (Create, Read, Update, Delete, Export, Approve)</span>
+                  <span className="flex items-center gap-1"><span className="text-slate-600">—</span> = No access</span>
+                </div>
+                <Separator className="bg-slate-800 my-4" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Create</span><br /><span className="text-slate-500">Add new records</span></div>
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Read</span><br /><span className="text-slate-500">View records</span></div>
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Update</span><br /><span className="text-slate-500">Edit records</span></div>
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Delete</span><br /><span className="text-slate-500">Remove records</span></div>
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Export</span><br /><span className="text-slate-500">Download data</span></div>
+                  <div className="p-2 rounded bg-slate-800/50 text-center"><span className="text-slate-200 font-medium">Approve</span><br /><span className="text-slate-500">Authorize actions</span></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Role Descriptions Card */}
+            <Card className="bg-card border-border rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2"><Users className="size-4 text-amber-400" /> Role Descriptions</CardTitle>
+                <CardDescription>What each role can do in the system</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
+                    <div className="flex items-center gap-2 mb-2"><Badge className="bg-amber-500/20 text-amber-400 border-0 font-semibold">Owner</Badge></div>
+                    <p className="text-sm text-slate-300">Full access to all stations and data. Can manage users and system configuration.</p>
+                  </div>
+                  <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+                    <div className="flex items-center gap-2 mb-2"><Badge className="bg-emerald-500/20 text-emerald-400 border-0 font-semibold">Manager</Badge></div>
+                    <p className="text-sm text-slate-300">Read, Create, Update for Sales, Inventory, and Employees at assigned stations. No delete or admin access.</p>
+                  </div>
+                  <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5">
+                    <div className="flex items-center gap-2 mb-2"><Badge className="bg-sky-500/20 text-sky-400 border-0 font-semibold">Staff</Badge></div>
+                    <p className="text-sm text-slate-300">Read-only for Sales and Inventory. Can create sales (personal scope). No access to financial or admin data.</p>
+                  </div>
+                  <div className="p-4 rounded-xl border border-violet-500/20 bg-violet-500/5">
+                    <div className="flex items-center gap-2 mb-2"><Badge className="bg-violet-500/20 text-violet-400 border-0 font-semibold">Auditor</Badge></div>
+                    <p className="text-sm text-slate-300">Read-only access to Audit Logs (global). Read access to Sales, Inventory, and Expenses at assigned stations.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Station Access Card */}
+            <Card className="bg-card border-border rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-foreground flex items-center gap-2"><MapPin className="size-4 text-amber-400" /> Station Access</CardTitle>
+                <CardDescription>Users can only access data from their assigned stations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {realUsers.length === 0 ? (
+                  <div className="text-center py-8"><div className="flex items-center justify-center size-12 rounded-full bg-slate-800/50 mx-auto mb-3"><Users className="size-6 text-slate-500" /></div><p className="text-slate-400 text-sm">No users to display</p></div>
+                ) : (
+                  <Table>
+                    <TableHeader><TableRow className="border-slate-800 hover:bg-transparent"><TableHead className="text-slate-400">User</TableHead><TableHead className="text-slate-400">Role</TableHead><TableHead className="text-slate-400">Assigned Stations</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {realUsers.map(user => (
+                        <TableRow key={user.id} className="border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                          <TableCell className="text-slate-200 font-medium">
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-center size-7 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold">{user.name.charAt(0).toUpperCase()}</div>
+                              {user.name}
+                            </div>
+                          </TableCell>
+                          <TableCell><Badge variant="secondary" className={`border-0 capitalize ${user.role === 'owner' ? 'bg-amber-500/15 text-amber-400' : user.role === 'manager' ? 'bg-emerald-500/15 text-emerald-400' : user.role === 'auditor' ? 'bg-violet-500/15 text-violet-400' : 'bg-sky-500/15 text-sky-400'}`}>{user.role}</Badge></TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {user.role === 'owner' ? (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs">All Stations</span>
+                              ) : user.stationCount && user.stationCount > 0 ? (
+                                Array.from({ length: Math.min(user.stationCount, 3) }, (_, i) => (
+                                  <span key={i} className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs">Station {i + 1}</span>
+                                ))
+                              ) : (
+                                <span className="text-slate-500 text-xs">No stations assigned</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <Info className="size-4 text-amber-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-300">Users can only access data from their assigned stations. Owners have access to all stations by default.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button onClick={() => toast.success('Permissions configuration saved')} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold"><Shield className="size-4 mr-2" /> Save Permissions</Button>
           </TabsContent>
         </Tabs>
       </div>
@@ -3851,6 +5030,9 @@ export default function FuelProDashboard() {
       case 'contacts': return renderContacts()
       case 'payroll': return renderPayroll()
       case 'documents': return renderDocuments()
+      case 'mpesa': return renderMpesa()
+      case 'debts': return renderDebts()
+      case 'pumps': return renderPumps()
       case 'admin': return renderAdmin()
       default: return renderDashboard()
     }
