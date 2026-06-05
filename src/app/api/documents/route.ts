@@ -1,32 +1,23 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('DOCUMENTS_GET', async () => {
     const documents = await db.document.findMany({
       include: { station: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json({ ok: true, data: documents })
-  } catch (error) {
-    console.error('[DOCUMENTS_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch documents' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(documents)
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return apiHandler('DOCUMENTS_POST', async () => {
     const body = await request.json()
     const { name, type, fileType, size, folder, description, url, stationId } = body
 
     if (!name || !type) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: name, type' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: name, type')
     }
 
     const document = await db.document.create({
@@ -43,12 +34,6 @@ export async function POST(request: Request) {
       include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: document }, { status: 201 })
-  } catch (error) {
-    console.error('[DOCUMENTS_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create document' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(document, 201)
+  })
 }

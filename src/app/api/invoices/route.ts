@@ -1,24 +1,18 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('INVOICES_GET', async () => {
     const invoices = await db.invoice.findMany({
       include: { station: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json({ ok: true, data: invoices })
-  } catch (error) {
-    console.error('[INVOICES_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch invoices' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(invoices)
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return apiHandler('INVOICES_POST', async () => {
     const body = await request.json()
     const {
       customerName,
@@ -35,13 +29,9 @@ export async function POST(request: Request) {
     } = body
 
     if (!customerName) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required field: customerName' },
-        { status: 400 }
-      )
+      return badRequest('Missing required field: customerName')
     }
 
-    // Auto-generate invoice number
     const count = await db.invoice.count()
     const invoiceNumber = `INV-${String(count + 1).padStart(5, '0')}`
 
@@ -63,12 +53,6 @@ export async function POST(request: Request) {
       include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: invoice }, { status: 201 })
-  } catch (error) {
-    console.error('[INVOICES_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create invoice' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(invoice, 201)
+  })
 }

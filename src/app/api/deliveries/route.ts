@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, notFound, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('DELIVERIES_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const fuelType = searchParams.get('fuelType')
@@ -19,18 +20,12 @@ export async function GET(request: NextRequest) {
       orderBy: { deliveredAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: deliveries })
-  } catch (error) {
-    console.error('[DELIVERIES_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch deliveries' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(deliveries)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('DELIVERIES_POST', async () => {
     const body = await request.json()
     const {
       stationId,
@@ -43,27 +38,19 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!stationId || !supplierName || !fuelType || !volumeLiters) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: stationId, supplierName, fuelType, volumeLiters' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: stationId, supplierName, fuelType, volumeLiters')
     }
 
-    // Find the matching tank to increase stock
     const tank = await db.tank.findFirst({
       where: { stationId, fuelType },
     })
 
     if (!tank) {
-      return NextResponse.json(
-        { ok: false, error: `No ${fuelType} tank found at this station` },
-        { status: 404 }
-      )
+      return notFound(`No ${fuelType} tank found at this station`)
     }
 
     const calculatedTotalCost = totalCost ?? (costPerLiter ? costPerLiter * volumeLiters : null)
 
-    // Create delivery and update tank stock in a transaction
     const [delivery] = await db.$transaction([
       db.delivery.create({
         data: {
@@ -85,12 +72,6 @@ export async function POST(request: NextRequest) {
       }),
     ])
 
-    return NextResponse.json({ ok: true, data: delivery }, { status: 201 })
-  } catch (error) {
-    console.error('[DELIVERIES_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create delivery' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(delivery, 201)
+  })
 }

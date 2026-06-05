@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { apiSuccess, badRequest, conflict, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('USERS_GET', async () => {
     const users = await db.user.findMany({
       select: {
         id: true,
@@ -16,33 +17,27 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' }
     })
-    return NextResponse.json({
-      ok: true,
-      data: users.map(u => ({
-        ...u,
-        status: u.isGuest ? 'guest' : 'active',
-        stationCount: u.stations.length,
-        lastLogin: u.updatedAt.toISOString()
-      }))
-    })
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: 'Failed to fetch users' }, { status: 500 })
-  }
+    return apiSuccess(users.map(u => ({
+      ...u,
+      status: u.isGuest ? 'guest' : 'active',
+      stationCount: u.stations.length,
+      lastLogin: u.updatedAt.toISOString()
+    })))
+  })
 }
 
 export async function POST(req: NextRequest) {
-  try {
+  return apiHandler('USERS_POST', async () => {
     const body = await req.json()
     const { name, email, role = 'staff' } = body
 
     if (!name || !email) {
-      return NextResponse.json({ ok: false, error: 'Name and email are required' }, { status: 400 })
+      return badRequest('Name and email are required')
     }
 
-    // Check if email already exists
     const existing = await db.user.findUnique({ where: { email } })
     if (existing) {
-      return NextResponse.json({ ok: false, error: 'Email already exists' }, { status: 409 })
+      return conflict('Email already exists')
     }
 
     const user = await db.user.create({
@@ -55,20 +50,15 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: 'active',
-        stationCount: 0,
-        lastLogin: user.createdAt.toISOString(),
-        createdAt: user.createdAt.toISOString(),
-      }
-    }, { status: 201 })
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: 'Failed to create user' }, { status: 500 })
-  }
+    return apiSuccess({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: 'active',
+      stationCount: 0,
+      lastLogin: user.createdAt.toISOString(),
+      createdAt: user.createdAt.toISOString(),
+    }, 201)
+  })
 }

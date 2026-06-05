@@ -1,21 +1,19 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, notFound, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('COUPON_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { code, type, value, maxUses, uses, status } = body
 
     const existing = await db.coupon.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Coupon not found' },
-        { status: 404 }
-      )
+      return notFound('Coupon')
     }
 
     const coupon = await db.coupon.update({
@@ -30,39 +28,23 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: coupon })
-  } catch (error) {
-    console.error('[COUPON_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update coupon' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(coupon)
+  })
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('COUPON_DELETE', async () => {
+    const id = await getPathId(params)
 
     const existing = await db.coupon.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Coupon not found' },
-        { status: 404 }
-      )
+      return notFound('Coupon')
     }
 
     await db.coupon.delete({ where: { id } })
-
-    return NextResponse.json({ ok: true, data: { id } })
-  } catch (error) {
-    console.error('[COUPON_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete coupon' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

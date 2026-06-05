@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params
+  return apiHandler('USERS_PUT', async () => {
+    const id = await getPathId(params)
     const body = await req.json()
     const { name, email, role, status } = body
 
@@ -18,27 +19,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: updateData,
     })
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.isGuest ? 'guest' : 'active',
-      }
+    return apiSuccess({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.isGuest ? 'guest' : 'active',
     })
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: 'Failed to update user' }, { status: 500 })
-  }
+  })
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  return apiHandler('USERS_DELETE', async () => {
+    const id = await getPathId(params)
     await db.user.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: 'Failed to delete user' }, { status: 500 })
-  }
+    return apiSuccess({ id })
+  })
 }

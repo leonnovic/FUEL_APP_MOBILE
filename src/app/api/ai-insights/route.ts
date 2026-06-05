@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { apiSuccess, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('AI_INSIGHTS_GET', async () => {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'dashboard'
 
@@ -215,9 +216,8 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
-      ok: true,
-      data: insights,
+    return apiSuccess({
+      insights,
       meta: {
         totalInsights: insights.length,
         critical: insights.filter(i => i.type === 'critical').length,
@@ -225,11 +225,5 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
     })
-  } catch (error) {
-    console.error('[AI_INSIGHTS_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to generate insights' },
-      { status: 500 }
-    )
-  }
+  })
 }

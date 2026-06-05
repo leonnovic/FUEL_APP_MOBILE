@@ -1,11 +1,11 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('COMPANY_GET', async () => {
     let profile = await db.companyProfile.findFirst()
 
-    // Create default profile if none exists
     if (!profile) {
       profile = await db.companyProfile.create({
         data: {
@@ -16,18 +16,12 @@ export async function GET() {
       })
     }
 
-    return NextResponse.json({ ok: true, data: profile })
-  } catch (error) {
-    console.error('[COMPANY_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch company profile' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(profile)
+  })
 }
 
 export async function PUT(request: NextRequest) {
-  try {
+  return apiHandler('COMPANY_PUT', async () => {
     const body = await request.json()
     const {
       name,
@@ -44,7 +38,6 @@ export async function PUT(request: NextRequest) {
       receiptFooter,
     } = body
 
-    // Find existing profile or create one
     let profile = await db.companyProfile.findFirst()
 
     if (!profile) {
@@ -84,12 +77,6 @@ export async function PUT(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ok: true, data: profile })
-  } catch (error) {
-    console.error('[COMPANY_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update company profile' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(profile)
+  })
 }

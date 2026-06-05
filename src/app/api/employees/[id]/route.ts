@@ -1,12 +1,12 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, notFound, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('EMPLOYEES_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const {
       name,
@@ -25,7 +25,6 @@ export async function PUT(
       dateJoined,
     } = body
 
-    // If salary fields are provided, recalculate netPay
     let netPay: number | undefined
     if (
       basicSalary !== undefined ||
@@ -36,13 +35,9 @@ export async function PUT(
       payeDeduction !== undefined ||
       otherDeductions !== undefined
     ) {
-      // Fetch current values for fields not provided
       const current = await db.employee.findUnique({ where: { id } })
       if (!current) {
-        return NextResponse.json(
-          { ok: false, error: 'Employee not found' },
-          { status: 404 }
-        )
+        return notFound('Employee')
       }
 
       const bs = basicSalary !== undefined ? parseFloat(basicSalary) : current.basicSalary
@@ -78,29 +73,17 @@ export async function PUT(
       include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: employee })
-  } catch (error) {
-    console.error('[EMPLOYEES_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update employee' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(employee)
+  })
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('EMPLOYEES_DELETE', async () => {
+    const id = await getPathId(params)
     await db.employee.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[EMPLOYEES_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete employee' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

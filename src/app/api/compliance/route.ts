@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
-// Hardcoded EPRA maximum prices for Kenya (realistic Nairobi values)
 const EPRA_MAX_PRICES = {
   Nairobi: { Petrol: 199.63, Diesel: 190.54, Kerosene: 169.48 },
   Mombasa: { Petrol: 196.23, Diesel: 187.14, Kerosene: 166.58 },
@@ -16,33 +16,23 @@ const EPRA_MAX_PRICES = {
 }
 
 export async function GET() {
-  try {
-    // Also fetch any stored EPRA prices from the database
+  return apiHandler('COMPLIANCE_GET', async () => {
     const dbPrices = await db.epraPrice.findMany({
       orderBy: { effectiveAt: 'desc' },
     })
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        hardcoded: EPRA_MAX_PRICES,
-        database: dbPrices,
-        lastUpdated: '2025-01-15',
-        currency: 'KES',
-        unit: 'per liter',
-      },
+    return apiSuccess({
+      hardcoded: EPRA_MAX_PRICES,
+      database: dbPrices,
+      lastUpdated: '2025-01-15',
+      currency: 'KES',
+      unit: 'per liter',
     })
-  } catch (error) {
-    console.error('[COMPLIANCE_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch EPRA prices' },
-      { status: 500 }
-    )
-  }
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('COMPLIANCE_POST', async () => {
     const body = await request.json()
     const {
       sellerTin,
@@ -53,18 +43,14 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!sellerTin || !fuelType || !quantity || !unitPrice) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: sellerTin, fuelType, quantity, unitPrice' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: sellerTin, fuelType, quantity, unitPrice')
     }
 
     const subtotal = quantity * unitPrice
-    const vatRate = 0.16 // Kenya VAT rate 16%
+    const vatRate = 0.16
     const vatAmount = subtotal * vatRate
     const totalAmount = subtotal + vatAmount
 
-    // Generate a KRA eTIMS-compliant invoice number
     const timestamp = Date.now().toString(36).toUpperCase()
     const random = Math.random().toString(36).substring(2, 6).toUpperCase()
     const invoiceNumber = `ETI-${timestamp}-${random}`
@@ -82,24 +68,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        ...invoice,
-        eTIMS: {
-          compliant: true,
-          vatRate: '16%',
-          currency: 'KES',
-          issuer: 'FuelPro Kenya',
-          standard: 'KRA eTIMS v2.1',
-        },
+    return apiSuccess({
+      ...invoice,
+      eTIMS: {
+        compliant: true,
+        vatRate: '16%',
+        currency: 'KES',
+        issuer: 'FuelPro Kenya',
+        standard: 'KRA eTIMS v2.1',
       },
-    }, { status: 201 })
-  } catch (error) {
-    console.error('[COMPLIANCE_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to generate invoice' },
-      { status: 500 }
-    )
-  }
+    }, 201)
+  })
 }

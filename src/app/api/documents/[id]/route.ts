@@ -1,12 +1,12 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('DOCUMENTS_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { name, type, fileType, size, folder, description, url, stationId } = body
 
@@ -25,29 +25,17 @@ export async function PUT(
       include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: document })
-  } catch (error) {
-    console.error('[DOCUMENTS_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update document' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(document)
+  })
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('DOCUMENTS_DELETE', async () => {
+    const id = await getPathId(params)
     await db.document.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[DOCUMENTS_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete document' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

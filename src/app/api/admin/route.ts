@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiSuccess, apiHandler } from '@/lib/api-utils'
 
 const adminData = {
   users: [
@@ -37,12 +38,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  try {
+  return apiHandler('ADMIN_PUT', async () => {
     const body = await request.json()
-    // Update in-memory config (for demo; in production, persist to DB)
     Object.assign(adminData.config, body)
-    return NextResponse.json({ ok: true, data: adminData.config })
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Failed to save configuration' }, { status: 500 })
-  }
+    return apiSuccess(adminData.config)
+  })
 }

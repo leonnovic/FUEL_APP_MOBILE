@@ -1,15 +1,11 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, conflict, apiHandler } from '@/lib/api-utils'
 
 export async function POST() {
-  try {
-    // Check if data already exists
+  return apiHandler('SEED_POST', async () => {
     const stationCount = await db.station.count()
     if (stationCount > 0) {
-      return NextResponse.json(
-        { ok: false, error: 'Database already seeded. Reset first.' },
-        { status: 409 }
-      )
+      return conflict('Database already seeded. Reset first.')
     }
 
     // 1. Create a demo user
@@ -174,26 +170,17 @@ export async function POST() {
       },
     })
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        user: user.id,
-        stations: 3,
-        tanks: tankData.length,
-        sales: salesData.length,
-        shifts: shiftsData.length,
-        suppliers: 4,
-        epraPrices: 9,
-        coupon: coupon.code,
-        deliveries: 3,
-        reconciliations: 1,
-      },
-    }, { status: 201 })
-  } catch (error) {
-    console.error('[SEED_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to seed database' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({
+      user: user.id,
+      stations: 3,
+      tanks: tankData.length,
+      sales: salesData.length,
+      shifts: shiftsData.length,
+      suppliers: 4,
+      epraPrices: 9,
+      coupon: coupon.code,
+      deliveries: 3,
+      reconciliations: 1,
+    }, 201)
+  })
 }

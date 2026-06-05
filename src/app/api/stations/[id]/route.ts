@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, notFound, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('STATION_GET', async () => {
+    const id = await getPathId(params)
     const station = await db.station.findUnique({
       where: { id },
       include: {
@@ -19,40 +20,27 @@ export async function GET(
     })
 
     if (!station) {
-      return NextResponse.json(
-        { ok: false, error: 'Station not found' },
-        { status: 404 }
-      )
+      return notFound('Station')
     }
 
-    return NextResponse.json({ ok: true, data: station })
-  } catch (error) {
-    console.error('[STATION_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch station' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(station)
+  })
 }
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('STATION_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { name, location, phone, county, status, tankId, pricePerLiter, alertThreshold } = body
 
     const existing = await db.station.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Station not found' },
-        { status: 404 }
-      )
+      return notFound('Station')
     }
 
-    // Handle tank price update
     if (tankId) {
       const tankData: { pricePerLiter?: number; alertThreshold?: number } = {}
       if (pricePerLiter !== undefined) tankData.pricePerLiter = pricePerLiter
@@ -72,39 +60,23 @@ export async function PUT(
       include: { tanks: true },
     })
 
-    return NextResponse.json({ ok: true, data: station })
-  } catch (error) {
-    console.error('[STATION_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update station' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(station)
+  })
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('STATION_DELETE', async () => {
+    const id = await getPathId(params)
 
     const existing = await db.station.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Station not found' },
-        { status: 404 }
-      )
+      return notFound('Station')
     }
 
     await db.station.delete({ where: { id } })
-
-    return NextResponse.json({ ok: true, data: { id } })
-  } catch (error) {
-    console.error('[STATION_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete station' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }
