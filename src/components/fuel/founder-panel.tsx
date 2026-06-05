@@ -447,7 +447,7 @@ export function FounderPanel() {
 
   // Growth chart data - derive from role breakdown counts
   const growthData = useMemo(() => {
-    const days = [];
+    const days: { date: string; users: number; active: number }[] = [];
     const totalUsers = founderData?.overview?.totalUsers || 0;
     for (let i = 6; i >= 0; i--) {
       const d = new Date();

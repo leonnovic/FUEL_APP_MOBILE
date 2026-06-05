@@ -59,13 +59,10 @@ export async function GET(request: NextRequest) {
   const startDate = url.searchParams.get('startDate');
   const endDate = url.searchParams.get('endDate');
   if (startDate || endDate) {
-    where.timestamp = {};
-    if (startDate) {
-      where.timestamp.gte = new Date(startDate);
-    }
-    if (endDate) {
-      where.timestamp.lte = new Date(endDate);
-    }
+    const tsFilter: Record<string, Date> = {};
+    if (startDate) tsFilter.gte = new Date(startDate);
+    if (endDate) tsFilter.lte = new Date(endDate);
+    where.timestamp = tsFilter;
   }
 
   try {

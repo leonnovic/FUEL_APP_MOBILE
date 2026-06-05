@@ -243,9 +243,10 @@ function parseMpesaText(text: string): ParseResult {
   const avgPayment = inflows.length > 0 ? totalValid / inflows.length : 0;
 
   // Balance analysis
+  const lastBalance = inflows.length > 0 ? inflows[0].balance : 0;
   const trueInflow = totalValid;
   const recordedNet = totalValid - totalWithdrawals;
-  const balanceDelta = balance > 0 ? Math.abs(trueInflow - recordedNet) : 0;
+  const balanceDelta = lastBalance > 0 ? Math.abs(trueInflow - recordedNet) : 0;
   const unrecordedInflow = Math.max(0, trueInflow - recordedNet);
   const discrepancyRate = trueInflow > 0 ? (balanceDelta / trueInflow) * 100 : 0;
 
@@ -306,7 +307,8 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         try {
-          const pdfParse = (await import('pdf-parse')).default;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const pdfParse = require('pdf-parse') as (buf: Buffer, opts?: Record<string, unknown>) => Promise<{ text: string }>;
           const pdfData = await pdfParse(buffer, password ? { password } : undefined);
           text = pdfData.text;
         } catch {

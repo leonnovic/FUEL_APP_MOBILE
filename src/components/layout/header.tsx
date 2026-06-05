@@ -93,6 +93,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
+import { SyncIndicator } from '@/components/layout/sync-indicator';
 
 // Tab definitions for search
 const allTabs = [
@@ -145,99 +146,17 @@ interface Notification {
   tabId?: string;
 }
 
-// Mock notifications
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'alert',
-    title: 'Low Tank Alert: PMS',
-    description: 'PMS tank level below 15%. Immediate restocking recommended.',
-    timestamp: '2m ago',
-    unread: true,
-    tabId: 'inventory',
-  },
-  {
-    id: '2',
-    type: 'warning',
-    title: 'Overdue Invoice #INV-0042',
-    description: 'Client Peter Mwangi has an overdue balance of Ksh 45,000.',
-    timestamp: '15m ago',
-    unread: true,
-    tabId: 'invoice',
-  },
-  {
-    id: '3',
-    type: 'success',
-    title: 'Delivery Completed',
-    description: 'AGO delivery of 5,000L from KenolKobil has been received.',
-    timestamp: '1h ago',
-    unread: true,
-    tabId: 'delivery',
-  },
-  {
-    id: '4',
-    type: 'info',
-    title: 'Shift Change Reminder',
-    description: 'Evening shift starts at 6:00 PM. Confirm handover details.',
-    timestamp: '2h ago',
-    unread: true,
-    tabId: 'shifts',
-  },
-  {
-    id: '5',
-    type: 'reminder',
-    title: 'EPRA Price Update',
-    description: 'New fuel prices effective from tomorrow. Update your price board.',
-    timestamp: '3h ago',
-    unread: true,
-    tabId: 'price-board',
-  },
-  {
-    id: '6',
-    type: 'warning',
-    title: 'Maintenance Overdue',
-    description: 'Pump #3 calibration check is 5 days overdue. Schedule immediately.',
-    timestamp: '5h ago',
-    unread: false,
-    tabId: 'maintenance',
-  },
-  {
-    id: '7',
-    type: 'success',
-    title: 'M-PESA Reconciliation',
-    description: 'Daily M-PESA reconciliation complete. Ksh 287,400 processed.',
-    timestamp: '6h ago',
-    unread: false,
-    tabId: 'mpesa',
-  },
-  {
-    id: '8',
-    type: 'alert',
-    title: 'Quality Test Failed',
-    description: 'AGO density test failed KEBS standards. Re-test required.',
-    timestamp: '8h ago',
-    unread: false,
-    tabId: 'quality',
-  },
-  {
-    id: '9',
-    type: 'info',
-    title: 'New Employee Onboarded',
-    description: 'Grace Wanjiku has been added as a shift attendant.',
-    timestamp: 'Yesterday',
-    unread: false,
-    tabId: 'team',
-  },
-  {
-    id: '10',
-    type: 'reminder',
-    title: 'Backup Scheduled',
-    description: 'Weekly data backup will run tonight at 11 PM.',
-    timestamp: 'Yesterday',
-    unread: false,
-    tabId: 'data',
-  },
-];
+// Notifications are sourced from the API (audit logs + system events).
+// No hardcoded/mock data — notifications are populated from real events.
+const emptyNotifications: Notification[] = [];
+
+function formatTimestamp(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
 
 // Notification icon & color mapping
 const notificationConfig: Record<NotificationType, { icon: typeof AlertTriangle; color: string; bg: string }> = {
@@ -257,6 +176,7 @@ interface HeaderProps {
 
 export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard', onTabChange }: HeaderProps) {
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const stations = useStationStore((s) => s.stations);
   const currentStation = useStationStore((s) => s.currentStation);
@@ -267,9 +187,40 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>(emptyNotifications);
   const [notifFilter, setNotifFilter] = useState<string>('all');
   const [currentTime, setCurrentTime] = useState('');
+
+  // Fetch real notifications from audit logs API
+  useEffect(() => {
+    if (!token) return;
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications?limit=20', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.data) {
+          const mapped = data.data.map((n: { id: string; type: string; title: string; description: string; timestamp: string; unread: boolean; tabId?: string }) => ({
+            id: n.id,
+            type: (n.type || 'info') as NotificationType,
+            title: n.title,
+            description: n.description,
+            timestamp: formatTimestamp(n.timestamp),
+            unread: n.unread ?? true,
+            tabId: n.tabId,
+          }));
+          setNotifications(mapped);
+        }
+      } catch {
+        // Silently fail — notifications are non-critical
+      }
+    };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
@@ -485,8 +436,11 @@ export function Header({ onShowStations, onShowCombined, activeTab = 'dashboard'
           </div>
         </div>
 
-        {/* Right: Search, Notifications, Theme, User */}
+        {/* Right: Sync, Search, Notifications, Theme, User */}
         <div className="flex items-center gap-1 md:gap-2">
+          {/* Sync indicator */}
+          <SyncIndicator />
+
           {/* Search Command Palette trigger */}
           <Button
             variant="ghost"

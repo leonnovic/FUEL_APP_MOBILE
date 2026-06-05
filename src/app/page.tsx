@@ -10,6 +10,7 @@ import { SetupWizard } from '@/components/layout/setup-wizard';
 import { useAuthStore } from '@/store/auth-store';
 import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
+import { getAccessibleTabs } from '@/lib/rbac';
 
 // Loading fallback component
 function TabLoader() {
@@ -165,9 +166,37 @@ export default function Home() {
     return () => window.removeEventListener('changeTab', handleChangeTab);
   }, []);
 
+  // Get accessible tabs based on user role
+  const accessibleTabs = useMemo(() => {
+    if (!user?.role) return ['dashboard'];
+    return getAccessibleTabs(user.role);
+  }, [user]);
+
+  // Ensure the active tab is accessible, fallback to dashboard
+  const effectiveActiveTab = useMemo(() => {
+    if (viewState === 'app' && !accessibleTabs.includes(activeTab)) {
+      return accessibleTabs[0] || 'dashboard';
+    }
+    return activeTab;
+  }, [viewState, accessibleTabs, activeTab]);
+
   // Render active tab content
   const renderTabContent = () => {
-    switch (activeTab) {
+    // Block access if tab is not in the user's accessible tabs
+    if (!accessibleTabs.includes(effectiveActiveTab) && effectiveActiveTab !== 'dashboard') {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+          <div className="size-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+            <span className="text-2xl">🔒</span>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-200 mb-2">Access Restricted</h3>
+          <p className="text-sm text-slate-400 max-w-md">
+            You don&apos;t have permission to access this section. Contact your station owner or manager for access.
+          </p>
+        </div>
+      );
+    }
+    switch (effectiveActiveTab) {
       case 'dashboard':
         return <Dashboard />;
       case 'sales':
@@ -276,9 +305,9 @@ export default function Home() {
       {/* Gradient separator line below header */}
       <div className="h-px bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
 
-      {/* Desktop Tab Navigation */}
+      {/* Desktop Tab Navigation - filtered by role permissions */}
       <div className="hidden md:block">
-        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} accessibleTabs={accessibleTabs} />
       </div>
 
       {/* Mobile Tab Label with accent bar */}
@@ -293,15 +322,15 @@ export default function Home() {
       <main className="flex-1 p-3 md:p-6 pb-24 md:pb-6">
         <div className="max-w-7xl mx-auto">
           <div className={`rounded-2xl shadow-lg min-h-[calc(100vh-220px)] md:min-h-[600px] overflow-auto ${theme === 'dark' ? '' : 'bg-white'}`}>
-            <div className="p-3 md:p-6 animate-fade-in" key={activeTab}>
+            <div className="p-3 md:p-6 animate-fade-in" key={effectiveActiveTab}>
               {renderTabContent()}
             </div>
           </div>
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      {/* Mobile Bottom Navigation - filtered by role permissions */}
+      <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} accessibleTabs={accessibleTabs} />
 
       {/* AI Chatbot */}
       <AIChatbot />

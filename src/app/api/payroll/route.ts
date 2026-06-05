@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       });
       const existingIds = new Set(existing.map((e) => e.employeeId));
 
-      const newRecords = [];
+      const newRecords: unknown[] = [];
 
       for (const emp of employees) {
         if (existingIds.has(emp.id)) continue;
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const updated = [];
+      const updated: unknown[] = [];
       for (const record of records) {
         const newSHA = Math.round(record.grossPay * shaRate * 100) / 100;
         const newTotalDeductions = newSHA + record.nssfDeduction + record.payeDeduction + record.advanceDeduction + record.otherDeductions;
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
       const recordIds: string[] = body.recordIds || [];
       if (recordIds.length === 0) return errorResponse('recordIds is required', 400);
 
-      const updated = [];
+      const updated: unknown[] = [];
       for (const id of recordIds) {
         const result = await db.payroll.update({
           where: { id, stationId },
