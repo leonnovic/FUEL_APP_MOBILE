@@ -47,6 +47,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 interface TabNavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  accessibleTabs?: string[];
 }
 
 // Tab badges — counts/indicators for specific tabs
@@ -104,7 +105,11 @@ const tabs = [
   { id: 'company', label: 'Company', icon: Building2 },
 ];
 
-export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
+export function TabNavigation({ activeTab, onTabChange, accessibleTabs }: TabNavigationProps) {
+  // Filter tabs based on role permissions
+  const visibleTabs = accessibleTabs
+    ? tabs.filter(t => accessibleTabs.includes(t.id))
+    : tabs;
   const scrollRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -163,7 +168,7 @@ export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
 
       <ScrollArea className="w-full" ref={scrollRef}>
         <nav className="flex items-center gap-0 px-2 min-w-max tab-scroll-container" role="tablist" ref={navRef}>
-          {tabs.map((tab, index) => {
+          {visibleTabs.map((tab, index) => {
             const isActive = activeTab === tab.id;
             const badge = tabBadges[tab.id];
             const showSeparator = separatorAfter.has(index);

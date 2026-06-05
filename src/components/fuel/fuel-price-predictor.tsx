@@ -234,7 +234,7 @@ export function FuelPricePredictor() {
   // ─── EPRA Comparison ───────────────────────────────────────────────────
 
   const epraComparison = useMemo(() => {
-    const items = [];
+    const items: { fuel: string; epra: number; actual: number; margin: number }[] = [];
     if (currentPms > 0) items.push({ fuel: 'PMS', epra: epraPrices.pms, actual: currentPms, margin: currentPms - epraPrices.pms });
     if (currentAgo > 0) items.push({ fuel: 'AGO', epra: epraPrices.ago, actual: currentAgo, margin: currentAgo - epraPrices.ago });
     if (currentDpk > 0) items.push({ fuel: 'DPK', epra: epraPrices.dpk, actual: currentDpk, margin: currentDpk - epraPrices.dpk });

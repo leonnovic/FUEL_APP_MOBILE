@@ -44,6 +44,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface MobileBottomNavProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  accessibleTabs?: string[];
 }
 
 // Badges for bottom nav items
@@ -94,11 +95,19 @@ const moreTabs = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
+export function MobileBottomNav({ activeTab, onTabChange, accessibleTabs }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // Filter tabs by role permissions
+  const visibleMainTabs = accessibleTabs
+    ? mainTabs.filter(t => accessibleTabs.includes(t.id))
+    : mainTabs;
+  const visibleMoreTabs = accessibleTabs
+    ? moreTabs.filter(t => accessibleTabs.includes(t.id))
+    : moreTabs;
+
   // Check if the active tab is in the "more" list
-  const isActiveInMore = moreTabs.some((t) => t.id === activeTab);
+  const isActiveInMore = visibleMoreTabs.some((t) => t.id === activeTab);
 
   // Count tabs with notifications/updates for the "More" badge
   const moreBadgeCount = Object.entries(navBadges).filter(([key]) =>
@@ -133,7 +142,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
             }}
           />
 
-          {mainTabs.map((tab) => {
+          {visibleMainTabs.map((tab) => {
             const isActive = activeTab === tab.id;
             const badge = navBadges[tab.id];
             return (
@@ -210,7 +219,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
               </SheetHeader>
               <ScrollArea className="h-[calc(75vh-80px)] mt-4">
                 <div className="grid grid-cols-3 gap-2.5 px-4 pb-10">
-                  {moreTabs.map((tab) => {
+                  {visibleMoreTabs.map((tab) => {
                     const isActive = activeTab === tab.id;
                     const badge = navBadges[tab.id];
                     return (

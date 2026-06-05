@@ -110,16 +110,16 @@ export function DataManager() {
 
     switch (entityKey) {
       case 'sales':
-        data = Object.values(store.salesHistory);
+        data = Object.values(store.salesHistory) as unknown as Record<string, unknown>[];
         break;
       case 'deliveries':
-        data = Object.values(store.deliveryData);
+        data = Object.values(store.deliveryData) as unknown as Record<string, unknown>[];
         break;
       case 'clients':
-        data = Object.values(store.clients);
+        data = Object.values(store.clients) as unknown as Record<string, unknown>[];
         break;
       case 'invoices':
-        data = Object.values(store.invoices);
+        data = Object.values(store.invoices) as unknown as Record<string, unknown>[];
         break;
       case 'employees':
         data = store.employees as unknown as Record<string, unknown>[];

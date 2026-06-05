@@ -90,7 +90,7 @@ export const useStationStore = create<StationState>()(
         const state = get();
         const currentStation =
           state.currentStation &&
-          stations.find((s) => s.id === state.currentStation.id)
+          stations.find((s) => s.id === state.currentStation!.id)
             ? state.currentStation
             : stations[0] ?? null;
         set({ stations, currentStation });

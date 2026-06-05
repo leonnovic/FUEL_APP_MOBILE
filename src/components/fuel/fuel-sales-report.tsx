@@ -163,7 +163,7 @@ export function FuelSalesReport() {
     const actual = row.totalRevenue;
     const variance = actual - expected;
     const variancePercent = expected > 0 ? (variance / expected) * 100 : 0;
-    return { ...row, expected, variance, variancePercent };
+    return { ...row, expected, actual, variance, variancePercent };
   });
 
   // Per-pump breakdown (simulated: split PMS and AGO as different "pumps")

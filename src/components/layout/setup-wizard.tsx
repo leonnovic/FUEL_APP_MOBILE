@@ -88,7 +88,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const token = useAuthStore((s) => s.token);
 
   const handleSave = async () => {
-    const ownerId = user?.id ?? 'demo-user';
+    if (!user?.id) return;
+    const ownerId = user.id;
 
     try {
       // Create station via API

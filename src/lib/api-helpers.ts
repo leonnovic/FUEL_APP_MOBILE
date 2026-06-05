@@ -25,7 +25,7 @@ interface AuditLogInput {
   userId: string;
   userEmail: string;
   userRole: string;
-  action: 'create' | 'update' | 'delete';
+  action: string;
   resourceType: string;
   resourceId: string;
   snapshotBefore?: Record<string, unknown> | null;
@@ -276,4 +276,80 @@ export async function authenticateAndAuthorize(
     ipAddress: getIpAddress(request),
     userAgent: getUserAgent(request),
   };
+}
+
+// ─── Data Isolation Query Builder ─────────────────────────────────────────────
+
+/**
+ * Build a Prisma where clause that enforces data isolation.
+ * Founders see all data; other roles are scoped to their assigned stations.
+ */
+export async function buildIsolatedWhere(
+  user: SessionUser,
+  additionalFilters?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  // Founders have global access
+  if (user.role === 'founder') {
+    return { ...additionalFilters };
+  }
+
+  const stationIds = await getUserStationIds(user.userId);
+
+  // Also include stations owned by the user
+  if (user.role === 'owner') {
+    const ownedStations = await db.station.findMany({
+      where: { ownerId: user.userId },
+      select: { id: true },
+    });
+    const ownedIds = ownedStations.map((s) => s.id);
+    const combined = [...new Set([...stationIds, ...ownedIds])];
+    return { stationId: { in: combined }, ...additionalFilters };
+  }
+
+  return { stationId: { in: stationIds }, ...additionalFilters };
+}
+
+// ─── Enhanced Audit with Chain Hashing ────────────────────────────────────────
+
+export async function createChainedAuditLog(input: AuditLogInput & { sessionId?: string; reason?: string }): Promise<void> {
+  try {
+    const timestamp = new Date().toISOString();
+    const hashPayload = [
+      input.userId,
+      input.userEmail,
+      input.action,
+      input.resourceType,
+      input.resourceId || '',
+      timestamp,
+    ].join('|');
+    const logHash = crypto.createHash('sha256').update(hashPayload).digest('hex');
+
+    // Chain: fetch previous log hash for tamper evidence
+    const lastLog = await db.auditLogSoc2.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { logHash: true },
+    });
+
+    await db.auditLogSoc2.create({
+      data: {
+        userId: input.userId,
+        userEmail: input.userEmail,
+        userRole: input.userRole,
+        sessionId: input.sessionId,
+        action: input.action,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        snapshotBefore: input.snapshotBefore ? JSON.stringify(input.snapshotBefore) : null,
+        snapshotAfter: input.snapshotAfter ? JSON.stringify(input.snapshotAfter) : null,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+        stationId: input.stationId,
+        logHash,
+        previousLogHash: lastLog?.logHash ?? null,
+        reason: input.reason,
+      },
+    });
+  } catch (err) {
+    console.error('[api-helpers] createChainedAuditLog error:', err);
+  }
 }
