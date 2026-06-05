@@ -1078,31 +1078,41 @@ export default function FuelProDashboard() {
 
   // Load data when tab changes
   useEffect(() => {
-    switch (activeTab) {
-      case 'dashboard': fetchDashboard(); fetchAiInsights(); break
-      case 'stations': fetchStations(); break
-      case 'inventory': fetchInventory(); break
-      case 'sales': fetchSales(); break
-      case 'shifts': fetchShifts(); break
-      case 'compliance': fetchCompliance(); break
-      case 'admin': fetchAdmin(); fetchUsers(); fetchCompany(); break
-      case 'suppliers': fetchSuppliers(); break
-      case 'coupons': fetchCoupons(); break
-      case 'reconciliation': fetchReconciliations(); break
-      case 'deliveries': fetchDeliveries(); break
-      case 'expenses': fetchExpenses(); break
-      case 'invoices': fetchInvoices(); break
-      case 'contacts': fetchContacts(); break
-      case 'payroll': fetchEmployees(); break
-      case 'documents': fetchDocuments(); break
-      case 'mpesa': fetchMpesa(); break
-      case 'debts': fetchDebts(); break
-      case 'pumps': fetchPumps(); break
+    const loadTabData = () => {
+      switch (activeTab) {
+        case 'dashboard': fetchDashboard(); fetchAiInsights(); break
+        case 'stations': fetchStations(); break
+        case 'inventory': fetchInventory(); break
+        case 'sales': fetchSales(); break
+        case 'shifts': fetchShifts(); break
+        case 'compliance': fetchCompliance(); break
+        case 'admin': fetchAdmin(); fetchUsers(); fetchCompany(); break
+        case 'suppliers': fetchSuppliers(); break
+        case 'coupons': fetchCoupons(); break
+        case 'reconciliation': fetchReconciliations(); break
+        case 'deliveries': fetchDeliveries(); break
+        case 'expenses': fetchExpenses(); break
+        case 'invoices': fetchInvoices(); break
+        case 'contacts': fetchContacts(); break
+        case 'payroll': fetchEmployees(); break
+        case 'documents': fetchDocuments(); break
+        case 'mpesa': fetchMpesa(); break
+        case 'debts': fetchDebts(); break
+        case 'pumps': fetchPumps(); break
+      }
     }
+    loadTabData()
   }, [activeTab, fetchDashboard, fetchStations, fetchInventory, fetchSales, fetchShifts, fetchCompliance, fetchAdmin, fetchCompany, fetchSuppliers, fetchCoupons, fetchReconciliations, fetchDeliveries, fetchExpenses, fetchAiInsights, fetchInvoices, fetchContacts, fetchEmployees, fetchDocuments, fetchMpesa, fetchDebts, fetchPumps])
 
   // Mount & auto-login check
-  useEffect(() => { setMounted(true); const saved = localStorage.getItem('fuelpro_auth'); if (saved) setIsLoggedIn(true) }, [])
+  useEffect(() => {
+    const init = () => {
+      setMounted(true)
+      const saved = localStorage.getItem('fuelpro_auth')
+      if (saved) setIsLoggedIn(true)
+    }
+    init()
+  }, [])
 
   // Command palette keyboard shortcut
   useEffect(() => {
@@ -1131,7 +1141,10 @@ export default function FuelProDashboard() {
   }, [isLoggedIn, fetchDashboard])
 
   // Initial load
-  useEffect(() => { if (isLoggedIn) fetchDashboard() }, [isLoggedIn, fetchDashboard])
+  useEffect(() => {
+    const load = () => { if (isLoggedIn) fetchDashboard() }
+    load()
+  }, [isLoggedIn, fetchDashboard])
 
   // Login handler
   const handleLogin = async (e: React.FormEvent) => {
@@ -1699,7 +1712,7 @@ export default function FuelProDashboard() {
 
   // ─── Sidebar Component ─────────────────────────────────────────────────────
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-4 py-5 border-b border-border">
         <div className="flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 shrink-0">
@@ -5045,13 +5058,13 @@ export default function FuelProDashboard() {
       <div className="flex flex-1">
       {/* Desktop Sidebar */}
       <aside className={`hidden lg:flex flex-col border-r border-border bg-card transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setMobileSidebarOpen(false)} />}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 lg:hidden ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Main Content */}
