@@ -35,12 +35,12 @@ export async function getPathId(params: Promise<{ id: string }>) {
  * Wraps an async route handler with try/catch + console.error logging.
  * Eliminates repetitive try/catch blocks across all API routes.
  */
-export function apiHandler<T>(
+export function apiHandler(
   tag: string,
-  fn: () => Promise<NextResponse<T>>
-): Promise<NextResponse<T | { ok: false; error: string }>> {
+  fn: () => Promise<NextResponse>
+): Promise<NextResponse> {
   return fn().catch((error: unknown) => {
     console.error(`[${tag}]`, error)
-    return apiError(`Internal server error`) as NextResponse<{ ok: false; error: string }>
+    return apiError('Internal server error')
   })
 }

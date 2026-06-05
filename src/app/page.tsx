@@ -1462,7 +1462,7 @@ export default function FuelProDashboard() {
   const handleRecordDebtPayment = async () => {
     if (!editDebt || !paymentAmount) { toast.error('Payment amount is required'); return }
     try {
-      const res = await fetch(`/api/debts/${editDebt.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paidAmount }) })
+      const res = await fetch(`/api/debts/${editDebt.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paidAmount: paymentAmount }) })
       const json = await res.json()
       if (json.ok) {
         setDebts(prev => prev.map(d => d.id === editDebt.id ? json.data : d))
