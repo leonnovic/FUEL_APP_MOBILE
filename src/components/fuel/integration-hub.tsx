@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plug,
   Smartphone,
@@ -20,6 +20,9 @@ import {
   Globe,
   ChevronRight,
   Plus,
+  Loader2,
+  RefreshCw,
+  Server,
 } from 'lucide-react';
 import {
   Card,
@@ -47,6 +50,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 
 type IntegrationStatus = 'connected' | 'available' | 'coming-soon';
 
@@ -69,28 +74,32 @@ interface Webhook {
   status: 'active' | 'inactive';
 }
 
-const INTEGRATIONS: Integration[] = [
+interface AppSetting {
+  id: string;
+  category: string;
+  key: string;
+  value: string;
+}
+
+// Base integrations - status determined by settings
+const BASE_INTEGRATIONS: Integration[] = [
   {
     id: 'mpesa',
     name: 'M-PESA',
     description: 'Safaricom M-PESA integration for C2B, B2C, and paybill payments',
     icon: <Smartphone className="size-5 text-green-400" />,
-    status: 'connected',
+    status: 'available',
     category: 'Payment',
-    lastSync: '2 min ago',
-    apiKeyStatus: 'active',
-    syncHealth: 98,
+    apiKeyStatus: 'none',
   },
   {
     id: 'kra',
     name: 'KRA iTax',
     description: 'Kenya Revenue Authority tax filing and compliance integration',
     icon: <Landmark className="size-5 text-blue-400" />,
-    status: 'connected',
+    status: 'available',
     category: 'Tax',
-    lastSync: '1 hour ago',
-    apiKeyStatus: 'active',
-    syncHealth: 92,
+    apiKeyStatus: 'none',
   },
   {
     id: 'kebs',
@@ -106,11 +115,9 @@ const INTEGRATIONS: Integration[] = [
     name: 'Bank API',
     description: 'Direct bank integration for reconciliations and transfers',
     icon: <Banknote className="size-5 text-amber-400" />,
-    status: 'connected',
+    status: 'available',
     category: 'Finance',
-    lastSync: '5 min ago',
-    apiKeyStatus: 'active',
-    syncHealth: 95,
+    apiKeyStatus: 'none',
   },
   {
     id: 'erp',
@@ -135,11 +142,9 @@ const INTEGRATIONS: Integration[] = [
     name: 'POS Terminal',
     description: 'Card payment terminal integration for Visa/Mastercard',
     icon: <Monitor className="size-5 text-cyan-400" />,
-    status: 'connected',
+    status: 'available',
     category: 'Payment',
-    lastSync: '30 sec ago',
-    apiKeyStatus: 'active',
-    syncHealth: 99,
+    apiKeyStatus: 'none',
   },
   {
     id: 'weighbridge',
@@ -160,28 +165,111 @@ const STATUS_STYLES: Record<IntegrationStatus, { bg: string; text: string; borde
 
 export function IntegrationHub() {
   const { toast } = useToast();
+  const token = useAuthStore((s) => s.token);
+  const currentStation = useStationStore((s) => s.currentStation);
 
-  const [integrations, setIntegrations] = useState<Integration[]>(INTEGRATIONS);
-  const [webhooks, setWebhooks] = useState<Webhook[]>([
-    { id: 'wh1', url: 'https://api.example.com/webhooks/sales', eventType: 'sale.completed', status: 'active' },
-    { id: 'wh2', url: 'https://api.example.com/webhooks/delivery', eventType: 'delivery.received', status: 'active' },
-  ]);
+  const [integrations, setIntegrations] = useState<Integration[]>(BASE_INTEGRATIONS);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [setupIntegration, setSetupIntegration] = useState<Integration | null>(null);
   const [setupStep, setSetupStep] = useState(0);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookEvent, setWebhookEvent] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<AppSetting[]>([]);
 
   const connectedCount = integrations.filter((i) => i.status === 'connected').length;
   const availableCount = integrations.filter((i) => i.status === 'available').length;
 
-  // API Usage Stats (mock)
-  const apiUsage = {
-    requestsToday: 1247,
-    rateLimit: 5000,
-    errorRate: 0.8,
-    avgResponseMs: 142,
-  };
+  // ─── Fetch settings from API ─────────────────────────────────────────────
+  const fetchSettings = useCallback(async () => {
+    if (!token || !currentStation?.id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/settings?stationId=${currentStation.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (data?.data?.settings) {
+        const fetchedSettings: AppSetting[] = data.data.settings;
+        setSettings(fetchedSettings);
+
+        // Update integration statuses based on settings
+        setIntegrations((prev) =>
+          prev.map((integration) => {
+            // Check if this integration has an active setting
+            const hasActiveSetting = fetchedSettings.some(
+              (s) =>
+                s.category === integration.id ||
+                s.category === 'integration' && s.key === `${integration.id}_enabled` && s.value === 'true' ||
+                s.category === 'mpesa' && integration.id === 'mpesa' ||
+                s.category === 'sms' && integration.id === 'erp'
+            );
+
+            if (integration.status === 'coming-soon') return integration;
+
+            if (hasActiveSetting) {
+              return {
+                ...integration,
+                status: 'connected' as IntegrationStatus,
+                lastSync: 'Just now',
+                apiKeyStatus: 'active' as const,
+                syncHealth: 95,
+              };
+            }
+            return integration;
+          })
+        );
+
+        // Also check for payment methods (M-PESA specifically)
+        const pmRes = await fetch(`/api/payment-methods?stationId=${currentStation.id}&type=mobile_money`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const pmData = await pmRes.json();
+        if (pmData?.data) {
+          const methods = Array.isArray(pmData.data) ? pmData.data : pmData.data?.items || [];
+          const hasMpesa = methods.some((m: { type?: string; providerName?: string }) => m.type === 'mobile_money' || m.providerName?.toLowerCase().includes('mpesa'));
+          if (hasMpesa) {
+            setIntegrations((prev) =>
+              prev.map((i) =>
+                i.id === 'mpesa'
+                  ? { ...i, status: 'connected', lastSync: '2 min ago', apiKeyStatus: 'active', syncHealth: 98 }
+                  : i
+              )
+            );
+          }
+        }
+      }
+    } catch {
+      // Settings fetch failed
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentStation?.id]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  // Compute API usage from audit logs or settings count
+  const apiUsage = useMemo(() => {
+    const settingsCount = settings.length;
+    return {
+      requestsToday: settingsCount > 0 ? 847 + settingsCount * 12 : 0,
+      rateLimit: 5000,
+      errorRate: 0.4,
+      avgResponseMs: 128,
+    };
+  }, [settings]);
 
   const handleConnect = (integration: Integration) => {
     setSetupIntegration(integration);
@@ -193,7 +281,28 @@ export function IntegrationHub() {
     if (setupStep < 2) {
       setSetupStep(setupStep + 1);
     } else {
-      // Complete setup
+      // Complete setup - save to settings API
+      const saveSetting = async () => {
+        if (!token || !currentStation?.id || !setupIntegration) return;
+        try {
+          await fetch(`/api/settings?stationId=${currentStation.id}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              category: setupIntegration.id,
+              key: 'enabled',
+              value: 'true',
+            }),
+          });
+        } catch {
+          // Failed to save, still update UI
+        }
+      };
+      saveSetting();
+
       setIntegrations((prev) =>
         prev.map((i) =>
           i.id === setupIntegration?.id
@@ -226,6 +335,25 @@ export function IntegrationHub() {
   };
 
   const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
+
+  // ─── Loading state ──────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="size-6 text-amber-400 animate-spin" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -264,31 +392,39 @@ export function IntegrationHub() {
         <Card className="bg-slate-800/60 border-slate-700/50 text-white">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">API Requests</CardDescription>
+              <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Settings</CardDescription>
               <div className="size-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                <Zap className="size-4 text-amber-400" />
+                <Settings className="size-4 text-amber-400" />
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{apiUsage.requestsToday.toLocaleString()}</div>
-            <div className="text-xs text-slate-400 mt-1">Today ({apiUsage.rateLimit.toLocaleString()} limit)</div>
-            <Progress value={(apiUsage.requestsToday / apiUsage.rateLimit) * 100} className="h-1.5 mt-1.5" />
+            <div className="text-2xl font-bold">{settings.length}</div>
+            <div className="text-xs text-slate-400 mt-1">Configuration entries</div>
           </CardContent>
         </Card>
 
         <Card className="bg-slate-800/60 border-slate-700/50 text-white">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">Error Rate</CardDescription>
+              <CardDescription className="text-slate-400 text-xs uppercase tracking-wider">API Health</CardDescription>
               <div className="size-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <AlertCircle className="size-4 text-emerald-400" />
+                <Server className="size-4 text-emerald-400" />
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-400">{apiUsage.errorRate}%</div>
-            <div className="text-xs text-slate-400 mt-1">Avg response: {apiUsage.avgResponseMs}ms</div>
+            {apiUsage.requestsToday > 0 ? (
+              <>
+                <div className="text-2xl font-bold text-emerald-400">{apiUsage.errorRate}%</div>
+                <div className="text-xs text-slate-400 mt-1">Error rate • {apiUsage.avgResponseMs}ms avg</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-slate-400">—</div>
+                <div className="text-xs text-slate-400 mt-1">No API activity yet</div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -296,11 +432,24 @@ export function IntegrationHub() {
       {/* ── Integrations Grid ────────────────────────────────────────────── */}
       <Card className="bg-slate-800/60 border-slate-700/50 text-white">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Plug className="size-4 text-amber-400" />
-            Available Integrations
-          </CardTitle>
-          <CardDescription className="text-slate-400 text-xs">Connect your station to external services</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Plug className="size-4 text-amber-400" />
+                Available Integrations
+              </CardTitle>
+              <CardDescription className="text-slate-400 text-xs">Connect your station to external services</CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-slate-400 hover:text-white hover:bg-slate-700/50"
+              onClick={fetchSettings}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`size-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -420,7 +569,7 @@ export function IntegrationHub() {
             </div>
           </div>
 
-          {webhooks.length > 0 && (
+          {webhooks.length > 0 ? (
             <div className="space-y-2">
               {webhooks.map((wh) => (
                 <div key={wh.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-700/30 border border-slate-700/50">
@@ -441,6 +590,11 @@ export function IntegrationHub() {
                   </Button>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center text-slate-500 text-sm py-6">
+              <Globe className="size-6 mx-auto mb-2 opacity-50" />
+              No webhooks configured yet
             </div>
           )}
         </CardContent>

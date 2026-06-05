@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import {
   Fuel,
   Shield,
@@ -12,7 +12,6 @@ import {
   EyeOff,
   Lock,
   Mail,
-  Zap,
   Check,
   Loader2,
   Phone,
@@ -25,17 +24,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth-store';
-import { useStationStore } from '@/store/station-store';
-import { useFuelStore } from '@/store/fuel-store';
 
 interface LoginScreenProps {
   onLogin: () => void;
 }
 
-// NOTE: Hardcoded demo/seed data has been REMOVED.
-// All data now comes from the real database via API endpoints.
-// The /api/auth/demo endpoint creates sample data in the database when a demo user is created.
-// The fuel store's syncFromServer() method fetches real data from the API.
+// NOTE: All data comes from the real database via API endpoints.
+// Users must register or sign in with real credentials.
 
 // Animated background particles - client-only to avoid hydration mismatch
 function BackgroundParticles() {
@@ -198,12 +193,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [regError, setRegError] = useState<string | null>(null);
   const [regLoading, setRegLoading] = useState(false);
 
-  // Demo mode
-  const [demoLoading, setDemoLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const authStore = useAuthStore();
-  const { addStation } = useStationStore();
 
   const passwordStrength = getPasswordStrength(regPassword);
 
@@ -258,82 +250,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     }
   };
 
-  // Demo Mode handler - calls /api/auth/demo to create a demo user in the DB
-  const handleDemoLogin = useCallback(async () => {
-    setDemoLoading(true);
-    try {
-      const res = await fetch('/api/auth/demo', { method: 'POST' });
-      const data = await res.json();
 
-      if (!data.data) {
-        setSignInError('Failed to start demo mode');
-        setDemoLoading(false);
-        return;
-      }
-
-      const { user: demoUser, token } = data.data;
-
-      // Set the auth store with the demo user data
-      authStore.setUser({
-        id: demoUser.id,
-        email: demoUser.email,
-        name: demoUser.name,
-        role: demoUser.role,
-        tier: demoUser.tier,
-        phone: demoUser.phone,
-        permissions: demoUser.permissions || [],
-        assignedStations: demoUser.assignedStations || [],
-        token,
-      });
-
-      // Add station to local store if returned (with the real database ID)
-      if (data.data.station) {
-        addStation({
-          id: data.data.station.id,
-          name: data.data.station.name,
-          location: data.data.station.location,
-          country: 'Kenya',
-          currency: 'KES',
-          ownerId: demoUser.id,
-        });
-      } else if (demoUser.assignedStations && demoUser.assignedStations.length > 0) {
-        // For existing users, fetch station details from API
-        try {
-          const stationsRes = await fetch('/api/stations', {
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          });
-          const stationsData = await stationsRes.json();
-          if (stationsData.data?.length > 0) {
-            const apiStations = stationsData.data.map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              location: s.location,
-              country: s.country || 'Kenya',
-              currency: s.currency || 'KES',
-              ownerId: s.ownerId,
-              createdAt: s.createdAt,
-              updatedAt: s.updatedAt,
-            }));
-            useStationStore.getState().setStations(apiStations);
-          }
-        } catch {
-          // If API fetch fails, the page.tsx will try again
-        }
-      }
-
-      // Data will be synced from the server via syncFromServer() in page.tsx
-
-      // Show success animation
-      setShowSuccess(true);
-      setTimeout(() => {
-        onLogin();
-      }, 900);
-    } catch {
-      // Fallback: if API fails, show error - no more local demo seeding
-      setSignInError('Demo mode unavailable. Please try again or register an account.');
-      setDemoLoading(false);
-    }
-  }, [authStore, addStation, onLogin]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 relative flex flex-col items-center justify-center p-4 overflow-hidden noise-overlay">
@@ -620,18 +537,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 </TabsContent>
               </Tabs>
 
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-white/20" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-transparent px-2 text-slate-400">or</span>
-                </div>
-              </div>
-
-              {/* Demo Mode button / Success animation */}
-              {showSuccess ? (
+              {/* Success animation after login */}
+              {showSuccess && (
                 <div className="w-full flex items-center justify-center py-3">
                   <div className="animate-success-icon flex items-center justify-center">
                     <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
@@ -654,20 +561,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                     Welcome aboard!
                   </span>
                 </div>
-              ) : (
-                <Button
-                  onClick={handleDemoLogin}
-                  disabled={demoLoading}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11 text-base transition-all duration-200 hover:scale-105 active:scale-100"
-                  size="lg"
-                >
-                  {demoLoading ? (
-                    <Loader2 className="animate-spin mr-2 size-5" />
-                  ) : (
-                    <Zap className="size-5 mr-2" />
-                  )}
-                  Demo Mode — Try instantly
-                </Button>
               )}
             </CardContent>
           </Card>

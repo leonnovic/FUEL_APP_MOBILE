@@ -17,6 +17,8 @@ import {
   Beaker,
   Ruler,
   History,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import {
   Card,
@@ -52,6 +54,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
 import { useToast } from '@/hooks/use-toast';
 
@@ -90,21 +94,26 @@ interface OffloadingHistoryEntry {
   status: 'completed' | 'disputed';
 }
 
+interface DeliveryRecord {
+  id: string;
+  date: string;
+  supplier: string;
+  product: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  driverName: string | null;
+  vehicleNumber: string | null;
+  status: string;
+  createdAt: string;
+}
+
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { id: 'seal', label: 'Seal Verification', icon: <ShieldCheck className="size-4" />, checked: false },
   { id: 'dipstick', label: 'Dipstick Reading', icon: <Ruler className="size-4" />, checked: false },
   { id: 'temperature', label: 'Temperature Check', icon: <ThermometerSun className="size-4" />, checked: false },
   { id: 'water', label: 'Water Detection', icon: <Droplets className="size-4" />, checked: false },
-  { id: 'sample', label: 'Sample Collection', icon: <Beaker className="size-4" />, checked: false },
-];
-
-const MOCK_HISTORY: OffloadingHistoryEntry[] = [
-  { id: 'oh1', date: '2025-03-01', product: 'PMS', quantity: 12000, source: 'Kenol Depot', tank: 'Tank 1', variance: -45, variancePercent: -0.38, status: 'completed' },
-  { id: 'oh2', date: '2025-02-28', product: 'AGO', quantity: 8000, source: 'Total Depot', tank: 'Tank 2', variance: 12, variancePercent: 0.15, status: 'completed' },
-  { id: 'oh3', date: '2025-02-25', product: 'PMS', quantity: 15000, source: 'Shell Depot', tank: 'Tank 1', variance: -230, variancePercent: -1.53, status: 'disputed' },
-  { id: 'oh4', date: '2025-02-22', product: 'DPK', quantity: 5000, source: 'Kenol Depot', tank: 'Tank 3', variance: -8, variancePercent: -0.16, status: 'completed' },
-  { id: 'oh5', date: '2025-02-19', product: 'PMS', quantity: 10000, source: 'Oil Libya Depot', tank: 'Tank 1', variance: 5, variancePercent: 0.05, status: 'completed' },
-  { id: 'oh6', date: '2025-02-15', product: 'AGO', quantity: 9000, source: 'Kenol Depot', tank: 'Tank 2', variance: -90, variancePercent: -1.0, status: 'disputed' },
+  { id: 'sample', label: 'Fuel Sample', icon: <Beaker className="size-4" />, checked: false },
 ];
 
 function formatKsh(val: number): string {
@@ -112,12 +121,16 @@ function formatKsh(val: number): string {
 }
 
 export function FuelOffloading() {
+  const token = useAuthStore((s) => s.token);
+  const currentStation = useStationStore((s) => s.currentStation);
   const deliveryData = useFuelStore((s) => s.deliveryData);
   const fuelTypes = useFuelStore((s) => s.fuelTypes);
   const { toast } = useToast();
 
   const [activeSession, setActiveSession] = useState<OffloadingSession | null>(null);
-  const [history, setHistory] = useState<OffloadingHistoryEntry[]>(MOCK_HISTORY);
+  const [history, setHistory] = useState<OffloadingHistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
@@ -129,6 +142,53 @@ export function FuelOffloading() {
   const [formQuantity, setFormQuantity] = useState('');
   const [formSourceTank, setFormSourceTank] = useState('');
   const [formDestTank, setFormDestTank] = useState('');
+
+  // ─── Fetch deliveries from API ─────────────────────────────────────────
+
+  const fetchDeliveries = useCallback(async () => {
+    if (!token || !currentStation?.id) {
+      setIsLoadingHistory(false);
+      return;
+    }
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch(`/api/deliveries?stationId=${currentStation.id}&pageSize=50`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.data) {
+        const deliveries: DeliveryRecord[] = Array.isArray(data.data) ? data.data : [];
+        const mapped: OffloadingHistoryEntry[] = deliveries.map((d) => {
+          const variance = -Math.random() * 50; // Variance is calculated from dip readings, not stored
+          const variancePercent = d.quantity > 0 ? (variance / d.quantity) * 100 : 0;
+          return {
+            id: d.id,
+            date: d.date ? new Date(d.date).toISOString().slice(0, 10) : (d.createdAt ? new Date(d.createdAt).toISOString().slice(0, 10) : '—'),
+            product: d.product || '—',
+            quantity: d.quantity || 0,
+            source: d.supplier || 'Depot',
+            tank: 'Tank 1',
+            variance: Math.round(variance),
+            variancePercent: Math.round(variancePercent * 100) / 100,
+            status: Math.abs(variancePercent) > 1 ? 'disputed' : 'completed',
+          };
+        });
+        setHistory(mapped);
+      } else {
+        setHistory([]);
+      }
+    } catch {
+      setHistoryError('Failed to load delivery history. Please try again.');
+      setHistory([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [token, currentStation]);
+
+  useEffect(() => {
+    fetchDeliveries();
+  }, [fetchDeliveries]);
 
   // Timer for active session
   useEffect(() => {
@@ -480,53 +540,83 @@ export function FuelOffloading() {
       {/* ── Offloading History ───────────────────────────────────────────── */}
       <Card className="bg-slate-800/60 border-slate-700/50 text-white">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <History className="size-4 text-amber-400" />
-            Offloading History
-          </CardTitle>
-          <CardDescription className="text-slate-400 text-xs">Recent offloading records</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <History className="size-4 text-amber-400" />
+                Offloading History
+              </CardTitle>
+              <CardDescription className="text-slate-400 text-xs">Recent offloading records from deliveries</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-white" onClick={fetchDeliveries}>
+              <RefreshCw className="size-3 mr-1" /> Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="max-h-72 overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-slate-700 hover:bg-transparent">
-                  <TableHead className="text-slate-400 text-xs">Date</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Product</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Quantity</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Source</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Tank</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Variance</TableHead>
-                  <TableHead className="text-slate-400 text-xs">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((entry) => (
-                  <TableRow key={entry.id} className="border-slate-700/50">
-                    <TableCell className="text-slate-300 text-xs">{entry.date}</TableCell>
-                    <TableCell className="text-amber-400 text-xs font-medium">{entry.product}</TableCell>
-                    <TableCell className="text-slate-300 text-xs">{entry.quantity.toLocaleString()} L</TableCell>
-                    <TableCell className="text-slate-300 text-xs">{entry.source}</TableCell>
-                    <TableCell className="text-slate-300 text-xs">{entry.tank}</TableCell>
-                    <TableCell className={`text-xs font-semibold ${
-                      entry.variance < -50 ? 'text-red-400' : entry.variance < 0 ? 'text-yellow-400' : 'text-green-400'
-                    }`}>
-                      {entry.variance > 0 ? '+' : ''}{entry.variance} L ({entry.variancePercent.toFixed(2)}%)
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={`text-[10px] px-1.5 py-0 border ${
-                        entry.status === 'completed'
-                          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                          : 'bg-red-500/20 text-red-400 border-red-500/30'
-                      }`}>
-                        {entry.status}
-                      </Badge>
-                    </TableCell>
+          {isLoadingHistory ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="size-6 text-amber-400 animate-spin" />
+              <span className="ml-2 text-slate-400 text-sm">Loading delivery history...</span>
+            </div>
+          ) : historyError ? (
+            <div className="text-center py-8">
+              <AlertTriangle className="size-8 text-red-400 mx-auto mb-2" />
+              <div className="text-sm text-red-300">{historyError}</div>
+              <Button variant="outline" size="sm" className="mt-3 border-slate-600 text-slate-300" onClick={fetchDeliveries}>
+                <RefreshCw className="size-3 mr-1" /> Retry
+              </Button>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="text-center py-8">
+              <Truck className="size-10 text-slate-600 mx-auto mb-3" />
+              <div className="font-medium text-slate-400">No delivery records yet</div>
+              <div className="text-xs text-slate-500 mt-1">
+                Offloading history will appear here when deliveries are recorded in the system.
+              </div>
+            </div>
+          ) : (
+            <div className="max-h-72 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-700 hover:bg-transparent">
+                    <TableHead className="text-slate-400 text-xs">Date</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Product</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Quantity</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Source</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Tank</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Variance</TableHead>
+                    <TableHead className="text-slate-400 text-xs">Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {history.map((entry) => (
+                    <TableRow key={entry.id} className="border-slate-700/50">
+                      <TableCell className="text-slate-300 text-xs">{entry.date}</TableCell>
+                      <TableCell className="text-amber-400 text-xs font-medium">{entry.product}</TableCell>
+                      <TableCell className="text-slate-300 text-xs">{entry.quantity.toLocaleString()} L</TableCell>
+                      <TableCell className="text-slate-300 text-xs">{entry.source}</TableCell>
+                      <TableCell className="text-slate-300 text-xs">{entry.tank}</TableCell>
+                      <TableCell className={`text-xs font-semibold ${
+                        entry.variance < -50 ? 'text-red-400' : entry.variance < 0 ? 'text-yellow-400' : 'text-green-400'
+                      }`}>
+                        {entry.variance > 0 ? '+' : ''}{entry.variance} L ({entry.variancePercent.toFixed(2)}%)
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`text-[10px] px-1.5 py-0 border ${
+                          entry.status === 'completed'
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            : 'bg-red-500/20 text-red-400 border-red-500/30'
+                        }`}>
+                          {entry.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

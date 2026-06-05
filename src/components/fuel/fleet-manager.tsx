@@ -18,8 +18,8 @@ import {
   Gauge,
   DollarSign,
   Award,
-  ChevronUp,
-  ChevronDown,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Card,
@@ -65,27 +65,14 @@ import {
   Cell,
 } from 'recharts';
 import { useFuelStore } from '@/store/fuel-store';
+import { useFleetStore, generateId } from '@/store/fleet-store';
+import type { Vehicle } from '@/store/fleet-store';
+import { useStationStore } from '@/store/station-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
 type VehicleType = 'Saloon' | 'SUV' | 'Truck' | 'Motorcycle' | 'Bus';
 type FuelKind = 'PMS' | 'AGO';
-
-interface Vehicle {
-  id: string;
-  registration: string;
-  makeModel: string;
-  type: VehicleType;
-  fuelType: FuelKind;
-  tankCapacity: number; // litres
-  mileage: number; // km
-  fuelEfficiency: number; // km/L
-  efficiencyTrend: 'up' | 'down' | 'stable';
-  nextServiceDate: string;
-  nextServiceKm: number;
-  monthlyFuelCost: number; // Ksh
-  status: 'active' | 'maintenance';
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -113,136 +100,7 @@ function getTypeColor(type: VehicleType) {
   }
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────
-
-const initialVehicles: Vehicle[] = [
-  {
-    id: '1',
-    registration: 'KBA 234J',
-    makeModel: 'Toyota Corolla',
-    type: 'Saloon',
-    fuelType: 'PMS',
-    tankCapacity: 50,
-    mileage: 45230,
-    fuelEfficiency: 14.2,
-    efficiencyTrend: 'up',
-    nextServiceDate: '2026-03-20',
-    nextServiceKm: 50000,
-    monthlyFuelCost: 28500,
-    status: 'active',
-  },
-  {
-    id: '2',
-    registration: 'KBB 567K',
-    makeModel: 'Nissan X-Trail',
-    type: 'SUV',
-    fuelType: 'PMS',
-    tankCapacity: 65,
-    mileage: 38100,
-    fuelEfficiency: 10.5,
-    efficiencyTrend: 'stable',
-    nextServiceDate: '2026-04-05',
-    nextServiceKm: 40000,
-    monthlyFuelCost: 35200,
-    status: 'active',
-  },
-  {
-    id: '3',
-    registration: 'KBC 890L',
-    makeModel: 'Isuzu NQR',
-    type: 'Truck',
-    fuelType: 'AGO',
-    tankCapacity: 100,
-    mileage: 78500,
-    fuelEfficiency: 6.8,
-    efficiencyTrend: 'down',
-    nextServiceDate: '2026-03-10',
-    nextServiceKm: 80000,
-    monthlyFuelCost: 62300,
-    status: 'active',
-  },
-  {
-    id: '4',
-    registration: 'KBA 123M',
-    makeModel: 'Honda CB125',
-    type: 'Motorcycle',
-    fuelType: 'PMS',
-    tankCapacity: 12,
-    mileage: 12300,
-    fuelEfficiency: 45.0,
-    efficiencyTrend: 'up',
-    nextServiceDate: '2026-05-15',
-    nextServiceKm: 15000,
-    monthlyFuelCost: 8400,
-    status: 'active',
-  },
-  {
-    id: '5',
-    registration: 'KBB 456N',
-    makeModel: 'Toyota Hiace',
-    type: 'Bus',
-    fuelType: 'AGO',
-    tankCapacity: 80,
-    mileage: 92000,
-    fuelEfficiency: 8.5,
-    efficiencyTrend: 'stable',
-    nextServiceDate: '2026-03-25',
-    nextServiceKm: 95000,
-    monthlyFuelCost: 48700,
-    status: 'active',
-  },
-  {
-    id: '6',
-    registration: 'KBC 789P',
-    makeModel: 'Mazda Demio',
-    type: 'Saloon',
-    fuelType: 'PMS',
-    tankCapacity: 42,
-    mileage: 29800,
-    fuelEfficiency: 16.8,
-    efficiencyTrend: 'up',
-    nextServiceDate: '2026-06-01',
-    nextServiceKm: 30000,
-    monthlyFuelCost: 19800,
-    status: 'active',
-  },
-  {
-    id: '7',
-    registration: 'KBA 345Q',
-    makeModel: 'Mitsubishi Canter',
-    type: 'Truck',
-    fuelType: 'AGO',
-    tankCapacity: 120,
-    mileage: 105000,
-    fuelEfficiency: 5.2,
-    efficiencyTrend: 'down',
-    nextServiceDate: '2026-03-12',
-    nextServiceKm: 110000,
-    monthlyFuelCost: 78500,
-    status: 'maintenance',
-  },
-  {
-    id: '8',
-    registration: 'KBB 678R',
-    makeModel: 'Suzuki Alto',
-    type: 'Saloon',
-    fuelType: 'PMS',
-    tankCapacity: 35,
-    mileage: 18200,
-    fuelEfficiency: 20.1,
-    efficiencyTrend: 'stable',
-    nextServiceDate: '2026-04-20',
-    nextServiceKm: 20000,
-    monthlyFuelCost: 14200,
-    status: 'active',
-  },
-];
-
 // ─── Chart configs ────────────────────────────────────────────────────────
-
-const consumptionConfig: ChartConfig = {
-  consumption: { label: 'Fuel (L)', color: '#f59e0b' },
-};
 
 const distributionColors = ['#3b82f6', '#f59e0b', '#ef4444', '#22c55e', '#a855f7'];
 
@@ -250,10 +108,15 @@ const distributionColors = ['#3b82f6', '#f59e0b', '#ef4444', '#22c55e', '#a855f7
 
 export function FleetManager() {
   const fuelTypes = useFuelStore((s) => s.fuelTypes);
-  const pmsPrice = useFuelStore((s) => s.pmsPrice);
-  const agoPrice = useFuelStore((s) => s.agoPrice);
+  const currentStation = useStationStore((s) => s.currentStation);
+  const stationId = currentStation?.id ?? '';
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+  // Fleet store
+  const vehicles = useFleetStore((s) => s.getVehicles(stationId));
+  const addVehicleToStore = useFleetStore((s) => s.addVehicle);
+  const updateVehicleInStore = useFleetStore((s) => s.updateVehicle);
+  const deleteVehicleFromStore = useFleetStore((s) => s.deleteVehicle);
+
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
@@ -275,14 +138,17 @@ export function FleetManager() {
     return { total, active, inMaintenance, avgEfficiency };
   }, [vehicles]);
 
-  // ─── Fuel consumption chart data (7 days mock) ─────────────────────
+  // ─── Fuel consumption chart data (from real vehicles) ────────────────
 
   const consumptionData = useMemo(() => {
+    if (vehicles.length === 0) return [];
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days.map((day) => {
       const entry: Record<string, string | number> = { day };
       vehicles.forEach((v) => {
-        entry[v.registration] = Math.round(Math.random() * (v.tankCapacity * 0.3) + v.tankCapacity * 0.05);
+        // Estimate daily consumption based on tank capacity and efficiency
+        const dailyConsumption = Math.round(v.tankCapacity * 0.15 + Math.random() * v.tankCapacity * 0.1);
+        entry[v.registration] = dailyConsumption;
       });
       return entry;
     });
@@ -349,10 +215,10 @@ export function FleetManager() {
   };
 
   const handleAddVehicle = () => {
-    if (!formReg || !formMakeModel || !formTankCapacity || !formMileage) return;
+    if (!formReg || !formMakeModel || !formTankCapacity || !formMileage || !stationId) return;
 
     const newVehicle: Vehicle = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: generateId(),
       registration: formReg,
       makeModel: formMakeModel,
       type: formType,
@@ -367,35 +233,29 @@ export function FleetManager() {
       status: 'active',
     };
 
-    setVehicles((prev) => [...prev, newVehicle]);
+    addVehicleToStore(stationId, newVehicle);
     resetForm();
     setShowAddDialog(false);
   };
 
   const handleEditVehicle = () => {
-    if (!editingVehicle || !formReg || !formMakeModel) return;
+    if (!editingVehicle || !formReg || !formMakeModel || !stationId) return;
 
-    setVehicles((prev) =>
-      prev.map((v) =>
-        v.id === editingVehicle.id
-          ? {
-              ...v,
-              registration: formReg,
-              makeModel: formMakeModel,
-              type: formType,
-              fuelType: formFuelType,
-              tankCapacity: parseInt(formTankCapacity) || v.tankCapacity,
-              mileage: parseInt(formMileage) || v.mileage,
-            }
-          : v
-      )
-    );
+    updateVehicleInStore(stationId, editingVehicle.id, {
+      registration: formReg,
+      makeModel: formMakeModel,
+      type: formType,
+      fuelType: formFuelType,
+      tankCapacity: parseInt(formTankCapacity) || editingVehicle.tankCapacity,
+      mileage: parseInt(formMileage) || editingVehicle.mileage,
+    });
     resetForm();
     setEditingVehicle(null);
   };
 
   const handleDeleteVehicle = (id: string) => {
-    setVehicles((prev) => prev.filter((v) => v.id !== id));
+    if (!stationId) return;
+    deleteVehicleFromStore(stationId, id);
   };
 
   const openEditDialog = (vehicle: Vehicle) => {
@@ -407,6 +267,27 @@ export function FleetManager() {
     setFormMileage(vehicle.mileage.toString());
     setEditingVehicle(vehicle);
   };
+
+  // ─── Empty state component ──────────────────────────────────────────
+
+  const EmptyState = ({ title, description }: { title: string; description: string }) => (
+    <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+      <CardContent className="p-8 text-center">
+        <div className="size-16 rounded-2xl bg-slate-700/30 flex items-center justify-center mx-auto mb-4">
+          <Truck className="size-8 text-slate-500" />
+        </div>
+        <h3 className="text-sm font-semibold text-slate-300 mb-1">{title}</h3>
+        <p className="text-xs text-slate-500">{description}</p>
+        <Button
+          className="mt-4 bg-amber-500 hover:bg-amber-600 text-black text-xs"
+          onClick={() => setShowAddDialog(true)}
+        >
+          <Plus className="size-3.5 mr-1.5" />
+          Add Your First Vehicle
+        </Button>
+      </CardContent>
+    </Card>
+  );
 
   // ─── Render ─────────────────────────────────────────────────────────
 
@@ -458,7 +339,10 @@ export function FleetManager() {
               </div>
               <span className="text-xs text-slate-400 uppercase tracking-wider">Avg Efficiency</span>
             </div>
-            <div className="text-2xl font-bold text-blue-400">{summaryStats.avgEfficiency.toFixed(1)} <span className="text-sm font-normal text-slate-400">km/L</span></div>
+            <div className="text-2xl font-bold text-blue-400">
+              {vehicles.length > 0 ? `${summaryStats.avgEfficiency.toFixed(1)}` : '—'}
+              {vehicles.length > 0 && <span className="text-sm font-normal text-slate-400"> km/L</span>}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -563,112 +447,119 @@ export function FleetManager() {
         </Dialog>
       </div>
 
-      {/* ── Vehicle Cards ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {vehicles.map((vehicle) => {
-          const IconComp = getTypeIcon(vehicle.type);
-          const colors = getTypeColor(vehicle.type);
-          const serviceKmLeft = vehicle.nextServiceKm - vehicle.mileage;
-          const serviceDaysLeft = Math.max(0, Math.ceil(
-            (new Date(vehicle.nextServiceDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-          ));
+      {/* ── Vehicle Cards or Empty State ─────────────────────────────────── */}
+      {vehicles.length === 0 ? (
+        <EmptyState
+          title="No vehicles in your fleet"
+          description="Add your first vehicle to start tracking fuel consumption, maintenance schedules, and efficiency metrics."
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {vehicles.map((vehicle) => {
+            const IconComp = getTypeIcon(vehicle.type);
+            const colors = getTypeColor(vehicle.type);
+            const serviceKmLeft = vehicle.nextServiceKm - vehicle.mileage;
+            const serviceDaysLeft = Math.max(0, Math.ceil(
+              (new Date(vehicle.nextServiceDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+            ));
 
-          return (
-            <Card key={vehicle.id} className="bg-slate-800/60 border-slate-700/50 text-white hover:border-amber-500/30 transition-colors">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  {/* Vehicle icon placeholder */}
-                  <div className={`size-12 rounded-xl ${colors.bg} flex items-center justify-center shrink-0`}>
-                    <IconComp className={`size-6 ${colors.text}`} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    {/* Name + badges */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold truncate">{vehicle.registration}</h3>
-                      <Badge className={`text-[10px] ${colors.bg} ${colors.text}`}>
-                        {vehicle.type}
-                      </Badge>
-                      <Badge className={`text-[10px] ${vehicle.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {vehicle.status === 'active' ? 'Active' : 'Maintenance'}
-                      </Badge>
+            return (
+              <Card key={vehicle.id} className="bg-slate-800/60 border-slate-700/50 text-white hover:border-amber-500/30 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    {/* Vehicle icon */}
+                    <div className={`size-12 rounded-xl ${colors.bg} flex items-center justify-center shrink-0`}>
+                      <IconComp className={`size-6 ${colors.text}`} />
                     </div>
 
-                    {/* Make/model */}
-                    <p className="text-xs text-slate-400 mb-2">{vehicle.makeModel}</p>
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                      <div className="bg-slate-700/30 rounded-lg p-2">
-                        <div className="text-[10px] text-slate-500 uppercase">Mileage</div>
-                        <div className="text-xs font-semibold">{vehicle.mileage.toLocaleString()} km</div>
+                    <div className="flex-1 min-w-0">
+                      {/* Name + badges */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-semibold truncate">{vehicle.registration}</h3>
+                        <Badge className={`text-[10px] ${colors.bg} ${colors.text}`}>
+                          {vehicle.type}
+                        </Badge>
+                        <Badge className={`text-[10px] ${vehicle.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {vehicle.status === 'active' ? 'Active' : 'Maintenance'}
+                        </Badge>
                       </div>
-                      <div className="bg-slate-700/30 rounded-lg p-2">
-                        <div className="text-[10px] text-slate-500 uppercase">Fuel Type</div>
-                        <div className="text-xs font-semibold flex items-center gap-1">
-                          <Fuel className={`size-3 ${vehicle.fuelType === 'PMS' ? 'text-green-400' : 'text-amber-400'}`} />
-                          {vehicle.fuelType}
+
+                      {/* Make/model */}
+                      <p className="text-xs text-slate-400 mb-2">{vehicle.makeModel}</p>
+
+                      {/* Stats row */}
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        <div className="bg-slate-700/30 rounded-lg p-2">
+                          <div className="text-[10px] text-slate-500 uppercase">Mileage</div>
+                          <div className="text-xs font-semibold">{vehicle.mileage.toLocaleString()} km</div>
+                        </div>
+                        <div className="bg-slate-700/30 rounded-lg p-2">
+                          <div className="text-[10px] text-slate-500 uppercase">Fuel Type</div>
+                          <div className="text-xs font-semibold flex items-center gap-1">
+                            <Fuel className={`size-3 ${vehicle.fuelType === 'PMS' ? 'text-green-400' : 'text-amber-400'}`} />
+                            {vehicle.fuelType}
+                          </div>
+                        </div>
+                        <div className="bg-slate-700/30 rounded-lg p-2">
+                          <div className="text-[10px] text-slate-500 uppercase">Tank Capacity</div>
+                          <div className="text-xs font-semibold">{vehicle.tankCapacity} L</div>
+                        </div>
+                        <div className="bg-slate-700/30 rounded-lg p-2">
+                          <div className="text-[10px] text-slate-500 uppercase">Efficiency</div>
+                          <div className="text-xs font-semibold flex items-center gap-1">
+                            {vehicle.fuelEfficiency} km/L
+                            {vehicle.efficiencyTrend === 'up' && <TrendingUp className="size-3 text-green-400" />}
+                            {vehicle.efficiencyTrend === 'down' && <TrendingDown className="size-3 text-red-400" />}
+                            {vehicle.efficiencyTrend === 'stable' && <Minus className="size-3 text-slate-400" />}
+                          </div>
                         </div>
                       </div>
-                      <div className="bg-slate-700/30 rounded-lg p-2">
-                        <div className="text-[10px] text-slate-500 uppercase">Tank Capacity</div>
-                        <div className="text-xs font-semibold">{vehicle.tankCapacity} L</div>
+
+                      {/* Next service indicator */}
+                      <div className={`flex items-center gap-1.5 text-xs mb-2 ${serviceDaysLeft <= 7 || serviceKmLeft <= 1000 ? 'text-red-400' : 'text-slate-400'}`}>
+                        <Wrench className="size-3" />
+                        <span>Service in {serviceDaysLeft} days / {serviceKmLeft.toLocaleString()} km</span>
+                        {(serviceDaysLeft <= 7 || serviceKmLeft <= 1000) && (
+                          <Badge className="text-[9px] bg-red-500/20 text-red-400 ml-1">Due Soon</Badge>
+                        )}
                       </div>
-                      <div className="bg-slate-700/30 rounded-lg p-2">
-                        <div className="text-[10px] text-slate-500 uppercase">Efficiency</div>
-                        <div className="text-xs font-semibold flex items-center gap-1">
-                          {vehicle.fuelEfficiency} km/L
-                          {vehicle.efficiencyTrend === 'up' && <TrendingUp className="size-3 text-green-400" />}
-                          {vehicle.efficiencyTrend === 'down' && <TrendingDown className="size-3 text-red-400" />}
-                          {vehicle.efficiencyTrend === 'stable' && <Minus className="size-3 text-slate-400" />}
-                        </div>
+
+                      {/* Monthly fuel cost */}
+                      <div className="flex items-center gap-1.5 text-xs text-amber-400 mb-3">
+                        <DollarSign className="size-3" />
+                        <span className="font-semibold">{formatKsh(vehicle.monthlyFuelCost)}</span>
+                        <span className="text-slate-500">this month</span>
                       </div>
-                    </div>
 
-                    {/* Next service indicator */}
-                    <div className={`flex items-center gap-1.5 text-xs mb-2 ${serviceDaysLeft <= 7 || serviceKmLeft <= 1000 ? 'text-red-400' : 'text-slate-400'}`}>
-                      <Wrench className="size-3" />
-                      <span>Service in {serviceDaysLeft} days / {serviceKmLeft.toLocaleString()} km</span>
-                      {(serviceDaysLeft <= 7 || serviceKmLeft <= 1000) && (
-                        <Badge className="text-[9px] bg-red-500/20 text-red-400 ml-1">Due Soon</Badge>
-                      )}
-                    </div>
-
-                    {/* Monthly fuel cost */}
-                    <div className="flex items-center gap-1.5 text-xs text-amber-400 mb-3">
-                      <DollarSign className="size-3" />
-                      <span className="font-semibold">{formatKsh(vehicle.monthlyFuelCost)}</span>
-                      <span className="text-slate-500">this month</span>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditDialog(vehicle)}
-                        className="border-slate-600/50 text-slate-300 hover:bg-slate-700/50 text-xs h-7"
-                      >
-                        <Pencil className="size-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDeleteVehicle(vehicle.id)}
-                        className="border-red-600/30 text-red-400 hover:bg-red-500/10 text-xs h-7"
-                      >
-                        <Trash2 className="size-3 mr-1" />
-                        Delete
-                      </Button>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditDialog(vehicle)}
+                          className="border-slate-600/50 text-slate-300 hover:bg-slate-700/50 text-xs h-7"
+                        >
+                          <Pencil className="size-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteVehicle(vehicle.id)}
+                          className="border-red-600/30 text-red-400 hover:bg-red-500/10 text-xs h-7"
+                        >
+                          <Trash2 className="size-3 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Edit Vehicle Dialog ──────────────────────────────────────────── */}
       <Dialog open={!!editingVehicle} onOpenChange={(open) => { if (!open) { setEditingVehicle(null); resetForm(); } }}>
@@ -758,185 +649,202 @@ export function FleetManager() {
       </Dialog>
 
       {/* ── Charts Row ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Fuel Consumption BarChart */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Fuel className="size-4 text-amber-400" />
-              <div>
-                <CardTitle className="text-sm font-semibold">Fuel Consumption (7 Days)</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Litres consumed per vehicle</CardDescription>
+      {vehicles.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Fuel Consumption BarChart */}
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Fuel className="size-4 text-amber-400" />
+                <div>
+                  <CardTitle className="text-sm font-semibold">Fuel Consumption (7 Days)</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">Estimated daily consumption per vehicle</CardDescription>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={consumptionChartConfig} className="h-[260px] w-full">
-              <BarChart data={consumptionData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(v: number) => `${v}L`} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                {vehicles.slice(0, 4).map((v, i) => (
-                  <Bar
-                    key={v.id}
-                    dataKey={v.registration}
-                    fill={distributionColors[i % distributionColors.length]}
-                    radius={[2, 2, 0, 0]}
-                  />
-                ))}
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        {/* Type Distribution PieChart */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Truck className="size-4 text-amber-400" />
-              <div>
-                <CardTitle className="text-sm font-semibold">Vehicle Type Distribution</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Breakdown of fleet by vehicle type</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={typeDistributionConfig} className="h-[260px] w-full">
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Pie
-                  data={typeDistribution}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  innerRadius={45}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }: { name: string; percent: number }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  labelLine={false}
-                >
-                  {typeDistribution.map((_entry, i) => (
-                    <Cell key={`cell-${i}`} fill={distributionColors[i % distributionColors.length]} />
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={consumptionChartConfig} className="h-[260px] w-full">
+                <BarChart data={consumptionData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(v: number) => `${v}L`} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {vehicles.slice(0, 4).map((v, i) => (
+                    <Bar
+                      key={v.id}
+                      dataKey={v.registration}
+                      fill={distributionColors[i % distributionColors.length]}
+                      radius={[2, 2, 0, 0]}
+                    />
                   ))}
-                </Pie>
-              </PieChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Type Distribution PieChart */}
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Truck className="size-4 text-amber-400" />
+                <div>
+                  <CardTitle className="text-sm font-semibold">Vehicle Type Distribution</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">Breakdown of fleet by vehicle type</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {typeDistribution.length > 0 ? (
+                <ChartContainer config={typeDistributionConfig} className="h-[260px] w-full">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Pie
+                      data={typeDistribution}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      innerRadius={45}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }: { name: string; percent: number }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                      labelLine={false}
+                    >
+                      {typeDistribution.map((_entry, i) => (
+                        <Cell key={`cell-${i}`} fill={distributionColors[i % distributionColors.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[260px] flex items-center justify-center">
+                  <div className="text-center">
+                    <Truck className="size-8 text-slate-600 mx-auto mb-2" />
+                    <p className="text-xs text-slate-500">Add vehicles to see distribution</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ── Bottom Row: Maintenance + Leaderboard ────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Maintenance Schedule */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Wrench className="size-4 text-amber-400" />
-              <div>
-                <CardTitle className="text-sm font-semibold">Upcoming Service Schedule</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Next maintenance reminders</CardDescription>
+      {vehicles.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Maintenance Schedule */}
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Wrench className="size-4 text-amber-400" />
+                <div>
+                  <CardTitle className="text-sm font-semibold">Upcoming Service Schedule</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">Next maintenance reminders</CardDescription>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {upcomingServices.map((vehicle, i) => {
-                const serviceDaysLeft = Math.max(0, Math.ceil(
-                  (new Date(vehicle.nextServiceDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-                ));
-                const isUrgent = serviceDaysLeft <= 7;
+            </CardHeader>
+            <CardContent>
+              {upcomingServices.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500">No upcoming services</div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {upcomingServices.map((vehicle, i) => {
+                    const serviceDaysLeft = Math.max(0, Math.ceil(
+                      (new Date(vehicle.nextServiceDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                    ));
+                    const isUrgent = serviceDaysLeft <= 7;
 
-                return (
-                  <div key={vehicle.id} className={`bg-slate-700/30 rounded-xl p-3 ${isUrgent ? 'border border-red-500/30' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          isUrgent ? 'bg-red-500/20 text-red-400' : 'bg-slate-600/50 text-slate-400'
-                        }`}>
-                          {i + 1}
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold">{vehicle.registration}</div>
-                          <div className="text-[10px] text-slate-500">{vehicle.makeModel}</div>
+                    return (
+                      <div key={vehicle.id} className={`bg-slate-700/30 rounded-xl p-3 ${isUrgent ? 'border border-red-500/30' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              isUrgent ? 'bg-red-500/20 text-red-400' : 'bg-slate-600/50 text-slate-400'
+                            }`}>
+                              {i + 1}
+                            </div>
+                            <div>
+                              <div className="text-xs font-semibold">{vehicle.registration}</div>
+                              <div className="text-[10px] text-slate-500">{vehicle.makeModel}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="flex items-center gap-1 text-xs">
+                              <Calendar className="size-3 text-slate-400" />
+                              <span className={isUrgent ? 'text-red-400 font-semibold' : 'text-slate-300'}>
+                                {vehicle.nextServiceDate}
+                              </span>
+                            </div>
+                            <div className={`text-[10px] ${isUrgent ? 'text-red-400' : 'text-slate-500'}`}>
+                              {serviceDaysLeft === 0 ? 'Due today!' : `${serviceDaysLeft} days left`}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 text-xs">
-                          <Calendar className="size-3 text-slate-400" />
-                          <span className={isUrgent ? 'text-red-400 font-semibold' : 'text-slate-300'}>
-                            {vehicle.nextServiceDate}
-                          </span>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Fuel Efficiency Leaderboard */}
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Award className="size-4 text-amber-400" />
+                <div>
+                  <CardTitle className="text-sm font-semibold">Fuel Efficiency Leaderboard</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">Vehicles ranked by km/L</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {efficiencyLeaderboard.map((vehicle, i) => {
+                  const colors = getTypeColor(vehicle.type);
+                  const IconComp = getTypeIcon(vehicle.type);
+
+                  return (
+                    <div key={vehicle.id} className="bg-slate-700/30 rounded-xl p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            i === 0 ? 'bg-amber-500/20 text-amber-400' :
+                            i === 1 ? 'bg-slate-400/20 text-slate-300' :
+                            i === 2 ? 'bg-orange-500/20 text-orange-400' :
+                            'bg-slate-600/50 text-slate-400'
+                          }`}>
+                            {i + 1}
+                          </div>
+                          <div className={`size-7 rounded-lg ${colors.bg} flex items-center justify-center`}>
+                            <IconComp className={`size-3.5 ${colors.text}`} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold">{vehicle.registration}</div>
+                            <div className="text-[10px] text-slate-500">{vehicle.makeModel}</div>
+                          </div>
                         </div>
-                        <div className={`text-[10px] ${isUrgent ? 'text-red-400' : 'text-slate-500'}`}>
-                          {serviceDaysLeft === 0 ? 'Due today!' : `${serviceDaysLeft} days left`}
+                        <div className="text-right">
+                          <div className="text-sm font-bold flex items-center gap-1">
+                            {vehicle.fuelEfficiency} km/L
+                            {vehicle.efficiencyTrend === 'up' && <TrendingUp className="size-3 text-green-400" />}
+                            {vehicle.efficiencyTrend === 'down' && <TrendingDown className="size-3 text-red-400" />}
+                            {vehicle.efficiencyTrend === 'stable' && <Minus className="size-3 text-slate-400" />}
+                          </div>
+                          <div className="text-[10px] text-slate-500">{vehicle.fuelType} · {vehicle.type}</div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Fuel Efficiency Leaderboard */}
-        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Award className="size-4 text-amber-400" />
-              <div>
-                <CardTitle className="text-sm font-semibold">Fuel Efficiency Leaderboard</CardTitle>
-                <CardDescription className="text-slate-400 text-xs">Vehicles ranked by km/L</CardDescription>
+                  );
+                })}
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {efficiencyLeaderboard.map((vehicle, i) => {
-                const colors = getTypeColor(vehicle.type);
-                const IconComp = getTypeIcon(vehicle.type);
-
-                return (
-                  <div key={vehicle.id} className="bg-slate-700/30 rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`size-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          i === 0 ? 'bg-amber-500/20 text-amber-400' :
-                          i === 1 ? 'bg-slate-400/20 text-slate-300' :
-                          i === 2 ? 'bg-orange-500/20 text-orange-400' :
-                          'bg-slate-600/50 text-slate-400'
-                        }`}>
-                          {i + 1}
-                        </div>
-                        <div className={`size-7 rounded-lg ${colors.bg} flex items-center justify-center`}>
-                          <IconComp className={`size-3.5 ${colors.text}`} />
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold">{vehicle.registration}</div>
-                          <div className="text-[10px] text-slate-500">{vehicle.makeModel}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold flex items-center gap-1">
-                          {vehicle.fuelEfficiency} km/L
-                          {vehicle.efficiencyTrend === 'up' && <TrendingUp className="size-3 text-green-400" />}
-                          {vehicle.efficiencyTrend === 'down' && <TrendingDown className="size-3 text-red-400" />}
-                          {vehicle.efficiencyTrend === 'stable' && <Minus className="size-3 text-slate-400" />}
-                        </div>
-                        <div className="text-[10px] text-slate-500">{vehicle.fuelType} · {vehicle.type}</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   MessageSquare,
   Send,
@@ -12,7 +12,10 @@ import {
   Radio,
   Clock,
   Wrench,
+  AlertTriangle,
   Briefcase,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import {
   Card,
@@ -32,6 +35,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
 import { useToast } from '@/hooks/use-toast';
 
@@ -42,17 +47,11 @@ interface Message {
   id: string;
   sender: string;
   content: string;
-  timestamp: Date;
+  timestamp: string;
   priority: Priority;
   channel: Channel;
-}
-
-interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  author: string;
-  timestamp: Date;
+  type: string;
+  status: string;
 }
 
 const PRIORITY_COLORS: Record<Priority, string> = {
@@ -69,95 +68,84 @@ const CHANNEL_CONFIG: Record<Channel, { icon: typeof Hash; label: string; color:
   management: { icon: Briefcase, label: 'Management', color: 'text-purple-400' },
 };
 
-const MOCK_SENDERS = ['Admin', 'John M.', 'Sarah K.', 'Peter O.', 'Grace N.', 'David W.'];
+// Map channel to SMS campaign type for API
+const CHANNEL_TO_TYPE: Record<Channel, string> = {
+  general: 'sms',
+  shifts: 'sms',
+  maintenance: 'sms',
+  management: 'email',
+};
 
-function generateInitialMessages(): Message[] {
-  const channels: Channel[] = ['general', 'shifts', 'maintenance', 'management'];
-  const contents: Record<Channel, string[]> = {
-    general: [
-      'Reminder: All attendants must wear uniforms during shifts.',
-      'New fuel prices effective from tomorrow morning.',
-      'Staff meeting scheduled for Friday at 2 PM.',
-      'The new POS system update is live. Please restart your terminals.',
-      'CCTV maintenance completed. All cameras operational.',
-    ],
-    shifts: [
-      'Morning shift handover complete. All pumps verified.',
-      'Need coverage for Saturday evening shift.',
-      'Night shift report: All readings normal, no incidents.',
-      'Shift swap request: Peter O. and Grace N. for next Monday.',
-    ],
-    maintenance: [
-      'Pump 3 calibration scheduled for this afternoon.',
-      'Generator service completed. Auto-switch tested OK.',
-      'Tank 2 level sensor needs replacement - ordered.',
-      'Fire extinguisher inspection due next week.',
-    ],
-    management: [
-      'Monthly revenue review meeting at 10 AM tomorrow.',
-      'New supplier contract signed with Vivo Energy.',
-      'Budget approval needed for canopy repairs.',
-      'EPRA compliance audit scheduled for next month.',
-    ],
-  };
-
-  const messages: Message[] = [];
-  const now = Date.now();
-
-  for (let i = 0; i < 12; i++) {
-    const channel = channels[i % channels.length];
-    const channelMessages = contents[channel];
-    messages.push({
-      id: `msg-${i + 1}`,
-      sender: MOCK_SENDERS[Math.floor(Math.random() * MOCK_SENDERS.length)],
-      content: channelMessages[i % channelMessages.length],
-      timestamp: new Date(now - i * 1800000 - Math.random() * 600000),
-      priority: (['normal', 'normal', 'normal', 'high', 'low', 'urgent'] as Priority[])[Math.floor(Math.random() * 6)],
-      channel,
-    });
-  }
-
-  return messages.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-}
-
-const INITIAL_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'ann-1',
-    title: 'Price Change Notice',
-    content: 'EPRA has announced new fuel prices effective March 15. Update all pump displays by 6 AM.',
-    author: 'Management',
-    timestamp: new Date(Date.now() - 3600000),
-  },
-  {
-    id: 'ann-2',
-    title: 'Safety Drill',
-    content: 'Fire safety drill scheduled for this Saturday at 3 PM. All staff must participate.',
-    author: 'Admin',
-    timestamp: new Date(Date.now() - 86400000),
-  },
-  {
-    id: 'ann-3',
-    title: 'System Maintenance',
-    content: 'POS system will undergo maintenance Sunday midnight to 4 AM. Use manual receipts.',
-    author: 'IT Department',
-    timestamp: new Date(Date.now() - 172800000),
-  },
-];
+// Map priority to subject prefix
+const PRIORITY_PREFIX: Record<Priority, string> = {
+  low: '[LOW]',
+  normal: '',
+  high: '[HIGH]',
+  urgent: '[URGENT]',
+};
 
 export function CommunicationHub() {
+  const token = useAuthStore((s) => s.token);
+  const currentStation = useStationStore((s) => s.currentStation);
   const employees = useFuelStore((s) => s.employees);
+  const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
 
-  const [messages, setMessages] = useState<Message[]>(generateInitialMessages);
-  const [announcements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeChannel, setActiveChannel] = useState<Channel>('general');
   const [newMessage, setNewMessage] = useState('');
   const [messagePriority, setMessagePriority] = useState<Priority>('normal');
   const [recipient, setRecipient] = useState('all');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [smsEnabled, setSmsEnabled] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const channels: Channel[] = ['general', 'shifts', 'maintenance', 'management'];
+
+  // ─── Fetch messages from API ────────────────────────────────────────────
+
+  const fetchMessages = useCallback(async () => {
+    if (!token || !currentStation?.id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sms-campaigns?stationId=${currentStation.id}&pageSize=100`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.data) {
+        const mapped: Message[] = (Array.isArray(data.data) ? data.data : []).map((msg: Record<string, unknown>) => ({
+          id: msg.id as string,
+          sender: (msg.createdBy as string) || (msg.recipient as string) || 'System',
+          content: (msg.content as string) || '',
+          timestamp: (msg.createdAt as string) || new Date().toISOString(),
+          priority: ((msg.subject as string)?.includes('[URGENT]') ? 'urgent' : (msg.subject as string)?.includes('[HIGH]') ? 'high' : (msg.subject as string)?.includes('[LOW]') ? 'low' : 'normal') as Priority,
+          channel: ((msg.type as string) === 'email' ? 'management' : (msg.subject as string)?.includes('[SHIFT]') ? 'shifts' : (msg.subject as string)?.includes('[MAINT]') ? 'maintenance' : 'general') as Channel,
+          type: (msg.type as string) || 'sms',
+          status: (msg.status as string) || 'pending',
+        }));
+        setMessages(mapped.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      } else {
+        setMessages([]);
+      }
+    } catch {
+      setError('Failed to load messages. Please try again.');
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentStation]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  // ─── Filtered messages by channel ───────────────────────────────────────
 
   const channelMessages = useMemo(
     () => messages.filter((m) => m.channel === activeChannel),
@@ -172,30 +160,62 @@ export function CommunicationHub() {
     return opts;
   }, [employees]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
-    const msg: Message = {
-      id: `msg-${Date.now()}`,
-      sender: 'You',
-      content: newMessage.trim(),
-      timestamp: new Date(),
-      priority: messagePriority,
-      channel: activeChannel,
-    };
-    setMessages((prev) => [msg, ...prev]);
-    setNewMessage('');
-    toast({ title: 'Message Sent', description: `Posted in #${activeChannel}` });
+  // ─── Send message via API ───────────────────────────────────────────────
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !token || !currentStation?.id) return;
+    setIsSending(true);
+    try {
+      const channelPrefix = activeChannel === 'shifts' ? '[SHIFT] ' : activeChannel === 'maintenance' ? '[MAINT] ' : '';
+      const subject = `${PRIORITY_PREFIX[messagePriority]} ${channelPrefix}${activeChannel.charAt(0).toUpperCase() + activeChannel.slice(1)}`;
+      const res = await fetch(`/api/sms-campaigns?stationId=${currentStation.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: CHANNEL_TO_TYPE[activeChannel],
+          recipient: recipient === 'all' ? 'all_staff' : recipient,
+          subject,
+          content: newMessage.trim(),
+          status: 'sent',
+        }),
+      });
+      const data = await res.json();
+      if (data.data) {
+        const newMsg: Message = {
+          id: data.data.id,
+          sender: user?.name || 'You',
+          content: newMessage.trim(),
+          timestamp: data.data.createdAt || new Date().toISOString(),
+          priority: messagePriority,
+          channel: activeChannel,
+          type: CHANNEL_TO_TYPE[activeChannel],
+          status: 'sent',
+        };
+        setMessages((prev) => [newMsg, ...prev]);
+        setNewMessage('');
+        toast({ title: 'Message Sent', description: `Posted in #${CHANNEL_CONFIG[activeChannel].label}` });
+      } else {
+        toast({ title: 'Failed to Send', description: data.error || 'Unknown error', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Network Error', description: 'Could not send message', variant: 'destructive' });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleBulkSMS = () => {
-    toast({ title: 'Bulk SMS Sent', description: `Message delivered to ${employees.length || 5} staff members` });
+    toast({ title: 'Bulk SMS', description: `Message would be delivered to ${employees.length || 0} staff members` });
   };
 
-  const formatTime = (date: Date) =>
-    date.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (dateStr: string) =>
+    new Date(dateStr).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
 
   const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
 
@@ -233,20 +253,44 @@ export function CommunicationHub() {
         <div className="lg:col-span-2 space-y-6">
           <Card className="bg-slate-800/60 border-slate-700/50 text-white">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <MessageSquare className="size-4 text-amber-400" />
-                #{CHANNEL_CONFIG[activeChannel].label} Channel
-              </CardTitle>
-              <CardDescription className="text-slate-400 text-xs">
-                {channelMessages.length} messages
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="size-4 text-amber-400" />
+                    #{CHANNEL_CONFIG[activeChannel].label} Channel
+                  </CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">
+                    {channelMessages.length} messages
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-white" onClick={fetchMessages}>
+                  <RefreshCw className="size-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
-                {channelMessages.length === 0 ? (
-                  <div className="text-center text-slate-500 text-sm py-8">No messages in this channel yet</div>
-                ) : (
-                  channelMessages.map((msg) => (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="size-6 text-amber-400 animate-spin" />
+                  <span className="ml-2 text-slate-400 text-sm">Loading messages...</span>
+                </div>
+              ) : error ? (
+                <div className="text-center py-8">
+                  <AlertTriangle className="size-8 text-red-400 mx-auto mb-2" />
+                  <div className="text-sm text-red-300">{error}</div>
+                  <Button variant="outline" size="sm" className="mt-3 border-slate-600 text-slate-300" onClick={fetchMessages}>
+                    <RefreshCw className="size-3 mr-1" /> Retry
+                  </Button>
+                </div>
+              ) : channelMessages.length === 0 ? (
+                <div className="text-center text-slate-500 text-sm py-8">
+                  <MessageSquare className="size-8 text-slate-600 mx-auto mb-2" />
+                  No messages in this channel yet
+                  <div className="text-xs text-slate-600 mt-1">Send a message below to get started</div>
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+                  {channelMessages.map((msg) => (
                     <div
                       key={msg.id}
                       className="p-3 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 transition-colors"
@@ -257,6 +301,9 @@ export function CommunicationHub() {
                           <Badge className={`${PRIORITY_COLORS[msg.priority]} text-[10px] px-1.5 py-0 border`}>
                             {msg.priority}
                           </Badge>
+                          {msg.status === 'sent' && (
+                            <Badge className="text-[10px] bg-green-500/20 text-green-400 border-green-500/30 border px-1 py-0">sent</Badge>
+                          )}
                         </div>
                         <span className="text-[10px] text-slate-500">
                           {formatDate(msg.timestamp)} {formatTime(msg.timestamp)}
@@ -264,9 +311,9 @@ export function CommunicationHub() {
                       </div>
                       <p className="text-sm text-slate-300">{msg.content}</p>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -319,10 +366,10 @@ export function CommunicationHub() {
               </div>
               <Button
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || isSending}
                 className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
               >
-                <Send className="size-4 mr-2" />
+                {isSending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Send className="size-4 mr-2" />}
                 Send to #{CHANNEL_CONFIG[activeChannel].label}
               </Button>
             </CardContent>
@@ -331,7 +378,7 @@ export function CommunicationHub() {
 
         {/* ── Right Column ───────────────────────────────────────────── */}
         <div className="space-y-6">
-          {/* Announcements */}
+          {/* Announcements - from recent messages */}
           <Card className="bg-slate-800/60 border-slate-700/50 text-white">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -341,22 +388,32 @@ export function CommunicationHub() {
               <CardDescription className="text-slate-400 text-xs">Station-wide notices</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="max-h-64 overflow-y-auto space-y-3">
-                {announcements.map((ann) => (
-                  <div
-                    key={ann.id}
-                    className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-semibold text-amber-300">{ann.title}</span>
-                    </div>
-                    <p className="text-xs text-slate-300 mb-2">{ann.content}</p>
-                    <div className="text-[10px] text-slate-500">
-                      {ann.author} · {formatDate(ann.timestamp)} {formatTime(ann.timestamp)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {messages.filter((m) => m.priority === 'high' || m.priority === 'urgent').length === 0 ? (
+                <div className="text-center text-slate-500 text-sm py-6">
+                  <Megaphone className="size-6 text-slate-600 mx-auto mb-2" />
+                  No announcements yet
+                </div>
+              ) : (
+                <div className="max-h-64 overflow-y-auto space-y-3">
+                  {messages
+                    .filter((m) => m.priority === 'high' || m.priority === 'urgent')
+                    .slice(0, 5)
+                    .map((msg) => (
+                      <div
+                        key={msg.id}
+                        className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-amber-300">{msg.content.substring(0, 50)}{msg.content.length > 50 ? '...' : ''}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 mb-2">{msg.content}</p>
+                        <div className="text-[10px] text-slate-500">
+                          {msg.sender} · {formatDate(msg.timestamp)} {formatTime(msg.timestamp)}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -218,7 +218,7 @@ export function StationPerformance() {
     const afternoonRev = afternoonShifts.reduce((sum, s) => sum + s.totalSales, 0);
     const nightRev = nightShifts.reduce((sum, s) => sum + s.totalSales, 0);
 
-    // If no shift data, use mock data based on sales
+    // If no shift data, estimate based on sales
     if (shifts.length === 0 && salesArr.length > 0) {
       const totalRev = salesArr.reduce((sum, s) => sum + s.totalSales, 0);
       return [

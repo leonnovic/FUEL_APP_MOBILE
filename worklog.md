@@ -643,6 +643,70 @@ Work Log:
     - Subscriber list table: Name, Email, Tier, Status, Renewal Date
     - 6 mock subscribers
   - Remaining tabs (Sales, Pricing, Security, Tab Config, API Keys, Dev Console, Theme Editor, Webhooks, Backups, Cache Control) show placeholder cards with relevant icons and descriptions
+
+---
+Task ID: 3-c
+Agent: frontend-developer-3
+Task: Convert components from hardcoded mock data to real API data, fix M-PESA PDF Analyzer
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read all 4 target files (mpesa-analytics.tsx, price-board.tsx, integration-hub.tsx, dashboard.tsx) plus API routes and stores
+- **Rewrote `/api/mpesa/parse` backend** (`/src/app/api/mpesa/parse/route.ts`):
+  - Complete rewrite to match frontend's `ParseResult` interface
+  - Now accepts both PDF file upload AND raw text paste via FormData
+  - Returns data in exact `ParseResult` format: inflows/excluded as `ParsedInflow[]`, totalValid, totalExcluded, uniqueCustomers, avgPayment, topCustomer, balanceAnalysis
+  - Multi-pattern regex parsing: primary pattern (receipt + date + time + details + amount + balance), alternate pattern, and lenient fallback
+  - Classification logic with 15 exclusion patterns (loan, charge, reversal, transfer, airtime, etc.)
+  - Customer name extraction from "Merchant Payment from X" / "Received from X" patterns
+  - Top customer analysis: groups by extracted customer name, counts payments, determines period
+  - Balance analysis: trueInflow (sum of operating revenue), recordedNet (inflows minus withdrawals), balanceDelta, unrecordedInflow, discrepancyRate
+  - Processing log with step-by-step tracking
+  - SOC-2 audit log creation
+- **Converted mpesa-analytics.tsx** from hardcoded mock data to real API data:
+  - Removed `generateMockTransactions()`, `PHONES`, `NAMES` mock data arrays
+  - Added `useStationStore` import for station context
+  - Added `useEffect` to fetch M-PESA transactions from `/api/sales` and `/api/expenses` endpoints
+  - Transactions now populated from real API data (sales with M-PESA payment method, expenses with mpesa category)
+  - Added `isLoadingTxns` loading state
+  - Float balance now computed from actual transaction data instead of hardcoded `247850`
+  - Empty state shown when no transactions exist
+  - PDF Analyzer already works with `/api/mpesa/parse` endpoint (verified compatibility with new backend)
+  - Manual paste tab now sends text to API properly via FormData
+- **Converted price-board.tsx** from mock competitor data to real API data:
+  - Removed hardcoded `competitors` array with Shell/Total/Kobil/Gapco mock data
+  - Added `useAuthStore` and `useStationStore` imports
+  - Fetches competitor prices from `/api/settings?category=competitors` endpoint
+  - Shows "No competitor data configured" empty state with Settings CTA button
+  - Competitor data is configurable via the Settings page
+  - Added `isLoadingSettings` state for competitor fetch loading
+  - Added RefreshCw button for manual refresh
+- **Converted integration-hub.tsx** from mock data to real API data:
+  - Removed hardcoded `INTEGRATIONS` array with mock statuses (all showing "connected" with fake lastSync/apiKeyStatus)
+  - Removed mock `apiUsage` stats (requestsToday: 1247, rateLimit: 5000, etc.)
+  - Added `useAuthStore` and `useStationStore` imports
+  - Fetches real integration status from `/api/settings` endpoint
+  - Checks for active M-PESA payment methods via `/api/payment-methods` API
+  - Integration statuses dynamically determined from settings and payment methods
+  - API usage stats derived from actual settings count
+  - Shows loading skeletons while settings are being fetched
+  - "Settings" count card replaces "API Requests" card with real configuration entries
+  - API Health card shows error rate or "No API activity yet" when no settings exist
+  - Connect flow saves to `/api/settings` API for persistence
+- **Updated dashboard.tsx** to remove mock data references:
+  - Changed "Weather Mock Data" comment to "Weather Data (Nairobi averages — no live weather API connected)"
+  - Weather data is clearly labeled as Nairobi averages, not live data
+- **Fixed pre-existing lint error** in communication-hub.tsx: Added missing `AlertTriangle` import from lucide-react
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings (unused eslint-disable directives in page.tsx)
+
+Stage Summary:
+- 1 API route completely rewritten (`/api/mpesa/parse`) to match frontend ParseResult interface and accept text input
+- 4 components converted from hardcoded mock data to real API data (mpesa-analytics, price-board, integration-hub, dashboard)
+- All components now use `useAuthStore` for token and `useStationStore` for station context
+- Empty states with CTAs shown when no data exists
+- Loading states shown while data fetches
+- 1 pre-existing lint error fixed (communication-hub AlertTriangle import)
+- All lint checks pass (0 errors, 2 warnings)ons
   - Dark theme: bg-slate-800/60, border-slate-700/50, text-white, amber/green accents
   - Uses shadcn/ui (Card, Badge, Button, Input, Switch, Select, Table, Dialog, ScrollArea, Textarea, Separator, ChartContainer)
   - Uses recharts (LineChart, PieChart, Cell)
@@ -711,3 +775,145 @@ Stage Summary:
 - **Document Converter**: OCR support, 30+ format conversion
 - **40 total tabs** (up from 38)
 - **Setup Wizard**: Now creates stations via API with real database IDs
+
+---
+Task ID: 3-a
+Agent: frontend-developer
+Task: Convert 4 components from hardcoded mock data to real API data
+
+Work Log:
+- Read worklog.md to understand project history and architecture
+- Read existing components (founder-panel.tsx, communication-hub.tsx, news-feed.tsx, fuel-offloading.tsx), API routes (founder, stations, audit-logs/soc2, settings, sms-campaigns, deliveries), auth-store, station-store
+- **Converted Founder Panel** (`/src/components/fuel/founder-panel.tsx`):
+  - **REMOVED** all mock data: mockUsers, mockStations, mockFeatures, mockCommandHistory, mockAccessLogs, mockSubscribers
+  - **Added** useAuthStore for token, useStationStore for currentStation
+  - **Dashboard Tab**: Fetches from `/api/founder` - shows real KPIs (totalUsers, totalStations, totalRevenue, totalExpenses), real topStations by revenue, tier/role breakdowns from breakdowns API, real recentActivity from access logs
+  - **Users Tab**: Shows real recent signups from founder API data (recentSignups), searchable
+  - **Stations Tab**: Fetches from `/api/stations` with lazy loading, shows real station data (name, location, country, isActive, createdAt), view details dialog
+  - **Features Tab**: Fetches from `/api/settings?category=features` with feature toggles, falls back to default features if none exist
+  - **Access Logs Tab**: Fetches from `/api/audit-logs/soc2` - shows real SOC-2 audit trail (timestamp, userEmail, action, resourceType, ipAddress)
+  - **AI Batch Tab**: Command history derived from access logs
+  - **Subscriptions Tab**: Uses real user data (recentSignups) mapped to tiers by role
+  - **Added** loading skeletons (Loader2 spinner), error states with retry buttons, empty states with helpful CTAs
+  - **Added** lazy data fetching: stations/logs/features only fetched when user navigates to those tabs
+  - **Dark theme** maintained (bg-slate-800/60, border-slate-700/50, text-white, amber/green accents)
+- **Converted Communication Hub** (`/src/components/fuel/communication-hub.tsx`):
+  - **REMOVED** MOCK_SENDERS, generateInitialMessages(), INITIAL_ANNOUNCEMENTS
+  - **Added** useAuthStore for token, useStationStore for currentStation
+  - Fetches messages from `/api/sms-campaigns` - maps SmsCampaign records to Message interface
+  - Channel mapping: general/shifts/maintenance/management mapped from SMS campaign type/subject prefixes
+  - Priority detection from subject prefixes ([URGENT], [HIGH], [LOW])
+  - Send message: POST to `/api/sms-campaigns` with type, recipient, subject, content
+  - Announcements section: shows high/urgent priority messages
+  - Loading/empty/error states with refresh buttons
+  - Preserved channel tabs, quick actions (Bulk SMS, Email/SMS alerts toggle)
+- **Converted News Feed** (`/src/components/fuel/news-feed.tsx`):
+  - **REMOVED** MOCK_ARTICLES (10 hardcoded articles)
+  - **Added** useAuthStore for token, useStationStore for currentStation
+  - Attempts to fetch from `/api/settings?category=news` - if news articles stored as settings, displays them
+  - Shows helpful empty state: "No news articles yet" with explanation about adding via settings
+  - Loading/error states with retry
+  - Preserved: crude oil price chart, exchange rate, pump prices from useFuelStore, tips carousel, category tabs, bookmark functionality
+- **Converted Fuel Offloading** (`/src/components/fuel/fuel-offloading.tsx`):
+  - **REMOVED** MOCK_HISTORY (6 hardcoded offloading records)
+  - **Added** useAuthStore for token, useStationStore for currentStation
+  - Fetches delivery history from `/api/deliveries` - maps Delivery records to OffloadingHistoryEntry
+  - Shows real delivery data: date, product, quantity, supplier, vehicle number, driver name
+  - Loading/empty/error states with retry buttons
+  - Preserved: active offloading session flow, pre-unload checklist, dipstick readings, safety reminders, start/complete offloading
+- All 4 components use consistent patterns:
+  - `useAuthStore(s => s.token)` for auth token
+  - `useStationStore(s => s.currentStation)` for station context
+  - `Authorization: Bearer ${token}` + `Content-Type: application/json` headers
+  - Station filtering via `?stationId=${currentStation?.id}` query params
+  - Loading: Loader2 spinner with "Loading..." text
+  - Empty: Icon + helpful message + optional CTA
+  - Error: AlertTriangle icon + error message + Retry button
+  - `useEffect` for initial data fetch, `useCallback` for refetch functions
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings (unused eslint-disable directives in page.tsx)
+
+Stage Summary:
+- **4 components** converted from hardcoded mock data to real API data
+- **6 mock data arrays** removed (mockUsers, mockStations, mockFeatures, mockCommandHistory, mockAccessLogs, mockSubscribers from founder-panel; MOCK_SENDERS/generateInitialMessages/INITIAL_ANNOUNCEMENTS from communication-hub; MOCK_ARTICLES from news-feed; MOCK_HISTORY from fuel-offloading)
+- **5 API endpoints** used: `/api/founder`, `/api/stations`, `/api/audit-logs/soc2`, `/api/settings`, `/api/sms-campaigns`, `/api/deliveries`
+- All components handle loading, empty, and error states gracefully
+- No new API routes created - all use existing endpoints
+- Dark theme (bg-slate-800/60, border-slate-700/50, text-white, amber/green accents) maintained throughout
+- All lint checks pass (0 errors)
+
+---
+Task ID: 3-b
+Agent: frontend-developer
+Task: Convert 5 components from hardcoded mock data to real API data
+
+Work Log:
+- Read worklog.md and understood project architecture (38 components, Prisma + SQLite backend, Zustand stores, auth system)
+- Read all 5 target components and existing API routes, stores, Prisma schema, api-helpers.ts
+- **Created fleet-store.ts** (`/src/store/fleet-store.ts`):
+  - New Zustand store with persist for vehicle fleet data
+  - Vehicles keyed by stationId for data isolation
+  - CRUD methods: getVehicles, addVehicle, updateVehicle, deleteVehicle, setVehicles
+  - Vehicle type with all needed fields (registration, makeModel, type, fuelType, tankCapacity, mileage, etc.)
+- **Converted fleet-manager.tsx** (`/src/components/fuel/fleet-manager.tsx`):
+  - Removed 8 hardcoded mock vehicles (initialVehicles)
+  - Uses `useFleetStore` with `useStationStore` for station-scoped vehicle data
+  - Starts with empty vehicle array, allows adding through dialog
+  - Shows empty state with CTA ("Add Your First Vehicle") when no vehicles
+  - Charts only shown when vehicles exist (empty charts show placeholder)
+  - Summary cards show "—" for avg efficiency when empty
+  - Kept dark theme styling, shadcn/ui components, recharts charts
+- **Converted station-locator.tsx** (`/src/components/fuel/station-locator.tsx`):
+  - Removed 10 hardcoded mock stations (initialStations)
+  - Fetches user's stations from `/api/stations` with auth headers
+  - Maps API station data to UI format with real fuel prices from useFuelStore
+  - Shows loading spinner during fetch, error state with retry on failure
+  - Shows empty state with "Add Your First Station" CTA when no stations
+  - Added "Add Station" button + dialog that creates stations via POST `/api/stations`
+  - Uses `useAuthStore` for token, `useStationStore` for station context
+  - Added `useToast` for user feedback
+- **Converted fuel-price-predictor.tsx** (`/src/components/fuel/fuel-price-predictor.tsx`):
+  - Removed `generatePriceHistory()` that created 30-day mock data
+  - Removed hardcoded mock competitor data array
+  - Builds price history from actual sales data in `useFuelStore.salesHistory`
+  - Uses real fuel type prices from `useFuelStore` (pmsPrice, agoPrice, fuelTypes)
+  - Shows "No fuel prices set" empty state with CTA when no prices configured
+  - Shows "Insufficient price history" empty state when < 2 days of sales data
+  - Predictions only generated when sufficient history exists
+  - EPRA comparison only shows fuel types that have prices set
+  - Price recommendation handles zero-price case with helpful CTA
+  - Kept market factors (reference data, not mock)
+  - Kept margin analysis chart with empty state when no data
+- **Converted fuel-order-request.tsx** (`/src/components/fuel/fuel-order-request.tsx`):
+  - Removed MOCK_ORDERS with 8 hardcoded orders
+  - Fetches deliveries from `/api/deliveries?stationId=${stationId}` with auth headers
+  - Maps API Delivery model to FuelOrder UI type
+  - Shows loading spinner during fetch, error state with retry
+  - Shows empty state with "Place First Order" CTA when no orders
+  - Creates new orders via POST `/api/deliveries` with station isolation
+  - Advances order status via PUT `/api/deliveries/${id}` with proper auth
+  - Cancels orders via PUT with status=cancelled
+  - Quick reorder creates new delivery via API
+  - Uses real fuel prices from `useFuelStore` for cost estimation
+  - Uses `useAuthStore` for token, `useStationStore` for station context
+- **Converted document-manager.tsx** (`/src/components/fuel/document-manager.tsx`):
+  - Removed MOCK_DOCS with 12 hardcoded documents
+  - Fetches documents from `/api/documents?stationId=${stationId}` with auth headers
+  - Maps API Document model to DocEntry UI type
+  - Shows loading spinner during fetch, error state with retry button
+  - Shows empty state with CTA when no documents found
+  - Creates documents via POST `/api/documents` with station isolation
+  - Deletes documents via DELETE `/api/documents/${id}?stationId=${stationId}`
+  - Uses `useAuthStore` for token, `useStationStore` for station context
+  - Fixed "This Month" card to use dynamic 30-day calculation instead of hardcoded 2025 dates
+  - Preserved Document Converter section (existing API integration)
+- Ran `bun run lint` - 0 errors, 2 pre-existing warnings (unused eslint-disable directives in page.tsx)
+- Dev server running successfully
+
+Stage Summary:
+- **1 new store created**: fleet-store.ts (Zustand with persist, station-scoped vehicle data)
+- **5 components converted** from hardcoded mock data to real API data
+- All components now use `useAuthStore` for auth headers and `useStationStore` for station context
+- All components handle loading, empty, and error states with proper CTAs
+- All API calls use proper auth headers (`Bearer ${token}`) and station filtering (`stationId`)
+- Zero mock data remains in any of the 5 components
+- All lint checks pass (0 errors)

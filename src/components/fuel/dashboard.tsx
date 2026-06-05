@@ -159,7 +159,7 @@ function getRelativeTime(dateStr: string): string {
   return then.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
 }
 
-// ─── Weather Mock Data ──────────────────────────────────────────────────────
+// ─── Weather Data (Nairobi averages — no live weather API connected) ────────
 
 const weatherData = {
   temp: 24,

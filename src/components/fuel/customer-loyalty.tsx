@@ -181,7 +181,7 @@ export function CustomerLoyalty() {
   );
 
   const loyaltyRedemptionRate = useMemo(() => {
-    // Mock redemption rate based on tier distribution
+    // Estimated redemption rate based on tier distribution
     const goldAndAbove = clientsWithLoyalty.filter((c) => c.loyaltyPoints >= 2000).length;
     const total = clientsWithLoyalty.length;
     return total > 0 ? (goldAndAbove / total) * 100 : 0;

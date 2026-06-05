@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
 import {
   authenticateAndAuthorize,
   createAuditLog,
@@ -7,122 +6,279 @@ import {
   successResponse,
 } from '@/lib/api-helpers';
 
-// M-PESA transaction line patterns
-const MERCHANT_PAYMENT_REGEX = /Merchant\s+Payment\s+from\s+([A-Za-z\s]+)\s*-\s*(\d[\d\s]+)/i;
-const AMOUNT_REGEX = /KES?[\s,]*([\d,]+(?:\.\d{2})?)/i;
-const DATE_REGEX = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?/i;
-const TRANSACTION_ID_REGEX = /([A-Z0-9]{10,12})\s+Merchant/i;
+// ─── Types matching frontend ParseResult ──────────────────────────────────
 
-// Exclusion patterns for non-inflow transactions
-const EXCLUSION_PATTERNS = [
-  /loan/i,
-  /charge/i,
-  /fee/i,
-  /reversal/i,
-  /withdrawal/i,
-  /transfer\s+to/i,
-  /airtime/i,
-  /paybill/i,
-  /tax/i,
-  /penalty/i,
-  /interest/i,
+interface ParsedInflow {
+  receipt: string;
+  date: string;
+  time: string;
+  details: string;
+  paidIn: number;
+  withdrawal: number;
+  balance: number;
+  category: string;
+}
+
+interface BalanceAnalysis {
+  trueInflow: number;
+  recordedNet: number;
+  balanceDelta: number;
+  unrecordedInflow: number;
+  discrepancyRate: number;
+}
+
+interface TopCustomer {
+  name: string;
+  total: number;
+  payments: number;
+  period: string;
+}
+
+interface ParseResult {
+  inflows: ParsedInflow[];
+  excluded: ParsedInflow[];
+  totalValid: number;
+  totalExcluded: number;
+  uniqueCustomers: number;
+  avgPayment: number;
+  lineCount: number;
+  rawTextLength: number;
+  processingLog: string[];
+  topCustomer: TopCustomer | null;
+  balanceAnalysis: BalanceAnalysis;
+}
+
+// ─── Exclusion patterns ─────────────────────────────────────────────────
+
+const EXCLUSION_PATTERNS: { pattern: RegExp; category: string }[] = [
+  { pattern: /loan/i, category: 'loan' },
+  { pattern: /overdraft/i, category: 'loan' },
+  { pattern: /charge/i, category: 'charge' },
+  { pattern: /fee/i, category: 'charge' },
+  { pattern: /reversal/i, category: 'reversal' },
+  { pattern: /reversed/i, category: 'reversal' },
+  { pattern: /withdrawal/i, category: 'transfer' },
+  { pattern: /transfer\s+to/i, category: 'transfer' },
+  { pattern: /sent\s+to/i, category: 'transfer' },
+  { pattern: /airtime/i, category: 'charge' },
+  { pattern: /paybill\s+payment/i, category: 'transfer' },
+  { pattern: /tax/i, category: 'charge' },
+  { pattern: /penalty/i, category: 'charge' },
+  { pattern: /interest/i, category: 'charge' },
+  { pattern: /savings/i, category: 'transfer' },
 ];
 
-interface ParsedTransaction {
-  transactionId: string;
-  date: string;
-  sender: string;
-  senderPhone: string;
-  amount: number;
-  rawLine: string;
+// ─── Transaction line regex patterns ────────────────────────────────────
+
+// Matches lines like: QJK4R2V7G6  1/3/25 9:30 AM  Merchant Payment from John Mwangi  5,000.00  252,850.00
+// Or: QJK4R2V7G6  1/3/25  Merchant Payment from John Mwangi  254712345678  KES 5,000.00  252,850.00
+const TX_LINE_REGEX = /^([A-Z0-9]{8,12})\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)?\s*(.+?)\s+([\d,]+(?:\.\d{2})?)\s+([\d,]+(?:\.\d{2})?)\s*$/i;
+
+// Simpler pattern for lines without receipt prefix
+const TX_LINE_ALT = /^(.+?)\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)\s+(.+?)\s+([\d,]+(?:\.\d{2})?)\s*$/i;
+
+function parseAmount(str: string): number {
+  return parseFloat(str.replace(/,/g, '')) || 0;
 }
 
-interface MpesaParseResult {
-  inflows: ParsedTransaction[];
-  totalValid: number;
-  excluded: { rawLine: string; reason: string }[];
-  summary: {
-    totalInflows: number;
-    totalAmount: number;
-    excludedCount: number;
-    parsedAt: string;
-    stationId: string;
-  };
+function classifyTransaction(details: string): string {
+  for (const { pattern, category } of EXCLUSION_PATTERNS) {
+    if (pattern.test(details)) return category;
+  }
+  return 'operating_revenue';
 }
 
-function parseMpesaTransactions(text: string): MpesaParseResult {
+function extractCustomerName(details: string): string {
+  // Try to extract name from "Merchant Payment from X", "Received from X", "Payment from X"
+  const fromMatch = details.match(/(?:from|by)\s+([A-Za-z\s]+?)(?:\s+-|\s+\d|\s*$)/i);
+  if (fromMatch && fromMatch[1]) return fromMatch[1].trim();
+  // Try "X paid Y"
+  const paidMatch = details.match(/^([A-Za-z\s]+?)(?:\s+paid|\s+sent|\s+transferred)/i);
+  if (paidMatch && paidMatch[1]) return paidMatch[1].trim();
+  return details.substring(0, 40).trim();
+}
+
+function parseMpesaText(text: string): ParseResult {
+  const log: string[] = ['Starting M-PESA text parsing...'];
   const lines = text.split('\n').filter((line) => line.trim().length > 0);
-  const inflows: ParsedTransaction[] = [];
-  const excluded: { rawLine: string; reason: string }[] = [];
+  log.push(`Found ${lines.length} lines to process`);
+
+  const inflows: ParsedInflow[] = [];
+  const excluded: ParsedInflow[] = [];
 
   for (const line of lines) {
     const trimmedLine = line.trim();
 
-    // Check if this line contains a merchant payment (inflow)
-    const merchantMatch = trimmedLine.match(MERCHANT_PAYMENT_REGEX);
-    if (!merchantMatch) continue;
-
-    // Check exclusion patterns
-    let isExcluded = false;
-    let exclusionReason = '';
-    for (const pattern of EXCLUSION_PATTERNS) {
-      if (pattern.test(trimmedLine)) {
-        isExcluded = true;
-        exclusionReason = `Matched exclusion pattern: ${pattern.source}`;
-        break;
-      }
-    }
-
-    if (isExcluded) {
-      excluded.push({ rawLine: trimmedLine, reason: exclusionReason });
+    // Skip header/footer lines
+    if (
+      trimmedLine.length < 10 ||
+      /^(date|time|details|receipt|statement|account|balance|total|page|generated)/i.test(trimmedLine) ||
+      /^[-=]{3,}$/.test(trimmedLine) ||
+      /^M-PESA/i.test(trimmedLine) && trimmedLine.length < 30
+    ) {
       continue;
     }
 
-    // Extract amount
-    const amountMatch = trimmedLine.match(AMOUNT_REGEX);
-    const amount = amountMatch
-      ? parseFloat(amountMatch[1].replace(/,/g, ''))
-      : 0;
+    // Try primary pattern (receipt date time details amount balance)
+    let match = trimmedLine.match(TX_LINE_REGEX);
+    let receipt = '';
+    let date = '';
+    let time = '';
+    let details = '';
+    let paidIn = 0;
+    let withdrawal = 0;
+    let balance = 0;
 
-    // Extract date
-    const dateMatch = trimmedLine.match(DATE_REGEX);
-    const date = dateMatch ? dateMatch[1] : '';
+    if (match) {
+      receipt = match[1];
+      date = match[2];
+      time = match[3] || '';
+      details = match[4].trim();
+      // Determine if this is paid-in or withdrawal based on context
+      const firstAmount = parseAmount(match[5]);
+      const secondAmount = parseAmount(match[6]);
+      balance = secondAmount;
 
-    // Extract transaction ID
-    const txMatch = trimmedLine.match(TRANSACTION_ID_REGEX);
-    const transactionId = txMatch ? txMatch[1] : '';
+      // Check if the line suggests a withdrawal (outgoing)
+      if (/withdrawal|sent|transfer|paid\s+to|b2c/i.test(details)) {
+        withdrawal = firstAmount;
+      } else {
+        paidIn = firstAmount;
+      }
+    } else {
+      // Try alternate pattern
+      match = trimmedLine.match(TX_LINE_ALT);
+      if (match) {
+        receipt = '';
+        details = match[1].trim();
+        date = match[2];
+        time = match[3] || '';
+        const amount = parseAmount(match[5]);
+        // Check direction
+        if (/withdrawal|sent|transfer|paid\s+to|b2c/i.test(details)) {
+          withdrawal = amount;
+        } else {
+          paidIn = amount;
+        }
+      } else {
+        // Try a more lenient approach: find any line with amounts
+        const amountMatches = trimmedLine.match(/([\d,]+(?:\.\d{2}))/g);
+        if (amountMatches && amountMatches.length >= 2) {
+          // Extract what we can
+          const parts = trimmedLine.split(/\s{2,}|\t/);
+          if (parts.length >= 3) {
+            receipt = parts[0]?.match(/^[A-Z0-9]{8,12}$/i) ? parts[0] : '';
+            details = parts.slice(1, -2).join(' ').trim();
+            paidIn = parseAmount(amountMatches[amountMatches.length - 2]);
+            balance = parseAmount(amountMatches[amountMatches.length - 1]);
+            // Try to find date in the line
+            const dateMatch = trimmedLine.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+            date = dateMatch ? dateMatch[1] : '';
+            const timeMatch = trimmedLine.match(/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)/i);
+            time = timeMatch ? timeMatch[1] : '';
+          }
+        } else {
+          continue; // Can't parse this line
+        }
+      }
+    }
 
-    // Extract sender info
-    const sender = merchantMatch[1]?.trim() || 'Unknown';
-    const senderPhone = merchantMatch[2]?.trim() || '';
+    if (!details) continue;
 
-    inflows.push({
-      transactionId,
+    // Classify the transaction
+    const category = classifyTransaction(details);
+
+    const parsed: ParsedInflow = {
+      receipt,
       date,
-      sender,
-      senderPhone,
-      amount,
-      rawLine: trimmedLine,
-    });
+      time,
+      details,
+      paidIn,
+      withdrawal,
+      balance,
+      category,
+    };
+
+    if (category === 'operating_revenue') {
+      inflows.push(parsed);
+    } else {
+      excluded.push(parsed);
+    }
   }
 
-  const totalAmount = inflows.reduce((sum, tx) => sum + tx.amount, 0);
+  log.push(`Parsed ${inflows.length} operating revenue inflows`);
+  log.push(`Excluded ${excluded.length} non-operating items`);
+
+  // Calculate metrics
+  const totalValid = inflows.reduce((s, i) => s + i.paidIn, 0);
+  const totalExcluded = excluded.reduce((s, i) => s + i.paidIn, 0);
+  const totalWithdrawals = [...inflows, ...excluded].reduce((s, i) => s + i.withdrawal, 0);
+
+  // Unique customers
+  const customerMap = new Map<string, { total: number; count: number }>();
+  for (const inflow of inflows) {
+    const name = extractCustomerName(inflow.details);
+    const existing = customerMap.get(name) || { total: 0, count: 0 };
+    existing.total += inflow.paidIn;
+    existing.count += 1;
+    customerMap.set(name, existing);
+  }
+
+  // Top customer
+  let topCustomer: TopCustomer | null = null;
+  for (const [name, data] of customerMap) {
+    if (!topCustomer || data.total > topCustomer.total) {
+      topCustomer = {
+        name,
+        total: data.total,
+        payments: data.count,
+        period: inflows.length > 0
+          ? `${inflows[inflows.length - 1].date} - ${inflows[0].date}`
+          : 'N/A',
+      };
+    }
+  }
+
+  const uniqueCustomers = customerMap.size;
+  const avgPayment = inflows.length > 0 ? totalValid / inflows.length : 0;
+
+  // Balance analysis
+  const trueInflow = totalValid;
+  const recordedNet = totalValid - totalWithdrawals;
+  const balanceDelta = balance > 0 ? Math.abs(trueInflow - recordedNet) : 0;
+  const unrecordedInflow = Math.max(0, trueInflow - recordedNet);
+  const discrepancyRate = trueInflow > 0 ? (balanceDelta / trueInflow) * 100 : 0;
+
+  log.push(`Total operating revenue: KES ${totalValid.toFixed(2)}`);
+  log.push(`Total excluded: KES ${totalExcluded.toFixed(2)}`);
+  log.push(`Unique customers: ${uniqueCustomers}`);
+  if (topCustomer) {
+    log.push(`Top customer: ${topCustomer.name} (${topCustomer.payments} payments)`);
+  }
+  log.push('Parsing complete');
 
   return {
     inflows,
-    totalValid: inflows.length,
     excluded,
-    summary: {
-      totalInflows: inflows.length,
-      totalAmount: Math.round(totalAmount * 100) / 100,
-      excludedCount: excluded.length,
-      parsedAt: new Date().toISOString(),
-      stationId: '', // Will be filled by the route handler
+    totalValid,
+    totalExcluded,
+    uniqueCustomers,
+    avgPayment,
+    lineCount: lines.length,
+    rawTextLength: text.length,
+    processingLog: log,
+    topCustomer,
+    balanceAnalysis: {
+      trueInflow,
+      recordedNet,
+      balanceDelta,
+      unrecordedInflow,
+      discrepancyRate,
     },
   };
 }
 
-// POST /api/mpesa/parse - Parse M-PESA PDF statement
+// POST /api/mpesa/parse - Parse M-PESA PDF statement or pasted text
 export async function POST(request: NextRequest) {
   const auth = await authenticateAndAuthorize(request);
   if ('error' in auth) return auth.error;
@@ -130,29 +286,51 @@ export async function POST(request: NextRequest) {
   const { user, stationId, ipAddress, userAgent } = auth;
 
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
+    const contentType = request.headers.get('content-type') || '';
+    let text = '';
+    let fileName = '';
+    let mode = 'auto';
 
-    if (!file) {
-      return errorResponse('PDF file is required (form field: "file")', 400);
+    if (contentType.includes('multipart/form-data')) {
+      // FormData upload (PDF or text)
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      const textInput = formData.get('text') as string | null;
+      mode = (formData.get('mode') as string) || 'auto';
+      const password = formData.get('password') as string | null;
+
+      if (file && file.name.toLowerCase().endsWith('.pdf')) {
+        // Parse PDF file
+        fileName = file.name;
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        try {
+          const pdfParse = (await import('pdf-parse')).default;
+          const pdfData = await pdfParse(buffer, password ? { password } : undefined);
+          text = pdfData.text;
+        } catch {
+          return errorResponse('Failed to parse PDF. It may be encrypted or corrupted.', 400);
+        }
+      } else if (textInput) {
+        // Raw text input
+        text = textInput;
+        fileName = 'pasted-text';
+      } else if (file) {
+        return errorResponse('Only PDF files are supported. For text, use the "text" form field.', 400);
+      } else {
+        return errorResponse('Please provide a PDF file or paste text', 400);
+      }
+    } else {
+      return errorResponse('Content-Type must be multipart/form-data', 400);
     }
 
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      return errorResponse('Only PDF files are supported', 400);
+    if (!text.trim()) {
+      return errorResponse('No text content found to parse', 400);
     }
 
-    // Read file as ArrayBuffer and convert to Buffer for pdf-parse
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Dynamic import for pdf-parse (ESM compatibility)
-    const pdfParse = (await import('pdf-parse')).default;
-    const pdfData = await pdfParse(buffer);
-    const text = pdfData.text;
-
-    // Parse M-PESA transaction lines
-    const result = parseMpesaTransactions(text);
-    result.summary.stationId = stationId;
+    // Parse the text content
+    const result = parseMpesaText(text);
 
     // Log to audit trail
     await createAuditLog({
@@ -163,10 +341,12 @@ export async function POST(request: NextRequest) {
       resourceType: 'mpesa_parse',
       resourceId: `parse_${Date.now()}`,
       snapshotAfter: {
-        fileName: file.name,
-        totalInflows: result.summary.totalInflows,
-        totalAmount: result.summary.totalAmount,
-        excludedCount: result.summary.excludedCount,
+        fileName: fileName || 'text-input',
+        mode,
+        totalInflows: result.inflows.length,
+        totalAmount: result.totalValid,
+        excludedCount: result.excluded.length,
+        uniqueCustomers: result.uniqueCustomers,
       },
       ipAddress,
       userAgent,
@@ -176,6 +356,6 @@ export async function POST(request: NextRequest) {
     return successResponse(result, 201);
   } catch (err) {
     console.error('[mpesa/parse] POST error:', err);
-    return errorResponse('Failed to parse M-PESA PDF', 500);
+    return errorResponse('Failed to parse M-PESA statement', 500);
   }
 }

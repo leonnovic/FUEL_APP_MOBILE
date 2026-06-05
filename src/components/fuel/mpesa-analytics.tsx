@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Smartphone,
   ArrowDownLeft,
@@ -86,6 +86,7 @@ import {
 } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 type MpesaTransactionType = 'C2B' | 'B2C' | 'Paybill' | 'Till';
@@ -153,52 +154,7 @@ function formatPhone(phone: string): string {
   return phone;
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────
-const PHONES = [
-  '254712345678', '254723456789', '254734567890', '254745678901',
-  '254756789012', '254767890123', '254778901234', '254789012345',
-  '254790123456', '254701234567',
-];
-
-const NAMES = [
-  'John Mwangi', 'Akinyi Odhiambo', 'Wanjiku Kamau', 'Hassan Ali',
-  'Fatuma Abdi', 'Peter Njoroge', 'Grace Wambui', 'Samuel Kiprop',
-  'Eve Achieng', 'David Ochieng',
-];
-
-function generateMockTransactions(): MpesaTransaction[] {
-  const types: MpesaTransactionType[] = ['C2B', 'B2C', 'Paybill', 'Till'];
-  const statuses: MpesaTransactionStatus[] = ['completed', 'completed', 'completed', 'completed', 'completed', 'pending', 'failed', 'reversed'];
-  const transactions: MpesaTransaction[] = [];
-
-  const now = new Date();
-  for (let i = 0; i < 50; i++) {
-    const d = new Date(now);
-    d.setMinutes(d.getMinutes() - i * 45 - Math.floor(Math.random() * 30));
-    const type = types[Math.floor(Math.random() * types.length)];
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const phoneIdx = Math.floor(Math.random() * PHONES.length);
-
-    let amount: number;
-    if (type === 'C2B' || type === 'Paybill') {
-      amount = Math.floor(Math.random() * 15000) + 500;
-    } else {
-      amount = Math.floor(Math.random() * 5000) + 100;
-    }
-
-    transactions.push({
-      id: `MP${String(Date.now() - i * 1000).slice(-8)}`,
-      time: d.toISOString(),
-      phone: PHONES[phoneIdx],
-      amount,
-      type,
-      status,
-      reference: `QJK${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-      description: type === 'C2B' ? `Payment from ${NAMES[phoneIdx]}` : type === 'B2C' ? `Disbursement to ${NAMES[phoneIdx]}` : `Fuel purchase - ${NAMES[phoneIdx]}`,
-    });
-  }
-  return transactions;
-}
+// ─── Data is fetched from API ──────────────────────────────────────────────
 
 const chartConfig: ChartConfig = {
   c2b: { label: 'C2B', color: '#22c55e' },
@@ -225,7 +181,9 @@ const STATUS_COLORS: Record<MpesaTransactionStatus, string> = {
 export function MpesaAnalytics() {
   const { toast } = useToast();
   const token = useAuthStore((s) => s.token);
-  const [transactions, setTransactions] = useState<MpesaTransaction[]>(generateMockTransactions);
+  const currentStation = useStationStore((s) => s.currentStation);
+  const [transactions, setTransactions] = useState<MpesaTransaction[]>([]);
+  const [isLoadingTxns, setIsLoadingTxns] = useState(true);
   const [filterType, setFilterType] = useState<MpesaTransactionType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<MpesaTransactionStatus | 'all'>('all');
   const [filterDate, setFilterDate] = useState('');
@@ -252,6 +210,78 @@ export function MpesaAnalytics() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
+
+  // ─── Fetch M-PESA transactions from sales/expenses API ──────────────────
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!token || !currentStation?.id) {
+        setIsLoadingTxns(false);
+        return;
+      }
+      setIsLoadingTxns(true);
+      try {
+        const headers: Record<string, string> = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
+        // Fetch sales with M-PESA payment method
+        const salesRes = await fetch(`/api/sales?stationId=${currentStation.id}&pageSize=100`, { headers });
+        const salesData = await salesRes.json();
+
+        const mpesaTxns: MpesaTransaction[] = [];
+        if (salesData?.data) {
+          const sales = Array.isArray(salesData.data) ? salesData.data : salesData.data?.items || [];
+          for (const sale of sales) {
+            const isMpesa = !sale.paymentMethod || sale.paymentMethod === 'mpesa' || sale.paymentMethod === 'mobile_money';
+            if (isMpesa) {
+              mpesaTxns.push({
+                id: sale.id,
+                time: sale.date || sale.createdAt,
+                phone: sale.customerPhone || '',
+                amount: sale.totalSales || sale.pmsSalesKsh + sale.agoSalesKsh || 0,
+                type: 'C2B' as MpesaTransactionType,
+                status: 'completed' as MpesaTransactionStatus,
+                reference: sale.id?.slice(0, 8).toUpperCase() || '',
+                description: `Fuel sale - Ksh ${sale.totalSales || 0}`,
+              });
+            }
+          }
+        }
+
+        // Fetch expenses paid via M-PESA
+        try {
+          const expRes = await fetch(`/api/expenses?stationId=${currentStation.id}&pageSize=50`, { headers });
+          const expData = await expRes.json();
+          if (expData?.data) {
+            const expenses = Array.isArray(expData.data) ? expData.data : expData.data?.items || [];
+            for (const exp of expenses) {
+              if (exp.paymentMethod === 'mpesa' || exp.paymentMethod === 'mobile_money' || exp.category === 'mpesa') {
+                mpesaTxns.push({
+                  id: exp.id,
+                  time: exp.date || exp.createdAt,
+                  phone: '',
+                  amount: exp.amount || 0,
+                  type: 'B2C' as MpesaTransactionType,
+                  status: 'completed' as MpesaTransactionStatus,
+                  reference: exp.id?.slice(0, 8).toUpperCase() || '',
+                  description: `${exp.category || 'Expense'} - ${exp.description || ''}`,
+                });
+              }
+            }
+          }
+        } catch {
+          // Expenses fetch failed, continue with sales only
+        }
+
+        setTransactions(mpesaTxns);
+      } catch {
+        // Failed to fetch, leave empty
+      } finally {
+        setIsLoadingTxns(false);
+      }
+    };
+    fetchTransactions();
+  }, [token, currentStation?.id]);
 
   // ─── PDF Upload Handler ────────────────────────────────────────────────
   const handlePdfUpload = useCallback(async () => {
@@ -470,7 +500,11 @@ export function MpesaAnalytics() {
     [totalMpesa, transactions.length]
   );
 
-  const floatBalance = 247850;
+  const floatBalance = useMemo(() => {
+    const inflowTotal = transactions.filter((t) => t.type === 'C2B' || t.type === 'Paybill' || t.type === 'Till').reduce((s, t) => s + t.amount, 0);
+    const outflowTotal = transactions.filter((t) => t.type === 'B2C').reduce((s, t) => s + t.amount, 0);
+    return inflowTotal - outflowTotal;
+  }, [transactions]);
 
   // ─── Chart Data ───────────────────────────────────────────────────────
   const dailyData = useMemo(() => {

@@ -206,7 +206,7 @@ export function AIChatbot() {
     } catch (error) {
       console.warn('[AI Chatbot] API call failed, falling back to local response:', error);
 
-      // Fallback to the hardcoded generateResponse function
+      // Fallback to the local generateResponse function
       const fallbackResponse = generateResponse(queryText);
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,

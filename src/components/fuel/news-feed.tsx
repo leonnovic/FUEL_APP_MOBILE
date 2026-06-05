@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Newspaper,
   Bookmark,
@@ -14,6 +14,8 @@ import {
   Zap,
   ExternalLink,
   Clock,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import {
   Card,
@@ -27,6 +29,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 import { useFuelStore } from '@/store/fuel-store';
 
 type NewsCategory = 'epra' | 'market' | 'industry' | 'tips';
@@ -65,99 +69,6 @@ const TIPS = [
   'Schedule tank cleaning every 6 months per KEBS standards.',
 ];
 
-const MOCK_ARTICLES: NewsArticle[] = [
-  {
-    id: 'n1',
-    title: 'EPRA Adjusts Fuel Prices for March 2025',
-    source: 'EPRA Kenya',
-    date: '2025-03-01',
-    summary: 'The Energy and Petroleum Regulatory Authority has revised fuel prices. PMS increased by Ksh 2.58 per litre, AGO decreased by Ksh 1.20 per litre, and DPK remained unchanged for the period March 1-15.',
-    category: 'epra',
-    bookmarked: false,
-  },
-  {
-    id: 'n2',
-    title: 'Crude Oil Prices Surge Past $80 Mark',
-    source: 'Reuters',
-    date: '2025-03-02',
-    summary: 'Brent crude oil futures surpassed $80 per barrel for the first time in three months, driven by OPEC+ production cuts and rising global demand forecasts.',
-    category: 'market',
-    bookmarked: false,
-  },
-  {
-    id: 'n3',
-    title: 'Kenya Revenue Authority Updates VAT Filing Portal',
-    source: 'KRA',
-    date: '2025-02-28',
-    summary: 'KRA has launched an updated iTax portal with enhanced features for VAT filing. Fuel station operators are required to file monthly returns by the 20th of each month.',
-    category: 'epra',
-    bookmarked: true,
-  },
-  {
-    id: 'n4',
-    title: 'New Fuel Quality Standards Effective April 2025',
-    source: 'KEBS',
-    date: '2025-02-27',
-    summary: 'The Kenya Bureau of Standards has announced new quality specifications for petroleum products. All fuel stations must comply by April 1, 2025. Key changes include lower sulphur content limits.',
-    category: 'industry',
-    bookmarked: false,
-  },
-  {
-    id: 'n5',
-    title: 'KES/USD Exchange Rate Stabilizes at 129.5',
-    source: 'Central Bank of Kenya',
-    date: '2025-03-01',
-    summary: 'The Kenyan shilling has stabilized against the US dollar at 129.5, providing some relief on import costs for petroleum products. Analysts expect further stabilization.',
-    category: 'market',
-    bookmarked: false,
-  },
-  {
-    id: 'n6',
-    title: '5 Tips to Reduce Fuel Station Operating Costs',
-    source: 'FuelPro Insights',
-    date: '2025-02-26',
-    summary: 'Discover proven strategies to cut operational expenses by up to 15%: from energy-efficient lighting to optimized shift scheduling and automated inventory tracking.',
-    category: 'tips',
-    bookmarked: false,
-  },
-  {
-    id: 'n7',
-    title: 'Government Announces Fuel Subsidy Review',
-    source: 'Ministry of Energy',
-    date: '2025-02-25',
-    summary: 'The Ministry of Energy has initiated a comprehensive review of the fuel subsidy program. New guidelines are expected to target subsidies more effectively towards public transport.',
-    category: 'industry',
-    bookmarked: true,
-  },
-  {
-    id: 'n8',
-    title: 'How to Prepare for EPRA Inspection',
-    source: 'FuelPro Insights',
-    date: '2025-02-24',
-    summary: 'Essential checklist for EPRA compliance inspections: calibration certificates, price board display, safety equipment, fire extinguisher validity, and record-keeping requirements.',
-    category: 'tips',
-    bookmarked: false,
-  },
-  {
-    id: 'n9',
-    title: 'Oil Marketing Companies Report Q4 Growth',
-    source: 'Business Daily',
-    date: '2025-02-23',
-    summary: 'Major oil marketing companies in Kenya have reported a 12% revenue growth in Q4 2024, attributed to increased demand and expanded retail networks across the country.',
-    category: 'industry',
-    bookmarked: false,
-  },
-  {
-    id: 'n10',
-    title: 'EPRA Warns Against Illegal Fuel Adulteration',
-    source: 'EPRA Kenya',
-    date: '2025-02-22',
-    summary: 'EPRA has issued a stern warning against fuel adulteration following increased enforcement operations. Penalties include license revocation and criminal prosecution.',
-    category: 'epra',
-    bookmarked: false,
-  },
-];
-
 const CATEGORY_CONFIG: Record<NewsCategory, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   epra: { label: 'EPRA Updates', color: 'text-green-400', bg: 'bg-green-500/20', icon: <ShieldCheck className="size-3.5" /> },
   market: { label: 'Market Prices', color: 'text-blue-400', bg: 'bg-blue-500/20', icon: <TrendingUp className="size-3.5" /> },
@@ -170,12 +81,61 @@ const chartConfig = {
 };
 
 export function NewsFeed() {
+  const token = useAuthStore((s) => s.token);
+  const currentStation = useStationStore((s) => s.currentStation);
   const pmsPrice = useFuelStore((s) => s.pmsPrice);
   const agoPrice = useFuelStore((s) => s.agoPrice);
 
-  const [articles, setArticles] = useState<NewsArticle[]>(MOCK_ARTICLES);
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<NewsCategory | 'all'>('all');
   const [tipIndex, setTipIndex] = useState(0);
+
+  // ─── Fetch news from settings or show empty state ────────────────────────
+
+  const fetchNews = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Try to fetch news articles stored as settings
+      if (token && currentStation?.id) {
+        const res = await fetch(`/api/settings?stationId=${currentStation.id}&category=news`, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (data.data?.settings && data.data.settings.length > 0) {
+          const mapped: NewsArticle[] = data.data.settings.map((s: { id: string; key: string; value: string; createdAt?: string }) => {
+            let parsed: Record<string, unknown> = {};
+            try { parsed = JSON.parse(s.value); } catch { /* not JSON */ }
+            return {
+              id: s.id,
+              title: (parsed.title as string) || s.key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+              source: (parsed.source as string) || 'FuelPro',
+              date: (parsed.date as string) || (s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)),
+              summary: (parsed.summary as string) || s.value,
+              category: ((parsed.category as string) || 'industry') as NewsCategory,
+              bookmarked: false,
+            };
+          });
+          setArticles(mapped);
+        } else {
+          setArticles([]);
+        }
+      } else {
+        setArticles([]);
+      }
+    } catch {
+      setError('Failed to load news. Please try again.');
+      setArticles([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, currentStation]);
+
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
 
   const filteredArticles = useMemo(() => {
     if (activeCategory === 'all') return articles;
@@ -291,10 +251,15 @@ export function NewsFeed() {
       {/* ── News Feed ──────────────────────────────────────────────────── */}
       <Card className="bg-slate-800/60 border-slate-700/50 text-white">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Newspaper className="size-4 text-amber-400" />
-            News & Updates
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Newspaper className="size-4 text-amber-400" />
+              News & Updates
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-white" onClick={fetchNews}>
+              <RefreshCw className="size-3 mr-1" /> Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as NewsCategory | 'all')}>
@@ -306,41 +271,65 @@ export function NewsFeed() {
               <TabsTrigger value="tips" className="text-xs data-[state=active]:bg-amber-500 data-[state=active]:text-black">Tips</TabsTrigger>
             </TabsList>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredArticles.map((article) => {
-                const catConfig = CATEGORY_CONFIG[article.category];
-                return (
-                  <div
-                    key={article.id}
-                    className="p-4 rounded-xl border bg-slate-700/20 border-slate-700/50 hover:border-slate-600 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <Badge className={`${catConfig.bg} ${catConfig.color} border border-current/20 text-[10px] px-1.5 py-0 flex items-center gap-1`}>
-                        {catConfig.icon}
-                        {catConfig.label}
-                      </Badge>
-                      <button
-                        onClick={() => toggleBookmark(article.id)}
-                        className="text-slate-500 hover:text-amber-400 transition-colors"
-                      >
-                        {article.bookmarked ? <BookmarkCheck className="size-4 text-amber-400" /> : <Bookmark className="size-4" />}
-                      </button>
-                    </div>
-                    <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{article.title}</h3>
-                    <p className="text-xs text-slate-400 mb-3 line-clamp-2">{article.summary}</p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                        <Clock className="size-3" />
-                        {article.date} · {article.source}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="size-6 text-amber-400 animate-spin" />
+                <span className="ml-2 text-slate-400 text-sm">Loading news...</span>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <TrendingDown className="size-8 text-red-400 mx-auto mb-2" />
+                <div className="text-sm text-red-300">{error}</div>
+                <Button variant="outline" size="sm" className="mt-3 border-slate-600 text-slate-300" onClick={fetchNews}>
+                  <RefreshCw className="size-3 mr-1" /> Retry
+                </Button>
+              </div>
+            ) : filteredArticles.length === 0 ? (
+              <div className="text-center py-12">
+                <Newspaper className="size-12 text-slate-600 mx-auto mb-3" />
+                <div className="font-medium text-slate-400">No news articles yet</div>
+                <div className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  News articles will appear here when added through the settings panel. 
+                  Stay tuned for EPRA updates, market prices, and industry news from Kenya and East Africa.
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredArticles.map((article) => {
+                  const catConfig = CATEGORY_CONFIG[article.category];
+                  return (
+                    <div
+                      key={article.id}
+                      className="p-4 rounded-xl border bg-slate-700/20 border-slate-700/50 hover:border-slate-600 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <Badge className={`${catConfig.bg} ${catConfig.color} border border-current/20 text-[10px] px-1.5 py-0 flex items-center gap-1`}>
+                          {catConfig.icon}
+                          {catConfig.label}
+                        </Badge>
+                        <button
+                          onClick={() => toggleBookmark(article.id)}
+                          className="text-slate-500 hover:text-amber-400 transition-colors"
+                        >
+                          {article.bookmarked ? <BookmarkCheck className="size-4 text-amber-400" /> : <Bookmark className="size-4" />}
+                        </button>
                       </div>
-                      <button className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
-                        Read <ExternalLink className="size-3" />
-                      </button>
+                      <h3 className="text-sm font-semibold text-white mb-1.5 leading-snug">{article.title}</h3>
+                      <p className="text-xs text-slate-400 mb-3 line-clamp-2">{article.summary}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                          <Clock className="size-3" />
+                          {article.date} · {article.source}
+                        </div>
+                        <button className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
+                          Read <ExternalLink className="size-3" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </Tabs>
         </CardContent>
       </Card>

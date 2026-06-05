@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   FileText,
   Upload,
@@ -65,6 +65,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/store/auth-store';
+import { useStationStore } from '@/store/station-store';
 
 type DocCategory = 'invoices' | 'receipts' | 'reports' | 'contracts' | 'compliance' | 'other';
 
@@ -121,26 +122,17 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const MOCK_DOCS: DocEntry[] = [
-  { id: 'd1', name: 'March 2025 Sales Report', type: 'application/pdf', category: 'reports', size: 245000, uploadDate: '2025-03-01', uploadedBy: 'Admin' },
-  { id: 'd2', name: 'Delivery Invoice - Kenol KBC-4521', type: 'application/pdf', category: 'invoices', size: 128000, uploadDate: '2025-02-28', uploadedBy: 'Manager' },
-  { id: 'd3', name: 'EPRA License 2025', type: 'application/pdf', category: 'compliance', size: 890000, uploadDate: '2025-02-25', uploadedBy: 'Admin' },
-  { id: 'd4', name: 'Fuel Supplier Contract - Shell', type: 'application/pdf', category: 'contracts', size: 1240000, uploadDate: '2025-02-20', uploadedBy: 'Admin' },
-  { id: 'd5', name: 'February 2025 Expense Report', type: 'application/vnd.ms-excel', category: 'reports', size: 67000, uploadDate: '2025-03-01', uploadedBy: 'Accountant' },
-  { id: 'd6', name: 'M-PESA Receipt Batch Feb', type: 'application/pdf', category: 'receipts', size: 345000, uploadDate: '2025-02-28', uploadedBy: 'Manager' },
-  { id: 'd7', name: 'Fire Safety Certificate', type: 'image/png', category: 'compliance', size: 2100000, uploadDate: '2025-02-15', uploadedBy: 'Admin' },
-  { id: 'd8', name: 'NEMA Compliance Report', type: 'application/pdf', category: 'compliance', size: 560000, uploadDate: '2025-02-10', uploadedBy: 'Admin' },
-  { id: 'd9', name: 'Staff Payroll February 2025', type: 'application/vnd.ms-excel', category: 'reports', size: 89000, uploadDate: '2025-02-28', uploadedBy: 'Accountant' },
-  { id: 'd10', name: 'Tank Calibration Certificate', type: 'application/pdf', category: 'compliance', size: 780000, uploadDate: '2025-01-15', uploadedBy: 'Admin' },
-  { id: 'd11', name: 'KEBS Quality Test Results', type: 'application/pdf', category: 'compliance', size: 340000, uploadDate: '2025-02-22', uploadedBy: 'Admin' },
-  { id: 'd12', name: 'Station Insurance Policy', type: 'application/pdf', category: 'contracts', size: 1560000, uploadDate: '2025-01-05', uploadedBy: 'Admin' },
-];
+
 
 export function DocumentManager() {
   const { toast } = useToast();
   const token = useAuthStore((s) => s.token);
+  const currentStation = useStationStore((s) => s.currentStation);
+  const stationId = currentStation?.id ?? '';
 
-  const [documents, setDocuments] = useState<DocEntry[]>(MOCK_DOCS);
+  const [documents, setDocuments] = useState<DocEntry[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<DocCategory | 'all'>('all');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -163,6 +155,47 @@ export function DocumentManager() {
   const convertFileInputRef = useRef<HTMLInputElement>(null);
 
   const inputClass = 'bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500';
+
+  // ─── Fetch documents from API ────────────────────────────────────────
+  const fetchDocuments = useCallback(async () => {
+    if (!token || !stationId) {
+      setIsLoadingDocs(false);
+      return;
+    }
+    setIsLoadingDocs(true);
+    setFetchError(null);
+    try {
+      const res = await fetch(`/api/documents?stationId=${stationId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (data.data && Array.isArray(data.data)) {
+        const mapped: DocEntry[] = data.data.map((d: Record<string, unknown>) => ({
+          id: (d.id as string) || '',
+          name: (d.name as string) || 'Unnamed',
+          type: (d.type as string) || 'other',
+          category: ((d.category as string) || 'other') as DocCategory,
+          size: (d.size as number) || 0,
+          uploadDate: d.createdAt ? new Date(d.createdAt as string).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          uploadedBy: (d.uploadedBy as string) || 'Admin',
+        }));
+        setDocuments(mapped);
+      } else if (data.error) {
+        setFetchError(data.error);
+      }
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to fetch documents');
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  }, [token, stationId]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   // Filter documents
   const filteredDocs = useMemo(() => {
@@ -190,24 +223,51 @@ export function DocumentManager() {
     return breakdown;
   }, [documents]);
 
-  const handleAddDocument = () => {
-    if (!formName) return;
-    const newDoc: DocEntry = {
-      id: `doc-${Date.now()}`,
-      name: formName,
-      type: formType,
-      category: formCategory,
-      size: Math.floor(Math.random() * 2000000) + 50000,
-      uploadDate: new Date().toISOString().slice(0, 10),
-      uploadedBy: 'Admin',
-    };
-    setDocuments([newDoc, ...documents]);
-    setAddDialogOpen(false);
-    setFormName('');
-    toast({ title: 'Document Added', description: `${formName} has been uploaded` });
+  const handleAddDocument = async () => {
+    if (!formName || !token || !stationId) return;
+    try {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stationId,
+          name: formName,
+          type: formType,
+          category: formCategory,
+          size: 0,
+          url: '',
+        }),
+      });
+      const data = await res.json();
+      if (data.data) {
+        toast({ title: 'Document Added', description: `${formName} has been uploaded` });
+        setAddDialogOpen(false);
+        setFormName('');
+        fetchDocuments();
+      } else {
+        toast({ title: 'Error', description: data.error || 'Failed to add document', variant: 'destructive' });
+      }
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add document', variant: 'destructive' });
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!token || !stationId) return;
+    try {
+      await fetch(`/api/documents/${id}?stationId=${stationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch {
+      // Continue with local removal
+    }
     setDocuments(documents.filter((d) => d.id !== id));
     toast({ title: 'Document Deleted' });
   };
@@ -572,9 +632,14 @@ export function DocumentManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-400">
-              {documents.filter((d) => d.uploadDate >= '2025-03-01' || (d.uploadDate >= '2025-02-01' && d.uploadDate < '2025-03-01')).length}
+              {documents.filter((d) => {
+                const uploadDate = new Date(d.uploadDate);
+                const now = new Date();
+                const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                return uploadDate >= thirtyDaysAgo;
+              }).length}
             </div>
-            <div className="text-xs text-slate-400 mt-1">Uploaded recently</div>
+            <div className="text-xs text-slate-400 mt-1">Uploaded in last 30 days</div>
           </CardContent>
         </Card>
       </div>
@@ -816,9 +881,29 @@ export function DocumentManager() {
             </Table>
           </div>
 
-          {filteredDocs.length === 0 && (
-            <div className="text-center text-slate-500 text-sm py-8">No documents found</div>
-          )}
+          {isLoadingDocs ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="size-6 text-amber-400 animate-spin" />
+              <span className="ml-2 text-sm text-slate-400">Loading documents...</span>
+            </div>
+          ) : fetchError ? (
+            <div className="text-center py-8">
+              <AlertCircle className="size-8 text-red-400 mx-auto mb-2" />
+              <p className="text-sm text-slate-300">Failed to load documents</p>
+              <p className="text-xs text-slate-500 mb-3">{fetchError}</p>
+              <Button onClick={fetchDocuments} size="sm" className="bg-amber-500 hover:bg-amber-600 text-black text-xs">
+                <RefreshCw className="size-3 mr-1" /> Retry
+              </Button>
+            </div>
+          ) : filteredDocs.length === 0 && documents.length === 0 ? (
+            <div className="text-center py-8">
+              <FolderOpen className="size-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">No documents yet</p>
+              <p className="text-xs text-slate-500 mt-1">Upload your first document to get started</p>
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <div className="text-center text-slate-500 text-sm py-8">No documents match your search</div>
+          ) : null}
         </CardContent>
       </Card>
 
