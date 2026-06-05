@@ -1,21 +1,19 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, notFound, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('SUPPLIER_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { name, contact, fuelTypes, location, status } = body
 
     const existing = await db.supplier.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Supplier not found' },
-        { status: 404 }
-      )
+      return notFound('Supplier')
     }
 
     const supplier = await db.supplier.update({
@@ -29,39 +27,23 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: supplier })
-  } catch (error) {
-    console.error('[SUPPLIER_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update supplier' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(supplier)
+  })
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('SUPPLIER_DELETE', async () => {
+    const id = await getPathId(params)
 
     const existing = await db.supplier.findUnique({ where: { id } })
     if (!existing) {
-      return NextResponse.json(
-        { ok: false, error: 'Supplier not found' },
-        { status: 404 }
-      )
+      return notFound('Supplier')
     }
 
     await db.supplier.delete({ where: { id } })
-
-    return NextResponse.json({ ok: true, data: { id } })
-  } catch (error) {
-    console.error('[SUPPLIER_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete supplier' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

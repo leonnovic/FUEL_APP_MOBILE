@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, notFound, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('SALES_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const fuelType = searchParams.get('fuelType')
@@ -21,18 +22,12 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: sales })
-  } catch (error) {
-    console.error('[SALES_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch sales' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(sales)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('SALES_POST', async () => {
     const body = await request.json()
     const {
       stationId,
@@ -46,34 +41,23 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!stationId || !userId || !fuelType || !quantityLiters || !pricePerLiter) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: stationId, userId, fuelType, quantityLiters, pricePerLiter' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: stationId, userId, fuelType, quantityLiters, pricePerLiter')
     }
 
     const totalAmount = quantityLiters * pricePerLiter
 
-    // Find the matching tank to reduce stock
     const tank = await db.tank.findFirst({
       where: { stationId, fuelType },
     })
 
     if (!tank) {
-      return NextResponse.json(
-        { ok: false, error: `No ${fuelType} tank found at this station` },
-        { status: 404 }
-      )
+      return notFound(`No ${fuelType} tank found at this station`)
     }
 
     if (tank.currentStock < quantityLiters) {
-      return NextResponse.json(
-        { ok: false, error: `Insufficient stock. Available: ${tank.currentStock}L, Requested: ${quantityLiters}L` },
-        { status: 400 }
-      )
+      return badRequest(`Insufficient stock. Available: ${tank.currentStock}L, Requested: ${quantityLiters}L`)
     }
 
-    // Create sale and update tank stock in a transaction
     const [sale] = await db.$transaction([
       db.sale.create({
         data: {
@@ -97,12 +81,6 @@ export async function POST(request: NextRequest) {
       }),
     ])
 
-    return NextResponse.json({ ok: true, data: sale }, { status: 201 })
-  } catch (error) {
-    console.error('[SALES_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create sale' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(sale, 201)
+  })
 }

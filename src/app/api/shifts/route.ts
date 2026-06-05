@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, notFound, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('SHIFTS_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const status = searchParams.get('status')
@@ -19,18 +20,12 @@ export async function GET(request: NextRequest) {
       orderBy: { startedAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: shifts })
-  } catch (error) {
-    console.error('[SHIFTS_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch shifts' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(shifts)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('SHIFTS_POST', async () => {
     const body = await request.json()
     const {
       id,
@@ -45,14 +40,11 @@ export async function POST(request: NextRequest) {
       status,
     } = body
 
-    // If id is provided with closingReading, end the shift
+    // End existing shift
     if (id) {
       const existing = await db.shift.findUnique({ where: { id } })
       if (!existing) {
-        return NextResponse.json(
-          { ok: false, error: 'Shift not found' },
-          { status: 404 }
-        )
+        return notFound('Shift')
       }
 
       const shift = await db.shift.update({
@@ -69,15 +61,12 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json({ ok: true, data: shift })
+      return apiSuccess(shift)
     }
 
     // Create new shift
     if (!stationId || !userId || !attendantName || !fuelType) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: stationId, userId, attendantName, fuelType' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: stationId, userId, attendantName, fuelType')
     }
 
     const shift = await db.shift.create({
@@ -94,12 +83,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: shift }, { status: 201 })
-  } catch (error) {
-    console.error('[SHIFTS_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create/update shift' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(shift, 201)
+  })
 }

@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('MPESA_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { status, receiptNumber, resultDesc, completedAt } = body
 
@@ -23,29 +24,17 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: transaction })
-  } catch (error) {
-    console.error('[MPESA_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update M-Pesa transaction' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(transaction)
+  })
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('MPESA_DELETE', async () => {
+    const id = await getPathId(params)
     await db.mpesaTransaction.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[MPESA_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete M-Pesa transaction' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('EXPENSES_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { category, description, amount, date } = body
 
@@ -23,29 +24,17 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: expense })
-  } catch (error) {
-    console.error('[EXPENSES_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update expense' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(expense)
+  })
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('EXPENSES_DELETE', async () => {
+    const id = await getPathId(params)
     await db.expense.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[EXPENSES_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete expense' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, notFound, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('INVENTORY_GET', async () => {
     const tanks = await db.tank.findMany({
       include: {
         station: { select: { id: true, name: true, location: true, county: true } },
@@ -10,25 +11,18 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Enrich with alert status
     const data = tanks.map((tank) => ({
       ...tank,
       isLow: tank.currentStock <= tank.alertThreshold,
       utilizationPct: tank.capacity > 0 ? Math.round((tank.currentStock / tank.capacity) * 100) : 0,
     }))
 
-    return NextResponse.json({ ok: true, data })
-  } catch (error) {
-    console.error('[INVENTORY_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch inventory' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(data)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('INVENTORY_POST', async () => {
     const body = await request.json()
     const {
       id,
@@ -41,20 +35,14 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!stationId || !fuelType) {
-      return NextResponse.json(
-        { ok: false, error: 'stationId and fuelType are required' },
-        { status: 400 }
-      )
+      return badRequest('stationId and fuelType are required')
     }
 
-    // If id is provided, update; otherwise create
+    // Update existing tank
     if (id) {
       const existing = await db.tank.findUnique({ where: { id } })
       if (!existing) {
-        return NextResponse.json(
-          { ok: false, error: 'Tank not found' },
-          { status: 404 }
-        )
+        return notFound('Tank')
       }
 
       const tank = await db.tank.update({
@@ -71,7 +59,7 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return NextResponse.json({ ok: true, data: tank })
+      return apiSuccess(tank)
     }
 
     // Create new tank
@@ -89,12 +77,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: tank }, { status: 201 })
-  } catch (error) {
-    console.error('[INVENTORY_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create/update tank' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(tank, 201)
+  })
 }

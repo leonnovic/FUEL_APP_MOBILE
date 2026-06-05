@@ -1,24 +1,18 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('EMPLOYEES_GET', async () => {
     const employees = await db.employee.findMany({
       include: { station: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json({ ok: true, data: employees })
-  } catch (error) {
-    console.error('[EMPLOYEES_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch employees' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(employees)
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return apiHandler('EMPLOYEES_POST', async () => {
     const body = await request.json()
     const {
       name,
@@ -38,10 +32,7 @@ export async function POST(request: Request) {
     } = body
 
     if (!name || !position) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: name, position' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: name, position')
     }
 
     const bs = basicSalary ? parseFloat(basicSalary) : 0
@@ -52,7 +43,6 @@ export async function POST(request: Request) {
     const paye = payeDeduction ? parseFloat(payeDeduction) : 0
     const other = otherDeductions ? parseFloat(otherDeductions) : 0
 
-    // Auto-calculate net pay
     const netPay = bs + ha + ta - nhif - nssf - paye - other
 
     const employee = await db.employee.create({
@@ -76,12 +66,6 @@ export async function POST(request: Request) {
       include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: employee }, { status: 201 })
-  } catch (error) {
-    console.error('[EMPLOYEES_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create employee' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(employee, 201)
+  })
 }

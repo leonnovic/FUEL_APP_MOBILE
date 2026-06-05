@@ -1,12 +1,12 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('CONTACTS_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const { name, phone, email, type, company, address, balance, notes, status } = body
 
@@ -25,29 +25,17 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: contact })
-  } catch (error) {
-    console.error('[CONTACTS_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update contact' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(contact)
+  })
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('CONTACTS_DELETE', async () => {
+    const id = await getPathId(params)
     await db.contact.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[CONTACTS_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete contact' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

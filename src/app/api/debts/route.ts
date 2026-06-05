@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('DEBTS_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const status = searchParams.get('status')
@@ -19,18 +20,12 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: debts })
-  } catch (error) {
-    console.error('[DEBTS_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch debts' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(debts)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('DEBTS_POST', async () => {
     const body = await request.json()
     const {
       customerName,
@@ -50,10 +45,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!customerName || !amount) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: customerName, amount' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: customerName, amount')
     }
 
     const debt = await db.debt.create({
@@ -78,12 +70,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: debt }, { status: 201 })
-  } catch (error) {
-    console.error('[DEBTS_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create debt' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(debt, 201)
+  })
 }

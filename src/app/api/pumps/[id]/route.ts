@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, notFound, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('PUMPS_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const {
       pumpLabel,
@@ -20,14 +21,11 @@ export async function PUT(
       reset,
     } = body
 
-    // If reset is requested, set closing = opening and reset sales
+    // Reset pump readings
     if (reset) {
       const existing = await db.pump.findUnique({ where: { id } })
       if (!existing) {
-        return NextResponse.json(
-          { ok: false, error: 'Pump not found' },
-          { status: 404 }
-        )
+        return notFound('Pump')
       }
 
       const pump = await db.pump.update({
@@ -42,12 +40,10 @@ export async function PUT(
           status: 'idle',
           lastResetAt: new Date(),
         },
-        include: {
-          station: { select: { id: true, name: true } },
-        },
+        include: { station: { select: { id: true, name: true } } },
       })
 
-      return NextResponse.json({ ok: true, data: pump })
+      return apiSuccess(pump)
     }
 
     // Auto-calculate sales from readings
@@ -81,34 +77,26 @@ export async function PUT(
         ...(shiftId !== undefined && { shiftId }),
         ...(status !== undefined && { status }),
       },
-      include: {
-        station: { select: { id: true, name: true } },
-      },
+      include: { station: { select: { id: true, name: true } } },
     })
 
-    return NextResponse.json({ ok: true, data: pump })
-  } catch (error) {
-    console.error('[PUMPS_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update pump' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(pump)
+  })
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('PUMPS_DELETE', async () => {
+    const id = await getPathId(params)
+
+    const existing = await db.pump.findUnique({ where: { id } })
+    if (!existing) {
+      return notFound('Pump')
+    }
+
     await db.pump.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[PUMPS_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete pump' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

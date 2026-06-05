@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, apiHandler, getPathId } from '@/lib/api-utils'
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('DEBTS_PUT', async () => {
+    const id = await getPathId(params)
     const body = await request.json()
     const {
       customerName,
@@ -27,38 +28,25 @@ export async function PUT(
     } = body
 
     // If paying partial, add to existing paidAmount
-    let newPaidAmount: number | undefined
     if (paidAmount !== undefined) {
       const existing = await db.debt.findUnique({ where: { id } })
       if (existing) {
-        newPaidAmount = existing.paidAmount + parseFloat(paidAmount)
-        // Auto-update status if fully paid
+        const newPaidAmount = existing.paidAmount + parseFloat(paidAmount)
         if (newPaidAmount >= existing.amount) {
           const debt = await db.debt.update({
             where: { id },
-            data: {
-              paidAmount: newPaidAmount,
-              status: 'paid',
-            },
-            include: {
-              station: { select: { id: true, name: true } },
-            },
+            data: { paidAmount: newPaidAmount, status: 'paid' },
+            include: { station: { select: { id: true, name: true } } },
           })
-          return NextResponse.json({ ok: true, data: debt })
+          return apiSuccess(debt)
         }
-        // Mark as partial if some amount paid but not full
         if (newPaidAmount > 0 && newPaidAmount < existing.amount) {
           const debt = await db.debt.update({
             where: { id },
-            data: {
-              paidAmount: newPaidAmount,
-              status: 'partial',
-            },
-            include: {
-              station: { select: { id: true, name: true } },
-            },
+            data: { paidAmount: newPaidAmount, status: 'partial' },
+            include: { station: { select: { id: true, name: true } } },
           })
-          return NextResponse.json({ ok: true, data: debt })
+          return apiSuccess(debt)
         }
       }
     }
@@ -86,29 +74,17 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ ok: true, data: debt })
-  } catch (error) {
-    console.error('[DEBTS_PUT]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to update debt' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(debt)
+  })
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
+  return apiHandler('DEBTS_DELETE', async () => {
+    const id = await getPathId(params)
     await db.debt.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('[DEBTS_DELETE]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to delete debt' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess({ id })
+  })
 }

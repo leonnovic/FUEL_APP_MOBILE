@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('EXPENSES_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const category = searchParams.get('category')
@@ -19,26 +20,17 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: expenses })
-  } catch (error) {
-    console.error('[EXPENSES_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch expenses' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(expenses)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('EXPENSES_POST', async () => {
     const body = await request.json()
     const { stationId, category, description, amount, date } = body
 
     if (!stationId || !category || !description || !amount) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: stationId, category, description, amount' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: stationId, category, description, amount')
     }
 
     const expense = await db.expense.create({
@@ -54,12 +46,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: expense }, { status: 201 })
-  } catch (error) {
-    console.error('[EXPENSES_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create expense' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(expense, 201)
+  })
 }

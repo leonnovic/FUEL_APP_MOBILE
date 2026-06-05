@@ -1,31 +1,22 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET() {
-  try {
+  return apiHandler('CONTACTS_GET', async () => {
     const contacts = await db.contact.findMany({
       orderBy: { name: 'asc' },
     })
-    return NextResponse.json({ ok: true, data: contacts })
-  } catch (error) {
-    console.error('[CONTACTS_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch contacts' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(contacts)
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return apiHandler('CONTACTS_POST', async () => {
     const body = await request.json()
     const { name, phone, email, type, company, address, balance, notes, status } = body
 
     if (!name) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required field: name' },
-        { status: 400 }
-      )
+      return badRequest('Missing required field: name')
     }
 
     const contact = await db.contact.create({
@@ -42,12 +33,6 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: contact }, { status: 201 })
-  } catch (error) {
-    console.error('[CONTACTS_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create contact' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(contact, 201)
+  })
 }

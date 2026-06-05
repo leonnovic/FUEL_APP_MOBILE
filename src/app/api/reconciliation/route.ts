@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('RECONCILIATION_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const flag = searchParams.get('flag')
@@ -19,18 +20,12 @@ export async function GET(request: NextRequest) {
       orderBy: { recordedAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: reconciliations })
-  } catch (error) {
-    console.error('[RECONCILIATION_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch reconciliations' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(reconciliations)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('RECONCILIATION_POST', async () => {
     const body = await request.json()
     const {
       stationId,
@@ -42,10 +37,7 @@ export async function POST(request: NextRequest) {
     } = body
 
     if (!stationId || !fuelType || bookStock === undefined || physicalStock === undefined) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: stationId, fuelType, bookStock, physicalStock' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: stationId, fuelType, bookStock, physicalStock')
     }
 
     const delivery = deliveryReceived ?? 0
@@ -76,12 +68,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: reconciliation }, { status: 201 })
-  } catch (error) {
-    console.error('[RECONCILIATION_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create reconciliation' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(reconciliation, 201)
+  })
 }

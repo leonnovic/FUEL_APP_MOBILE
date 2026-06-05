@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { apiSuccess, badRequest, apiHandler } from '@/lib/api-utils'
 
 export async function GET(request: NextRequest) {
-  try {
+  return apiHandler('MPESA_GET', async () => {
     const { searchParams } = new URL(request.url)
     const stationId = searchParams.get('stationId')
     const status = searchParams.get('status')
@@ -19,29 +20,19 @@ export async function GET(request: NextRequest) {
       orderBy: { initiatedAt: 'desc' },
     })
 
-    return NextResponse.json({ ok: true, data: transactions })
-  } catch (error) {
-    console.error('[MPESA_GET]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to fetch M-Pesa transactions' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(transactions)
+  })
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return apiHandler('MPESA_POST', async () => {
     const body = await request.json()
     const { phoneNumber, amount, stationId, saleId } = body
 
     if (!phoneNumber || !amount) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing required fields: phoneNumber, amount' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: phoneNumber, amount')
     }
 
-    // Simulated STK Push: auto-generate receipt number
     const receiptNumber = `QKR${Math.random().toString(36).substring(2, 9).toUpperCase()}`
     const checkoutRequestId = `ws_CO_${Date.now()}`
     const merchantRequestId = `mr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
@@ -64,12 +55,6 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ ok: true, data: transaction }, { status: 201 })
-  } catch (error) {
-    console.error('[MPESA_POST]', error)
-    return NextResponse.json(
-      { ok: false, error: 'Failed to create M-Pesa transaction' },
-      { status: 500 }
-    )
-  }
+    return apiSuccess(transaction, 201)
+  })
 }
