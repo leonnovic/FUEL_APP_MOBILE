@@ -55,4 +55,4 @@ server.log
 
 # Prisma database files
 prisma/db/*.db
-prisma/db/*.db-*
+prisma/db/*.db-*.env
