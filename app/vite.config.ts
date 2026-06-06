@@ -10,7 +10,8 @@ export default defineConfig({
     react()],
   server: {
     allowedHosts: true,
-    port: 3000,
+    host: "0.0.0.0",
+    port: 5000,
   },
   build: {
     chunkSizeWarningLimit: 5000,
