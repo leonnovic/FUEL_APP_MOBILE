@@ -61,6 +61,7 @@ export function useCrossDeviceSync(): SyncStatus {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const deviceId = useRef(getDeviceId());
+  const [stableDeviceId] = useState(() => getDeviceId());
 
   // Track online/offline status
   useEffect(() => {
@@ -77,7 +78,7 @@ export function useCrossDeviceSync(): SyncStatus {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    setIsOnline(navigator.onLine);
+    setIsOnline(navigator.onLine); // eslint-disable-line react-hooks/set-state-in-effect
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -198,7 +199,7 @@ export function useCrossDeviceSync(): SyncStatus {
     isSyncing,
     lastSyncAt,
     syncError,
-    deviceId: deviceId.current,
+    deviceId: stableDeviceId,
     isOnline,
     activeDevices,
   };

@@ -29,7 +29,7 @@ export const TAB_PERMISSION_MAP: Record<string, { action: ActionType; dataType: 
   news: { action: 'read', dataType: 'station' },
   data: { action: 'read', dataType: 'settings' },
   integration: { action: 'read', dataType: 'settings' },
-  regional: { action: 'read', dataType: 'report' },
+  compliance: { action: 'read', dataType: 'report' },
   'fuel-types': { action: 'update', dataType: 'inventory' },
   team: { action: 'read', dataType: 'employee' },
   documents: { action: 'read', dataType: 'report' },
@@ -46,6 +46,7 @@ export const TAB_PERMISSION_MAP: Record<string, { action: ActionType; dataType: 
   fleet: { action: 'read', dataType: 'station' },
   founder: { action: 'read', dataType: 'settings' },
   company: { action: 'read', dataType: 'settings' },
+  'doc-converter': { action: 'read', dataType: 'report' },
 };
 
 // Default tabs accessible by each role (order matters for default tab)
@@ -55,8 +56,8 @@ export const DEFAULT_ROLE_TABS: Record<UserRole, string[]> = {
     'dashboard', 'sales', 'pos', 'inventory', 'live', 'offloading', 'delivery',
     'invoice', 'credit', 'debt', 'mpesa', 'payroll', 'shifts', 'customers',
     'quality', 'fuel-sales', 'reports', 'analytics', 'audit', 'communication',
-    'news', 'data', 'integration', 'regional', 'fuel-types', 'team', 'documents',
-    'suppliers', 'maintenance', 'expenses', 'price-board', 'settings',
+    'news', 'data', 'integration', 'compliance', 'fuel-types', 'team', 'documents',
+    'suppliers', 'maintenance', 'expenses', 'price-board', 'doc-converter', 'settings',
     'fuel-orders', 'profit-calc', 'station-perf', 'price-predict', 'station-locator',
     'fleet', 'company',
   ],

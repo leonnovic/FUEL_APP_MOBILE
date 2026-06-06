@@ -254,10 +254,10 @@ export function IntegrationHub() {
     } finally {
       setIsLoading(false);
     }
-  }, [token, currentStation?.id]);
+  }, [token, currentStation]);
 
   useEffect(() => {
-    fetchSettings();
+    void fetchSettings(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchSettings]);
 
   // Compute API usage from audit logs or settings count

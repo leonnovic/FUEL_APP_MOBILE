@@ -276,7 +276,7 @@ export function FuelOrderRequest() {
   }, [token, stationId, currentStation?.location]);
 
   useEffect(() => {
-    fetchOrders();
+    void fetchOrders(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchOrders]);
 
   // ─── Computed values ─────────────────────────────────────────────────────

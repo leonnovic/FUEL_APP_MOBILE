@@ -59,35 +59,35 @@ const tabBadges: Record<string, { count?: number; alert?: boolean }> = {
 };
 
 // Separator positions — indices AFTER which a dot separator appears
-// Group 1: Core (0-7), Group 2: Management (8-14), Group 3: Operations (15-23), Group 4: Admin (24-32)
-const separatorAfter = new Set([7, 14, 23, 32]);
+// Group 1: Core (0-7), Group 2: Financial (8-11), Group 3: Operations (12-20), Group 4: Management (21-31), Group 5: Extended (32+)
+const separatorAfter = new Set([7, 11, 20, 31]);
 
 const tabs = [
+  // Core tabs — match reference site order exactly
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'sales', label: 'Sales', icon: DollarSign },
-  { id: 'pos', label: 'POS', icon: ShoppingCart },
-  { id: 'delivery', label: 'Delivery', icon: Truck },
-  { id: 'offloading', label: 'Offloading', icon: Droplets },
-  { id: 'invoice', label: 'Invoice', icon: FileText },
-  { id: 'debt', label: 'Debt', icon: CreditCard },
-  { id: 'reports', label: 'Reports', icon: BarChart3 },
-  { id: 'mpesa', label: 'M-PESA', icon: Smartphone },
-  { id: 'payroll', label: 'Payroll', icon: Users },
-  { id: 'data', label: 'Data', icon: Database },
-  { id: 'news', label: 'News', icon: Newspaper },
-  { id: 'live', label: 'Live', icon: Radio },
-  { id: 'fuel-sales', label: 'Fuel Sales', icon: Fuel },
-  { id: 'communication', label: 'Communication', icon: MessageSquare },
+  { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
+  { id: 'sales', label: 'Sales Tracking', icon: DollarSign },
+  { id: 'live', label: 'Live Transaction', icon: Radio },
   { id: 'inventory', label: 'Inventory', icon: Package },
-  { id: 'customers', label: 'Customers', icon: UserCircle },
-  { id: 'audit', label: 'Audit', icon: ClipboardCheck },
-  { id: 'shifts', label: 'Shifts', icon: Clock },
-  { id: 'quality', label: 'Quality', icon: Star },
+  { id: 'offloading', label: 'Fuel Offloading', icon: Droplets },
+  { id: 'delivery', label: 'Delivery Tracker', icon: Truck },
+  { id: 'invoice', label: 'Invoice', icon: FileText },
   { id: 'credit', label: 'Credit', icon: Wallet },
+  { id: 'debt', label: 'Debt Reminder', icon: CreditCard },
+  { id: 'mpesa', label: 'M-PESA Analyzer', icon: Smartphone },
+  { id: 'payroll', label: 'Payroll System', icon: Users },
+  { id: 'shifts', label: 'Shifts', icon: Clock },
+  { id: 'customers', label: 'Customers', icon: UserCircle },
+  { id: 'quality', label: 'Fuel Quality', icon: Star },
+  { id: 'fuel-sales', label: 'Fuel Sales Report', icon: Fuel },
+  { id: 'reports', label: 'Reports Center', icon: BarChart3 },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-  { id: 'station-perf', label: 'Station Perf', icon: BarChart3 },
-  { id: 'integration', label: 'Integration', icon: Plug },
-  { id: 'regional', label: 'Regional', icon: Globe },
+  { id: 'audit', label: 'Audit Trail', icon: ClipboardCheck },
+  { id: 'communication', label: 'Communication', icon: MessageSquare },
+  { id: 'news', label: 'News', icon: Newspaper },
+  { id: 'data', label: 'Data Manager', icon: Database },
+  { id: 'integration', label: 'Integrations', icon: Plug },
+  { id: 'compliance', label: 'Compliance', icon: Globe },
   { id: 'fuel-types', label: 'Fuel Types', icon: Layers },
   { id: 'team', label: 'Team', icon: UsersRound },
   { id: 'documents', label: 'Documents', icon: FileStack },
@@ -95,6 +95,9 @@ const tabs = [
   { id: 'maintenance', label: 'Maintenance', icon: Wrench },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'price-board', label: 'Price Board', icon: Monitor },
+  { id: 'doc-converter', label: 'Doc Converter', icon: FileText },
+  // Extended tabs (our additions beyond reference)
+  { id: 'station-perf', label: 'Station Perf', icon: BarChart3 },
   { id: 'price-predict', label: 'Price Predict', icon: TrendingUp },
   { id: 'station-locator', label: 'Stations', icon: MapPin },
   { id: 'fleet', label: 'Fleet', icon: Truck },

@@ -142,7 +142,7 @@ export function CommunicationHub() {
   }, [token, currentStation]);
 
   useEffect(() => {
-    fetchMessages();
+    void fetchMessages(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchMessages]);
 
   // ─── Filtered messages by channel ───────────────────────────────────────

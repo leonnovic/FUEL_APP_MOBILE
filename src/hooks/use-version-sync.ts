@@ -67,7 +67,7 @@ export function useVersionSync(): VersionSyncState {
 
   // Check on mount and periodically
   useEffect(() => {
-    checkForUpdate();
+    void checkForUpdate(); // eslint-disable-line react-hooks/set-state-in-effect
     const interval = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [checkForUpdate]);

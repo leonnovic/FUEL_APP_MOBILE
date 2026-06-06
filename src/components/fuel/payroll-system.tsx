@@ -262,11 +262,11 @@ export function PayrollSystem() {
   }, [token, currentStation, payrollMonth]);
 
   useEffect(() => {
-    fetchEmployees();
+    void fetchEmployees(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchEmployees]);
 
   useEffect(() => {
-    fetchPayroll();
+    void fetchPayroll(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchPayroll]);
 
   // ─── Compute Payroll Preview ──────────────────────────────────────────

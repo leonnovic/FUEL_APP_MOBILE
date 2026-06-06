@@ -134,7 +134,7 @@ export function AuditTrail() {
   }, [actionFilter, resourceTypeFilter, severityFilter, dateFrom, dateTo, userFilter, token, currentStation]);
 
   useEffect(() => {
-    fetchLogs();
+    void fetchLogs(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchLogs]);
 
   // ─── Verify Integrity ──────────────────────────────────────────────────

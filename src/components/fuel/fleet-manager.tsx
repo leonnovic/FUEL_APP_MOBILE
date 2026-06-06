@@ -270,7 +270,7 @@ export function FleetManager() {
 
   // ─── Empty state component ──────────────────────────────────────────
 
-  const EmptyState = ({ title, description }: { title: string; description: string }) => (
+  const renderEmptyState = (title: string, description: string) => (
     <Card className="bg-slate-800/60 border-slate-700/50 text-white">
       <CardContent className="p-8 text-center">
         <div className="size-16 rounded-2xl bg-slate-700/30 flex items-center justify-center mx-auto mb-4">
@@ -449,10 +449,10 @@ export function FleetManager() {
 
       {/* ── Vehicle Cards or Empty State ─────────────────────────────────── */}
       {vehicles.length === 0 ? (
-        <EmptyState
-          title="No vehicles in your fleet"
-          description="Add your first vehicle to start tracking fuel consumption, maintenance schedules, and efficiency metrics."
-        />
+        renderEmptyState(
+          "No vehicles in your fleet",
+          "Add your first vehicle to start tracking fuel consumption, maintenance schedules, and efficiency metrics."
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {vehicles.map((vehicle) => {
