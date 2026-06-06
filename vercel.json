@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && ELECTRON_SKIP_BINARY_DOWNLOAD=1 ELECTRON_BUILDER_SKIP_PUBLISH=1 npm ci --legacy-peer-deps && npm run build",
+  "buildCommand": "echo 'Static build - serving pre-built frontend'",
   "outputDirectory": "frontend/dist",
-  "installCommand": "true",
+  "installCommand": "echo 'skip install'",
   "framework": null,
+  "cleanUrls": true,
   "headers": [
     {
       "source": "/(.*)",
