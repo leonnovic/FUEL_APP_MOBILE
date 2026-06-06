@@ -5,8 +5,10 @@ frontend/node_modules/
 # Build outputs
 .next/
 build/
-dist/
 *.egg-info/
+
+# Exception for Vercel deployment - include pre-built frontend
+!frontend/dist
 
 # Environment
 .env
