@@ -4,6 +4,15 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { createAuditLog, getClientIp, getUserAgent } from '@/lib/audit';
 
+// Log environment info (safe - doesn't expose secrets)
+function logEnvInfo() {
+  console.log('[Register] Environment check:', {
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    nodeEnv: process.env.NODE_ENV,
+    vercelEnv: process.env.VERCEL_ENV,
+  });
+}
+
 // Default permissions for the "staff" role
 const DEFAULT_STAFF_PERMISSIONS = [
   { action: 'read', dataType: 'sale', teamScope: 'personal', stationId: null },
@@ -13,6 +22,9 @@ const DEFAULT_STAFF_PERMISSIONS = [
 
 export async function POST(request: NextRequest) {
   try {
+    // Log environment for debugging
+    logEnvInfo();
+    
     const body = await request.json();
     const { email, name, password, phone } = body as {
       email?: string;
@@ -177,6 +189,15 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[Register API] Error:', error);
+    // Log environment info for debugging
+    logEnvInfo();
+    
+    // Check specific error types
+    if (error instanceof Error) {
+      console.error('[Register API] Error message:', error.message);
+      console.error('[Register API] Error stack:', error.stack);
+    }
+    
     return NextResponse.json(
       { success: false, error: 'Registration failed. Please try again.' },
       { status: 500 }
