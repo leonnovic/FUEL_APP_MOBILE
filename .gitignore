@@ -1,2 +1,42 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+.next/
+frontend/dist/
+build/
+dist/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel/
 api/handler.mjs
 api/handler.cjs
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+.turbo/
