@@ -169,7 +169,7 @@ export function StationLocator() {
   }, [token, pmsPrice, agoPrice]);
 
   useEffect(() => {
-    fetchStations();
+    void fetchStations(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchStations]);
 
   // Toggle favorite

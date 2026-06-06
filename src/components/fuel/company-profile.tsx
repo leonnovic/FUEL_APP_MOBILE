@@ -219,7 +219,7 @@ export function CompanyProfile() {
     }
   };
 
-  const SaveButton = ({ section }: { section: string }) => (
+  const renderSaveButton = (section: string) => (
     <div className="flex items-center gap-2">
       <Button
         onClick={() => saveSection(section)}
@@ -286,7 +286,7 @@ export function CompanyProfile() {
                 <CardDescription className="text-slate-400 text-xs">Business information and contact details</CardDescription>
               </div>
             </div>
-            <SaveButton section="company" />
+            {renderSaveButton("company")}
           </div>
         </CardHeader>
         <CardContent>
@@ -368,7 +368,7 @@ export function CompanyProfile() {
                 <CardDescription className="text-slate-400 text-xs">Currency, KRA, and tax registration details</CardDescription>
               </div>
             </div>
-            <SaveButton section="tax" />
+            {renderSaveButton("tax")}
           </div>
         </CardHeader>
         <CardContent>
@@ -434,7 +434,7 @@ export function CompanyProfile() {
                 <CardDescription className="text-slate-400 text-xs">Business bank account information</CardDescription>
               </div>
             </div>
-            <SaveButton section="bank" />
+            {renderSaveButton("bank")}
           </div>
         </CardHeader>
         <CardContent>
@@ -510,7 +510,7 @@ export function CompanyProfile() {
               <Badge className={`text-[10px] ${settings.mpesaSandbox ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
                 {settings.mpesaSandbox ? 'Sandbox' : 'Production'}
               </Badge>
-              <SaveButton section="mpesa" />
+              {renderSaveButton("mpesa")}
             </div>
           </div>
         </CardHeader>
@@ -581,7 +581,7 @@ export function CompanyProfile() {
                 <CardDescription className="text-slate-400 text-xs">SMS gateway configuration for notifications</CardDescription>
               </div>
             </div>
-            <SaveButton section="sms" />
+            {renderSaveButton("sms")}
           </div>
         </CardHeader>
         <CardContent>
@@ -632,7 +632,7 @@ export function CompanyProfile() {
                 <CardDescription className="text-slate-400 text-xs">SMTP configuration for outgoing emails</CardDescription>
               </div>
             </div>
-            <SaveButton section="email" />
+            {renderSaveButton("email")}
           </div>
         </CardHeader>
         <CardContent>

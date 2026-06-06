@@ -134,7 +134,7 @@ export function NewsFeed() {
   }, [token, currentStation]);
 
   useEffect(() => {
-    fetchNews();
+    void fetchNews(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchNews]);
 
   const filteredArticles = useMemo(() => {

@@ -66,6 +66,7 @@ const StationLocator = dynamic(() => import('@/components/fuel/station-locator')
 const FleetManager = dynamic(() => import('@/components/fuel/fleet-manager').then(m => ({ default: m.FleetManager })), { loading: TabLoader });
 const FounderPanel = dynamic(() => import('@/components/fuel/founder-panel').then(m => ({ default: m.FounderPanel })), { loading: TabLoader });
 const CompanyProfile = dynamic(() => import('@/components/fuel/company-profile').then(m => ({ default: m.CompanyProfile })), { loading: TabLoader });
+const DocConverter = dynamic(() => import('@/components/fuel/doc-converter').then(m => ({ default: m.DocConverter })), { loading: TabLoader });
 
 export default function Home() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -92,7 +93,7 @@ export default function Home() {
     if (token) {
       validateSession().catch(() => {});
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync data from server when station changes
   useEffect(() => {
@@ -130,7 +131,7 @@ export default function Home() {
         })
         .catch(() => {});
     }
-  }, [isAuthenticated, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, token]);
 
   // Auto-refresh data every 30 seconds for cross-device sync
   useEffect(() => {
@@ -243,7 +244,7 @@ export default function Home() {
         return <AdvancedAnalytics />;
       case 'integration':
         return <IntegrationHub />;
-      case 'regional':
+      case 'compliance':
         return <RegionalCompliance />;
       case 'fuel-types':
         return <FuelTypesManager />;
@@ -277,6 +278,8 @@ export default function Home() {
         return <FounderPanel />;
       case 'company':
         return <CompanyProfile />;
+      case 'doc-converter':
+        return <DocConverter />;
       default:
         return <Dashboard />;
     }

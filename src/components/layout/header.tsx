@@ -120,7 +120,7 @@ const allTabs = [
   { id: 'credit', label: 'Credit', icon: Wallet },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'integration', label: 'Integration', icon: Plug },
-  { id: 'regional', label: 'Regional', icon: Globe },
+  { id: 'compliance', label: 'Compliance', icon: Globe },
   { id: 'fuel-types', label: 'Fuel Types', icon: Layers },
   { id: 'team', label: 'Team', icon: UsersRound },
   { id: 'documents', label: 'Documents', icon: FileStack },

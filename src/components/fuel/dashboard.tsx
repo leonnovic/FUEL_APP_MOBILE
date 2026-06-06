@@ -283,7 +283,7 @@ export function Dashboard() {
   }, [currentStation?.id]);
 
   useEffect(() => {
-    loadDashboard();
+    void loadDashboard(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [loadDashboard]);
 
   // Auto-refresh every 60 seconds for cross-device sync

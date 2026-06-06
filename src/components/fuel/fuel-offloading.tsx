@@ -187,7 +187,7 @@ export function FuelOffloading() {
   }, [token, currentStation]);
 
   useEffect(() => {
-    fetchDeliveries();
+    void fetchDeliveries(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchDeliveries]);
 
   // Timer for active session

@@ -194,7 +194,7 @@ export function DocumentManager() {
   }, [token, stationId]);
 
   useEffect(() => {
-    fetchDocuments();
+    void fetchDocuments(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchDocuments]);
 
   // Filter documents

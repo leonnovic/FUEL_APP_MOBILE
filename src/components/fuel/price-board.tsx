@@ -97,7 +97,7 @@ export function PriceBoard() {
   }, [token, currentStation]);
 
   useEffect(() => {
-    fetchSettings();
+    void fetchSettings(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchSettings]);
 
   const handleStartEdit = (id: string, currentPrice: number) => {

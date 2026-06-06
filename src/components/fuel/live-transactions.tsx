@@ -105,7 +105,7 @@ export function LiveTransactions() {
       txn.timestamp = new Date(now - (i + 1) * (Math.random() * 120000 + 30000));
       initial.push(txn);
     }
-    setTransactions(initial);
+    setTransactions(initial); // eslint-disable-line react-hooks/set-state-in-effect
   }, []);
 
   // Simulate live updates

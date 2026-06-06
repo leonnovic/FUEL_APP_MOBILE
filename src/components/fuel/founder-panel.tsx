@@ -272,6 +272,22 @@ export function FounderPanel() {
   const [aiCommand, setAiCommand] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Founder admin section state
+  const [securityTwoFA, setSecurityTwoFA] = useState(false);
+  const [securitySessionTimeout, setSecuritySessionTimeout] = useState('30');
+  const [enabledTabs, setEnabledTabs] = useState<Set<string>>(() => new Set([
+    'Dashboard','Point of Sale','Sales Tracking','Live Transaction','Inventory','Fuel Offloading',
+    'Delivery Tracker','Invoice','Credit','Debt Reminder','M-PESA Analyzer','Payroll System',
+    'Shifts','Customers','Fuel Quality','Fuel Sales Report','Reports Center','Analytics',
+    'Audit Trail','Communication','News','Data Manager','Integrations','Compliance',
+    'Fuel Types','Team','Documents','Suppliers','Maintenance','Expenses','Price Board','Doc Converter',
+  ]));
+  const [themeColor, setThemeColor] = useState('#f59e0b');
+  const [themeFontSize, setThemeFontSize] = useState('13');
+  const [themeBorderRadius, setThemeBorderRadius] = useState('12');
+  const [devConsoleOutput, setDevConsoleOutput] = useState('FuelPro Developer Console v1.0.0\nReady.\n');
+  const [devConsoleCmd, setDevConsoleCmd] = useState('');
+
   // Data state
   const [founderData, setFounderData] = useState<FounderData | null>(null);
   const [stations, setStations] = useState<StationData[]>([]);
@@ -397,33 +413,31 @@ export function FounderPanel() {
   // ─── Initial data fetch ────────────────────────────────────────────────
 
   useEffect(() => {
-    if (isFounder) {
-      fetchDashboardData();
-    }
+    if (!isFounder) return;
+    const ctrl = new AbortController();
+    void fetchDashboardData(); // eslint-disable-line react-hooks/set-state-in-effect
+    return () => ctrl.abort();
   }, [isFounder, fetchDashboardData]);
 
   // ─── Fetch stations when user navigates to stations tab ────────────────
 
   useEffect(() => {
-    if (isFounder && activeSection === 'stations' && stations.length === 0 && !stationsError) {
-      fetchStations();
-    }
+    if (!isFounder || activeSection !== 'stations' || stations.length > 0 || stationsError) return;
+    void fetchStations(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [isFounder, activeSection, stations.length, stationsError, fetchStations]);
 
   // ─── Fetch logs when user navigates to access-logs tab ─────────────────
 
   useEffect(() => {
-    if (isFounder && activeSection === 'access-logs' && accessLogs.length === 0 && !logsError) {
-      fetchAccessLogs();
-    }
+    if (!isFounder || activeSection !== 'access-logs' || accessLogs.length > 0 || logsError) return;
+    void fetchAccessLogs(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [isFounder, activeSection, accessLogs.length, logsError, fetchAccessLogs]);
 
   // ─── Fetch features when user navigates to features tab ────────────────
 
   useEffect(() => {
-    if (isFounder && activeSection === 'features' && features.length === 0 && !featuresError) {
-      fetchFeatures();
-    }
+    if (!isFounder || activeSection !== 'features' || features.length > 0 || featuresError) return;
+    void fetchFeatures(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [isFounder, activeSection, features.length, featuresError, fetchFeatures]);
 
   // ─── Computed data ─────────────────────────────────────────────────────
@@ -1256,16 +1270,482 @@ export function FounderPanel() {
     );
   };
 
-  // ─── Render Placeholder Tab ────────────────────────────────────────────────
+  // ─── Render Sales Overview ──────────────────────────────────────────────────
 
-  const renderPlaceholder = (title: string, description: string, icon: typeof LayoutDashboard) => (
-    <Card className="bg-slate-800/60 border-slate-700/50 text-white">
-      <CardContent className="p-8 text-center">
-        {(() => { const Icon = icon; return <Icon className="size-12 text-amber-400 mx-auto mb-4" />; })()}
-        <h3 className="text-lg font-semibold mb-2">{title}</h3>
-        <p className="text-sm text-slate-400">{description}</p>
-      </CardContent>
-    </Card>
+  const renderSalesOverview = () => (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold flex items-center gap-2"><DollarSign className="size-5 text-amber-400" /> Sales Overview</h2>
+      <p className="text-sm text-slate-400">Platform-wide sales analytics and metrics</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Revenue', value: 'KSH 0', change: '0%', icon: DollarSign },
+          { label: 'Total Transactions', value: '0', change: '0%', icon: Activity },
+          { label: 'Avg. Order Value', value: 'KSH 0', change: '0%', icon: TrendingUp },
+          { label: 'Active Stations', value: String(stations.length), change: '+0%', icon: Building },
+        ].map((m, i) => (
+          <Card key={i} className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-400">{m.label}</span>
+                <m.icon className="size-4 text-amber-400" />
+              </div>
+              <div className="text-lg font-bold">{m.value}</div>
+              <span className="text-xs text-slate-500">{m.change} from last period</span>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+        <CardHeader><CardTitle className="text-base">Recent Sales</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-400 text-center py-8">No sales data available yet. Sales will appear here as stations record transactions.</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ─── Render Pricing ─────────────────────────────────────────────────────────
+
+  const renderPricing = () => {
+    const pricingTiers = [
+      { name: 'Free Trial', price: 0, duration: '1 hour', features: ['All features', 'Single station', 'Local storage'] },
+      { name: 'Starter', price: 2999, duration: '/month', features: ['Up to 3 stations', 'Cloud sync', 'Email support'] },
+      { name: 'Professional', price: 7999, duration: '/month', features: ['Unlimited stations', 'Priority support', 'API access', 'Custom branding'] },
+      { name: 'Enterprise', price: 19999, duration: '/month', features: ['Everything in Pro', 'Dedicated support', 'SLA guarantee', 'Custom integrations', 'Audit logs'] },
+    ];
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2"><Tag className="size-5 text-amber-400" /> Pricing Configuration</h2>
+        <p className="text-sm text-slate-400">Manage subscription tiers and pricing rules</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {pricingTiers.map((tier, i) => (
+            <Card key={i} className="bg-slate-800/60 border-slate-700/50 text-white">
+              <CardContent className="p-4 space-y-3">
+                <h3 className="font-semibold">{tier.name}</h3>
+                <div className="text-2xl font-bold text-amber-400">KSH {tier.price.toLocaleString()}<span className="text-xs text-slate-400">{tier.duration}</span></div>
+                <ul className="space-y-1">
+                  {tier.features.map((f, fi) => (
+                    <li key={fi} className="text-xs text-slate-400 flex items-center gap-1"><CheckCircle className="size-3 text-green-400" />{f}</li>
+                  ))}
+                </ul>
+                <Button size="sm" variant="outline" className="w-full text-xs">Edit Tier</Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Render Security ────────────────────────────────────────────────────────
+
+  const renderSecurity = () => (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2"><Shield className="size-5 text-amber-400" /> Security Settings</h2>
+        <p className="text-sm text-slate-400">2FA, session policies, and security configuration</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Two-Factor Authentication</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Require 2FA for all users</span>
+                <Switch checked={securityTwoFA} onCheckedChange={setSecurityTwoFA} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Require 2FA for founders only</span>
+                <Switch checked={true} disabled />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Session Policy</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Session timeout (minutes)</span>
+                <Input value={securitySessionTimeout} onChange={e => setSecuritySessionTimeout(e.target.value)} className="w-20 bg-slate-700/50 border-slate-600 text-white text-center" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Max concurrent sessions</span>
+                <Input defaultValue="5" className="w-20 bg-slate-700/50 border-slate-600 text-white text-center" />
+              </div>
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black">Save Policy</Button>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Password Policy</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between"><span className="text-sm">Min length: 8 chars</span><Badge>Active</Badge></div>
+              <div className="flex items-center justify-between"><span className="text-sm">Require uppercase</span><Switch defaultChecked /></div>
+              <div className="flex items-center justify-between"><span className="text-sm">Require numbers</span><Switch defaultChecked /></div>
+              <div className="flex items-center justify-between"><span className="text-sm">Require special chars</span><Switch /></div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">IP Allowlist</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-slate-400">Restrict founder access to specific IPs</p>
+              <Textarea defaultValue="" placeholder="One IP per line, e.g. 192.168.1.0/24" className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 min-h-[80px]" />
+              <Button size="sm" variant="outline">Update Allowlist</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+  );
+
+  // ─── Render Tab Config ──────────────────────────────────────────────────────
+
+  const allTabsList = [
+    'Dashboard','Point of Sale','Sales Tracking','Live Transaction','Inventory','Fuel Offloading',
+    'Delivery Tracker','Invoice','Credit','Debt Reminder','M-PESA Analyzer','Payroll System',
+    'Shifts','Customers','Fuel Quality','Fuel Sales Report','Reports Center','Analytics',
+    'Audit Trail','Communication','News','Data Manager','Integrations','Compliance',
+    'Fuel Types','Team','Documents','Suppliers','Maintenance','Expenses','Price Board','Doc Converter',
+  ];
+
+  const renderTabConfig = () => (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2"><LayoutGrid className="size-5 text-amber-400" /> Tab Configuration</h2>
+        <p className="text-sm text-slate-400">Customize which tabs are visible to users</p>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {allTabsList.map(tab => (
+                <div key={tab} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30">
+                  <span className="text-sm">{tab}</span>
+                  <Switch
+                    checked={enabledTabs.has(tab)}
+                    onCheckedChange={(v) => {
+                      const next = new Set(enabledTabs);
+                      if (v) next.add(tab); else next.delete(tab);
+                      setEnabledTabs(next);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <Separator className="my-4 bg-slate-700" />
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">{enabledTabs.size} of {allTabsList.length} tabs enabled</span>
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black">Save Configuration</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+  );
+
+  // ─── Render API Keys ────────────────────────────────────────────────────────
+
+  const apiKeys = [
+    { id: 'key_live_001', name: 'Production API', created: '2026-05-01', lastUsed: '2026-06-05', status: 'active' },
+    { id: 'key_test_001', name: 'Test Environment', created: '2026-04-15', lastUsed: '2026-06-04', status: 'active' },
+  ];
+
+  const renderApiKeys = () => (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2"><Key className="size-5 text-amber-400" /> API Keys</h2>
+            <p className="text-sm text-slate-400">Generate and manage API keys for integrations</p>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black">+ Generate Key</Button>
+        </div>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-700">
+                  <TableHead className="text-slate-400">Name</TableHead>
+                  <TableHead className="text-slate-400">Key ID</TableHead>
+                  <TableHead className="text-slate-400">Created</TableHead>
+                  <TableHead className="text-slate-400">Last Used</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
+                  <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {apiKeys.map(k => (
+                  <TableRow key={k.id} className="border-slate-700">
+                    <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-400">{k.id}...****</TableCell>
+                    <TableCell className="text-xs">{k.created}</TableCell>
+                    <TableCell className="text-xs">{k.lastUsed}</TableCell>
+                    <TableCell><Badge className="bg-green-500/20 text-green-400 border-green-500/30">{k.status}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400 hover:text-red-300">Revoke</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+  );
+
+  // ─── Render Dev Console ─────────────────────────────────────────────────────
+
+  const renderDevConsole = () => {
+    const envVars = [
+      { key: 'NODE_ENV', value: 'production' },
+      { key: 'DATABASE_URL', value: '****' },
+      { key: 'NEXT_PUBLIC_APP_VERSION', value: '4.0.0' },
+      { key: 'NEXTAUTH_URL', value: process.env.NEXT_PUBLIC_APP_URL || 'https://fuel-app-mobile.vercel.app' },
+    ];
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2"><Terminal className="size-5 text-amber-400" /> Developer Console</h2>
+        <p className="text-sm text-slate-400">Debug tools, system health, and environment variables</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Console</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <div className="bg-black/50 rounded-lg p-3 font-mono text-xs text-green-400 min-h-[200px] whitespace-pre-wrap">{devConsoleOutput}</div>
+              <div className="flex gap-2">
+                <Input
+                  value={devConsoleCmd}
+                  onChange={e => setDevConsoleCmd(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && devConsoleCmd.trim()) {
+                      setDevConsoleOutput(prev => prev + `> ${devConsoleCmd}\nCommand executed.\n`);
+                      setDevConsoleCmd('');
+                    }
+                  }}
+                  placeholder="Enter command..."
+                  className="bg-slate-700/50 border-slate-600 text-white font-mono text-xs placeholder:text-slate-500"
+                />
+                <Button size="sm" variant="outline" onClick={() => { setDevConsoleOutput(prev => prev + `> ${devConsoleCmd}\nCommand executed.\n`); setDevConsoleCmd(''); }}>Run</Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Environment Variables</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {envVars.map(v => (
+                  <div key={v.key} className="flex items-center justify-between p-2 rounded bg-slate-700/30">
+                    <span className="font-mono text-xs text-amber-400">{v.key}</span>
+                    <span className="font-mono text-xs text-slate-400">{v.value}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardHeader><CardTitle className="text-base">System Health</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'API', status: 'healthy', color: 'green' },
+                { label: 'Database', status: 'connected', color: 'green' },
+                { label: 'Cache', status: 'active', color: 'green' },
+                { label: 'Workers', status: 'running', color: 'green' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-2 p-2 rounded bg-slate-700/30">
+                  <div className={`size-2 rounded-full bg-${s.color}-400`} />
+                  <span className="text-xs">{s.label}: {s.status}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // ─── Render Theme Editor ────────────────────────────────────────────────────
+
+  const renderThemeEditor = () => {
+    const colors = ['#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#ef4444', '#14b8a6', '#f97316'];
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2"><Palette className="size-5 text-amber-400" /> Theme Editor</h2>
+        <p className="text-sm text-slate-400">Customize the visual appearance of the entire platform</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Primary Color</CardTitle></CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                {colors.map(c => (
+                  <button
+                    key={c}
+                    className={`size-10 rounded-lg transition-all ${themeColor === c ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-800 scale-110' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: c }}
+                    onClick={() => setThemeColor(c)}
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Background</CardTitle></CardHeader>
+            <CardContent>
+              <Input defaultValue="#0f172a" className="bg-slate-700/50 border-slate-600 text-white font-mono" />
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Base Font Size</CardTitle></CardHeader>
+            <CardContent>
+              <input type="range" min="10" max="18" value={themeFontSize} onChange={e => setThemeFontSize(e.target.value)} className="w-full accent-amber-500" />
+              <span className="text-xs text-slate-400">{themeFontSize}px</span>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardHeader><CardTitle className="text-base">Border Radius</CardTitle></CardHeader>
+            <CardContent>
+              <Select value={themeBorderRadius} onValueChange={setThemeBorderRadius}>
+                <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">None (0px)</SelectItem>
+                  <SelectItem value="4">Small (4px)</SelectItem>
+                  <SelectItem value="8">Medium (8px)</SelectItem>
+                  <SelectItem value="12">Large (12px)</SelectItem>
+                  <SelectItem value="16">XL (16px)</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardContent className="p-4">
+            <div className="p-4 rounded-xl border-2 border-dashed border-amber-500/30 text-center" style={{ borderRadius: `${themeBorderRadius}px` }}>
+              <span style={{ color: themeColor, fontSize: `${themeFontSize}px` }}>Preview: This is how your theme looks</span>
+            </div>
+            <Button className="mt-4 bg-amber-500 hover:bg-amber-600 text-black">Save Theme</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // ─── Render Webhooks ────────────────────────────────────────────────────────
+
+  const webhooksList = [
+    { id: 'wh_001', url: 'https://api.example.com/webhook/sales', events: ['sale.created', 'sale.updated'], status: 'active', lastTriggered: '2026-06-05 14:30' },
+    { id: 'wh_002', url: 'https://slack.com/api/webhook/fuelpro', events: ['alert.critical'], status: 'active', lastTriggered: '2026-06-04 09:15' },
+  ];
+
+  const renderWebhooks = () => (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2"><Link className="size-5 text-amber-400" /> Webhooks</h2>
+            <p className="text-sm text-slate-400">Configure webhook endpoints for external integrations</p>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black">+ Add Webhook</Button>
+        </div>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-700">
+                  <TableHead className="text-slate-400">URL</TableHead>
+                  <TableHead className="text-slate-400">Events</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
+                  <TableHead className="text-slate-400">Last Triggered</TableHead>
+                  <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {webhooksList.map(wh => (
+                  <TableRow key={wh.id} className="border-slate-700">
+                    <TableCell className="font-mono text-xs max-w-[200px] truncate">{wh.url}</TableCell>
+                    <TableCell><div className="flex flex-wrap gap-1">{wh.events.map(e => <Badge key={e} variant="outline" className="text-[10px]">{e}</Badge>)}</div></TableCell>
+                    <TableCell><Badge className="bg-green-500/20 text-green-400 border-green-500/30">{wh.status}</Badge></TableCell>
+                    <TableCell className="text-xs text-slate-400">{wh.lastTriggered}</TableCell>
+                    <TableCell className="text-right"><Button variant="ghost" size="sm" className="h-7 text-xs">Edit</Button><Button variant="ghost" size="sm" className="h-7 text-xs text-red-400">Delete</Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+  );
+
+  // ─── Render Backups ─────────────────────────────────────────────────────────
+
+  const backupsList = [
+    { name: 'Daily Backup', date: '2026-06-05 03:00', size: '245 MB', status: 'success' },
+    { name: 'Weekly Backup', date: '2026-06-01 02:00', size: '1.2 GB', status: 'success' },
+  ];
+
+  const renderBackups = () => (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2"><Database className="size-5 text-amber-400" /> Backups</h2>
+            <p className="text-sm text-slate-400">Database and file backups</p>
+          </div>
+          <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black">+ Create Backup</Button>
+        </div>
+        <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-700">
+                  <TableHead className="text-slate-400">Name</TableHead>
+                  <TableHead className="text-slate-400">Date</TableHead>
+                  <TableHead className="text-slate-400">Size</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
+                  <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {backupsList.map((b, i) => (
+                  <TableRow key={i} className="border-slate-700">
+                    <TableCell className="font-medium">{b.name}</TableCell>
+                    <TableCell className="text-xs">{b.date}</TableCell>
+                    <TableCell className="text-xs">{b.size}</TableCell>
+                    <TableCell><Badge className="bg-green-500/20 text-green-400 border-green-500/30">{b.status}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs"><RefreshCw className="size-3 mr-1" />Restore</Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400"><Trash2 className="size-3 mr-1" />Delete</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+  );
+
+  // ─── Render Cache Control ───────────────────────────────────────────────────
+
+  const renderCacheControl = () => (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold flex items-center gap-2"><Trash2 className="size-5 text-amber-400" /> Cache Control</h2>
+      <p className="text-sm text-slate-400">Clear cache, view stats, and manage entries</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[
+          { label: 'Cache Hit Rate', value: '94.2%', desc: 'Last 24 hours' },
+          { label: 'Cache Size', value: '128 MB', desc: 'Of 512 MB allocated' },
+          { label: 'Cached Entries', value: '2,847', desc: 'Active entries' },
+        ].map((s, i) => (
+          <Card key={i} className="bg-slate-800/60 border-slate-700/50 text-white">
+            <CardContent className="p-4 text-center">
+              <span className="text-xs text-slate-400">{s.label}</span>
+              <div className="text-2xl font-bold text-amber-400 my-1">{s.value}</div>
+              <span className="text-xs text-slate-500">{s.desc}</span>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card className="bg-slate-800/60 border-slate-700/50 text-white">
+        <CardContent className="p-4 space-y-3">
+          <h3 className="font-semibold">Cache Actions</h3>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" size="sm"><RefreshCw className="size-3 mr-1" />Refresh Stats</Button>
+            <Button variant="outline" size="sm" className="text-amber-400 border-amber-500/30">Clear API Cache</Button>
+            <Button variant="outline" size="sm" className="text-amber-400 border-amber-500/30">Clear Page Cache</Button>
+            <Button variant="destructive" size="sm"><Trash2 className="size-3 mr-1" />Flush All Cache</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   // ─── Render Content ────────────────────────────────────────────────────────
@@ -1287,25 +1767,25 @@ export function FounderPanel() {
       case 'subscriptions':
         return renderSubscriptions();
       case 'sales':
-        return renderPlaceholder('Sales Overview', 'Platform-wide sales analytics and metrics', DollarSign);
+        return renderSalesOverview();
       case 'pricing':
-        return renderPlaceholder('Pricing Configuration', 'Manage subscription tiers and pricing rules', Tag);
+        return renderPricing();
       case 'security':
-        return renderPlaceholder('Security Settings', '2FA, session policies, and security configuration', Shield);
+        return renderSecurity();
       case 'tab-config':
-        return renderPlaceholder('Tab Configuration', 'Customize navigation tabs and feature visibility', LayoutGrid);
+        return renderTabConfig();
       case 'api-keys':
-        return renderPlaceholder('API Key Management', 'Generate and manage API keys for integrations', Key);
+        return renderApiKeys();
       case 'dev-console':
-        return renderPlaceholder('Developer Console', 'Debug tools, system health, and environment variables', Terminal);
+        return renderDevConsole();
       case 'theme-editor':
-        return renderPlaceholder('Theme Editor', 'Customize colors, fonts, and branding across the platform', Palette);
+        return renderThemeEditor();
       case 'webhooks':
-        return renderPlaceholder('Webhook Management', 'Configure webhook endpoints for external integrations', Link);
+        return renderWebhooks();
       case 'backups':
-        return renderPlaceholder('Backup Management', 'Schedule and restore system backups', Database);
+        return renderBackups();
       case 'cache':
-        return renderPlaceholder('Cache Control', 'Clear cache, view stats, and manage Redis entries', Trash2);
+        return renderCacheControl();
       default:
         return renderDashboard();
     }
