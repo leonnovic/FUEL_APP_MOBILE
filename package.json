@@ -8,9 +8,5 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "hono": "^4.12.23",
-    "jspdf": "^4.2.1"
-  }
+  "description": ""
 }
