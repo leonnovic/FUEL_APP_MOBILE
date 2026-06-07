@@ -9,7 +9,8 @@ import {
   Layers, HardDrive, Code, FileJson, FileCode, Bell, Wifi,
   Clock, Server, Zap, Ban, Rocket, Cpu, Brush, Send,
   Package, Wrench, Info, Search, Copy, Check,
-  Sparkles, Lightbulb, Smartphone, MessageSquare, Webhook
+  Sparkles, Lightbulb, Smartphone, MessageSquare, Webhook,
+  Cloud
 } from 'lucide-react';
 // Import new integration components
 import MPesaConfig from '@/react-app/components/MPesaConfig';
