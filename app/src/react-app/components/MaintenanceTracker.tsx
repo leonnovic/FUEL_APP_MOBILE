@@ -35,11 +35,7 @@ const EQUIPMENT_TYPES = [
 
 function loadRecords(): MaintenanceRecord[] {
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
-  return [
-    { id: 'mt_1', equipmentName: 'Pump #1', equipmentType: 'pump', stationId: 'default', description: 'Routine seal replacement and calibration check', priority: 'medium', status: 'scheduled', assignedTo: 'John M.', cost: 15000, scheduledDate: '2025-06-15', nextDueDate: '2025-09-15', notes: 'Order seals in advance', createdAt: '2025-05-01T00:00:00Z' },
-    { id: 'mt_2', equipmentName: 'Underground Tank A', equipmentType: 'tank', stationId: 'default', description: 'Leak detection system inspection', priority: 'high', status: 'in_progress', assignedTo: 'External Vendor', cost: 45000, scheduledDate: '2025-05-10', nextDueDate: '2025-11-10', notes: 'EPA compliance required', createdAt: '2025-04-20T00:00:00Z' },
-    { id: 'mt_3', equipmentName: 'Backup Generator', equipmentType: 'generator', stationId: 'default', description: 'Oil change, filter replacement, load test', priority: 'medium', status: 'completed', assignedTo: 'Peter K.', cost: 8000, scheduledDate: '2025-04-01', completedDate: '2025-04-03', nextDueDate: '2025-07-01', notes: 'Passed load test', createdAt: '2025-03-15T00:00:00Z' },
-  ];
+  return [];
 }
 
 export default function MaintenanceTracker() {

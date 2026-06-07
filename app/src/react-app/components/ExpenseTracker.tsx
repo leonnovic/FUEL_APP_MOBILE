@@ -38,12 +38,7 @@ const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'M-PESA', 'Card', 'Cheque'];
 
 function loadExpenses(): Expense[] {
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
-  return [
-    { id: 'exp_1', date: '2025-05-01', category: 'fuel_purchase', description: 'Diesel delivery - 10,000L', amount: 1800000, paymentMethod: 'Bank Transfer', reference: 'INV-2025-0542', approvedBy: 'Manager', status: 'approved', stationId: 'default', createdAt: '2025-05-01T00:00:00Z' },
-    { id: 'exp_2', date: '2025-05-05', category: 'salaries', description: 'Staff May salaries', amount: 450000, paymentMethod: 'Bank Transfer', reference: 'SAL-MAY-2025', approvedBy: 'Manager', status: 'approved', stationId: 'default', createdAt: '2025-05-05T00:00:00Z' },
-    { id: 'exp_3', date: '2025-05-08', category: 'maintenance', description: 'Pump calibration service', amount: 25000, paymentMethod: 'M-PESA', reference: 'MPESA-998877', approvedBy: 'Supervisor', status: 'pending', stationId: 'default', createdAt: '2025-05-08T00:00:00Z' },
-    { id: 'exp_4', date: '2025-05-10', category: 'rent', description: 'Station premises rent', amount: 120000, paymentMethod: 'Bank Transfer', reference: 'RENT-MAY-2025', approvedBy: 'Manager', status: 'approved', stationId: 'default', createdAt: '2025-05-10T00:00:00Z' },
-  ];
+  return [];
 }
 
 export default function ExpenseTracker() {

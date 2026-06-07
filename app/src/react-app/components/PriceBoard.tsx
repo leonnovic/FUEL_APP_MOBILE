@@ -41,22 +41,12 @@ const FUEL_GRADES: Record<string, string[]> = {
 
 function loadPrices(): PriceEntry[] {
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
-  return [
-    { id: 'pb_1', fuelType: 'Petrol', grade: 'Regular', price: 185.50, previousPrice: 182.00, currency: 'KES', displayOrder: 1, isActive: true, effectiveDate: '2025-05-01', updatedBy: 'Manager', updatedAt: '2025-05-01T00:00:00Z' },
-    { id: 'pb_2', fuelType: 'Petrol', grade: 'Premium', price: 198.00, previousPrice: 194.50, currency: 'KES', displayOrder: 2, isActive: true, effectiveDate: '2025-05-01', updatedBy: 'Manager', updatedAt: '2025-05-01T00:00:00Z' },
-    { id: 'pb_3', fuelType: 'Diesel', grade: 'Regular', price: 172.00, previousPrice: 175.00, currency: 'KES', displayOrder: 3, isActive: true, effectiveDate: '2025-05-01', updatedBy: 'Manager', updatedAt: '2025-05-01T00:00:00Z' },
-    { id: 'pb_4', fuelType: 'Diesel', grade: 'Premium', price: 185.00, previousPrice: 188.00, currency: 'KES', displayOrder: 4, isActive: true, effectiveDate: '2025-05-01', updatedBy: 'Manager', updatedAt: '2025-05-01T00:00:00Z' },
-    { id: 'pb_5', fuelType: 'Kerosene', grade: 'Standard', price: 145.00, previousPrice: 145.00, currency: 'KES', displayOrder: 5, isActive: true, effectiveDate: '2025-05-01', updatedBy: 'Manager', updatedAt: '2025-05-01T00:00:00Z' },
-  ];
+  return [];
 }
 
 function loadHistory(): PriceHistory[] {
   try { const saved = localStorage.getItem(HISTORY_KEY); if (saved) return JSON.parse(saved); } catch { /* ignore */ }
-  return [
-    { id: 'ph_1', priceEntryId: 'pb_1', oldPrice: 182.00, newPrice: 185.50, changedBy: 'Manager', reason: 'Monthly price review', changedAt: '2025-05-01T00:00:00Z' },
-    { id: 'ph_2', priceEntryId: 'pb_2', oldPrice: 194.50, newPrice: 198.00, changedBy: 'Manager', reason: 'Monthly price review', changedAt: '2025-05-01T00:00:00Z' },
-    { id: 'ph_3', priceEntryId: 'pb_3', oldPrice: 175.00, newPrice: 172.00, changedBy: 'Manager', reason: 'Supply cost reduction', changedAt: '2025-05-01T00:00:00Z' },
-  ];
+  return [];
 }
 
 export default function PriceBoard() {

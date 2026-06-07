@@ -160,9 +160,5 @@ export default function CreditManagement() {
 }
 
 function defaultAccounts(): CreditAccount[] {
-  return [
-    { id: 'ca_1', customerName: 'ABC Transport Ltd', phone: '+254712000111', vehicleReg: 'Fleet (12 trucks)', creditLimit: 500000, balanceUsed: 125000, status: 'active', paymentTerms: 14, lastPayment: '2026-05-01', totalPayments: 850000, totalPurchases: 975000, notes: 'Regular fleet customer', createdDate: '2025-06-01' },
-    { id: 'ca_2', customerName: 'Quick Deliveries', phone: '+254723000222', vehicleReg: 'Fleet (5 vans)', creditLimit: 150000, balanceUsed: 142000, status: 'active', paymentTerms: 7, lastPayment: '2026-04-20', totalPayments: 320000, totalPurchases: 462000, notes: 'Approaching limit', createdDate: '2025-09-15' },
-    { id: 'ca_3', customerName: 'Safari Tours Kenya', phone: '+254734000333', vehicleReg: 'Fleet (8 buses)', creditLimit: 300000, balanceUsed: 0, status: 'active', paymentTerms: 30, lastPayment: '2026-05-10', totalPayments: 1200000, totalPurchases: 1200000, notes: 'Good payment history', createdDate: '2024-03-01' },
-  ];
+  return [];
 }

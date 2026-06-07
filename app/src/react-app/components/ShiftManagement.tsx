@@ -195,12 +195,5 @@ export default function ShiftManagement() {
 }
 
 function defaultEmployees(): Employee[] {
-  return [
-    { id: 'emp_1', name: 'James Mwangi', phone: '+254712345678', role: 'Manager', hourlyRate: 350, status: 'active', joinDate: '2024-01-10' },
-    { id: 'emp_2', name: 'Ann Wanjiku', phone: '+254723456789', role: 'Supervisor', hourlyRate: 280, status: 'active', joinDate: '2024-03-15' },
-    { id: 'emp_3', name: 'Robert Kimani', phone: '+254734567890', role: 'Attendant', hourlyRate: 200, status: 'active', joinDate: '2025-01-20' },
-    { id: 'emp_4', name: 'Jane Akinyi', phone: '+254745678901', role: 'Cashier', hourlyRate: 220, status: 'active', joinDate: '2025-02-01' },
-    { id: 'emp_5', name: 'Peter Odhiambo', phone: '+254756789012', role: 'Attendant', hourlyRate: 200, status: 'on_leave', joinDate: '2025-04-10' },
-    { id: 'emp_6', name: 'Grace Muthoni', phone: '+254767890123', role: 'Security', hourlyRate: 180, status: 'active', joinDate: '2025-06-01' },
-  ];
+  return [];
 }

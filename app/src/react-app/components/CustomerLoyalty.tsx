@@ -211,11 +211,5 @@ export default function CustomerLoyalty() {
 }
 
 function defaultCustomers(): Customer[] {
-  return [
-    { id: 'cust_1', name: 'John Kamau', phone: '+254712345678', email: 'john@email.com', vehicleReg: 'KCA 123A', loyaltyPoints: 3200, totalSpent: 45000, visits: 23, lastVisit: '2026-05-10', preferredFuel: 'PMS', tier: 'Gold', notes: 'Regular customer', joinDate: '2025-01-15' },
-    { id: 'cust_2', name: 'Mary Ochieng', phone: '+254723456789', email: 'mary@email.com', vehicleReg: 'KDJ 456B', loyaltyPoints: 850, totalSpent: 12000, visits: 8, lastVisit: '2026-05-09', preferredFuel: 'AGO', tier: 'Silver', notes: '', joinDate: '2025-06-20' },
-    { id: 'cust_3', name: 'Peter Njoroge', phone: '+254734567890', email: '', vehicleReg: 'KBM 789C', loyaltyPoints: 150, totalSpent: 3500, visits: 3, lastVisit: '2026-05-08', preferredFuel: 'Both', tier: 'Bronze', notes: 'New customer', joinDate: '2026-04-01' },
-    { id: 'cust_4', name: 'Grace Wanjiku', phone: '+254745678901', email: 'grace@email.com', vehicleReg: 'KCK 012D', loyaltyPoints: 12500, totalSpent: 180000, visits: 67, lastVisit: '2026-05-11', preferredFuel: 'PMS', tier: 'Platinum', notes: 'VIP - fleet manager', joinDate: '2024-03-10' },
-    { id: 'cust_5', name: 'David Otieno', phone: '+254756789012', email: '', vehicleReg: 'KDA 345E', loyaltyPoints: 600, totalSpent: 8500, visits: 5, lastVisit: '2026-05-07', preferredFuel: 'AGO', tier: 'Silver', notes: '', joinDate: '2026-02-15' },
-  ];
+  return [];
 }

@@ -50,10 +50,7 @@ function loadSuppliers(): Supplier[] {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
   } catch { /* ignore */ }
-  return [
-    { id: 'sup_1', name: 'Kenya Pipeline Company', contactPerson: 'John Kamau', phone: '+254720123456', email: 'orders@kpc.co.ke', address: 'Nairobi, Kenya', fuelTypes: ['Petrol', 'Diesel', 'Premium'], rating: 4.5, status: 'active', creditLimit: 5000000, currentBalance: 1250000, deliveryDays: '3-5 days', notes: 'Primary supplier', createdAt: '2024-01-15T00:00:00Z' },
-    { id: 'sup_2', name: 'Vivo Energy', contactPerson: 'Sarah Ochieng', phone: '+254733987654', email: 'supply@vivoenergy.com', address: 'Mombasa, Kenya', fuelTypes: ['Petrol', 'Diesel', 'Kerosene'], rating: 4.2, status: 'active', creditLimit: 3000000, currentBalance: 800000, deliveryDays: '2-4 days', notes: 'Reliable delivery', createdAt: '2024-02-10T00:00:00Z', lastOrderAt: '2024-12-01T00:00:00Z' },
-  ];
+  return [];
 }
 
 function loadOrders(): PurchaseOrder[] {

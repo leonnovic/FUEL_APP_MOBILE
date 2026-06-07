@@ -148,9 +148,5 @@ export default function FuelQualityTesting() {
 }
 
 function defaultTests(): QualityTest[] {
-  return [
-    { id: 'qt_1', date: '2026-05-01', fuelType: 'PMS', batchNumber: 'LOT-2026-0451', supplier: 'Vivo Energy', density: 745.2, temperature: 24, waterContent: 45, sulfurContent: 38, color: 'Water white', flashPoint: 42, appearance: 'clear', passed: true, testedBy: 'Lab Tech', notes: 'Within spec' },
-    { id: 'qt_2', date: '2026-05-05', fuelType: 'AGO', batchNumber: 'LOT-2026-0462', supplier: 'Total Kenya', density: 835.1, temperature: 26, waterContent: 32, sulfurContent: 42, color: 'Pale yellow', flashPoint: 56, appearance: 'clear', passed: true, testedBy: 'Lab Tech', notes: 'Good quality' },
-    { id: 'qt_3', date: '2026-05-08', fuelType: 'PMS', batchNumber: 'LOT-2026-0470', supplier: 'Oilibya', density: 718.5, temperature: 25, waterContent: 85, sulfurContent: 48, color: 'Slightly hazy', flashPoint: 39, appearance: 'hazy', passed: false, testedBy: 'Lab Tech', notes: 'Water content elevated, quarantined' },
-  ];
+  return [];
 }

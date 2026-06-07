@@ -243,16 +243,5 @@ export default function InventoryManagement() {
 }
 
 function defaultItems(): StockItem[] {
-  return [
-    { id: 'eng_oil_5w30', name: 'Engine Oil 5W-30 (1L)', category: 'lubricant', quantity: 24, unit: 'Bottles', reorderLevel: 10, maxStock: 100, unitCost: 800, sellingPrice: 1200, supplier: 'Vivo Energy', lastRestocked: '2026-05-01', notes: 'Full synthetic' },
-    { id: 'eng_oil_15w40', name: 'Engine Oil 15W-40 (5L)', category: 'lubricant', quantity: 12, unit: 'Cans', reorderLevel: 5, maxStock: 50, unitCost: 2500, sellingPrice: 3500, supplier: 'Vivo Energy', lastRestocked: '2026-05-01', notes: 'Mineral' },
-    { id: 'brake_fluid', name: 'Brake Fluid DOT 4 (500ml)', category: 'lubricant', quantity: 18, unit: 'Bottles', reorderLevel: 8, maxStock: 60, unitCost: 350, sellingPrice: 550, supplier: 'Total Kenya', lastRestocked: '2026-04-28', notes: '' },
-    { id: 'coolant', name: 'Radiator Coolant (1L)', category: 'lubricant', quantity: 15, unit: 'Bottles', reorderLevel: 6, maxStock: 40, unitCost: 450, sellingPrice: 700, supplier: 'Total Kenya', lastRestocked: '2026-04-28', notes: '' },
-    { id: 'air_filter', name: 'Universal Air Filter', category: 'accessory', quantity: 8, unit: 'Pieces', reorderLevel: 5, maxStock: 30, unitCost: 600, sellingPrice: 950, supplier: 'AutoParts Kenya', lastRestocked: '2026-04-15', notes: '' },
-    { id: 'oil_filter', name: 'Universal Oil Filter', category: 'accessory', quantity: 10, unit: 'Pieces', reorderLevel: 5, maxStock: 30, unitCost: 350, sellingPrice: 600, supplier: 'AutoParts Kenya', lastRestocked: '2026-04-15', notes: '' },
-    { id: 'wiper_blades', name: 'Windshield Wiper Blades (Pair)', category: 'accessory', quantity: 6, unit: 'Pairs', reorderLevel: 4, maxStock: 25, unitCost: 800, sellingPrice: 1300, supplier: 'AutoParts Kenya', lastRestocked: '2026-04-15', notes: '' },
-    { id: 'tire_pressure', name: 'Tire Pressure Gauge', category: 'accessory', quantity: 5, unit: 'Pieces', reorderLevel: 3, maxStock: 20, unitCost: 500, sellingPrice: 850, supplier: 'AutoParts Kenya', lastRestocked: '2026-03-20', notes: '' },
-    { id: 'car_wash', name: 'Premium Car Wash Service', category: 'service', quantity: 999, unit: 'Services', reorderLevel: 0, maxStock: 9999, unitCost: 0, sellingPrice: 500, supplier: 'In-house', lastRestocked: '2026-05-01', notes: 'Unlimited capacity' },
-    { id: 'tire_pressure_service', name: 'Tire Pressure Check & Fill', category: 'service', quantity: 999, unit: 'Services', reorderLevel: 0, maxStock: 9999, unitCost: 0, sellingPrice: 50, supplier: 'In-house', lastRestocked: '2026-05-01', notes: 'Free with fuel purchase' },
-  ];
+  return [];
 }
