@@ -69,7 +69,9 @@ type SectionId =
   // AI & Advanced (1)
   | 'aibatch'
   // Integrations (3)
-  | 'mpesa' | 'smsgateway' | 'authproviders';
+  | 'mpesa' | 'smsgateway' | 'authproviders'
+  // Cloud Sync (1)
+  | 'cloudconfig';
 
 // ─── Auth Hook ───
 function useFounderAuth() {
@@ -1154,6 +1156,275 @@ function CacheSection() {
   );
 }
 
+// ─── Cloud Sync Configuration Section ───
+function CloudConfigSection() {
+  const [endpoint, setEndpoint] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).apiEndpoint || ''; } catch { }
+    }
+    return '';
+  });
+  const [apiKey, setApiKey] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).apiKey || ''; } catch { }
+    }
+    return '';
+  });
+  const [status, setStatus] = useState<{ enabled: boolean; isOnline: boolean; lastSync: number | null; pendingChanges: number }>({
+    enabled: false,
+    isOnline: navigator.onLine,
+    lastSync: null,
+    pendingChanges: 0,
+  });
+
+  useEffect(() => {
+    const sync = (window as any).FuelProCloudSync;
+    if (sync) setStatus(sync.getStatus());
+    
+    const handleOnline = () => setStatus(prev => ({ ...prev, isOnline: true }));
+    const handleOffline = () => setStatus(prev => ({ ...prev, isOnline: false }));
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const handleSave = () => {
+    const sync = (window as any).FuelProCloudSync;
+    if (sync && endpoint && apiKey) {
+      sync.configure(endpoint, apiKey);
+      setStatus(sync.getStatus());
+      toast('Cloud sync configured successfully!');
+    } else if (sync) {
+      sync.disable();
+      setStatus(sync.getStatus());
+      toast('Cloud sync disabled');
+    }
+  };
+
+  const handleSyncNow = () => {
+    const sync = (window as any).FuelProCloudSync;
+    if (sync && sync.isEnabled()) {
+      sync.pushToCloud();
+      toast('Syncing to cloud...');
+    }
+  };
+
+  const handlePullFromCloud = () => {
+    const sync = (window as any).FuelProCloudSync;
+    if (sync && sync.isEnabled()) {
+      sync.pullFromCloud();
+      toast('Pulling from cloud...');
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Cloud Sync Configuration</h2>
+        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Enable cross-device data synchronization</p>
+      </div>
+
+      {/* Status Card */}
+      <div style={{ 
+        background: '#111', 
+        border: '1px solid #222', 
+        borderRadius: 12, 
+        padding: 20,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 16
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: 40, height: 40, borderRadius: '50%', 
+            background: status.enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 8px'
+          }}>
+            {status.enabled ? <CheckCircle2 size={20} style={{ color: '#10b981' }} /> : <X size={20} style={{ color: '#ef4444' }} />}
+          </div>
+          <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Cloud Sync</p>
+          <p style={{ fontSize: 14, fontWeight: 'bold', color: status.enabled ? '#10b981' : '#ef4444', margin: '4px 0 0' }}>
+            {status.enabled ? 'Enabled' : 'Disabled'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: 40, height: 40, borderRadius: '50%', 
+            background: status.isOnline ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 8px'
+          }}>
+            {status.isOnline ? <Wifi size={20} style={{ color: '#10b981' }} /> : <Wifi size={20} style={{ color: '#f59e0b' }} />}
+          </div>
+          <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Connection</p>
+          <p style={{ fontSize: 14, fontWeight: 'bold', color: status.isOnline ? '#10b981' : '#f59e0b', margin: '4px 0 0' }}>
+            {status.isOnline ? 'Online' : 'Offline'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: 40, height: 40, borderRadius: '50%', 
+            background: 'rgba(59,130,246,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 8px'
+          }}>
+            <RefreshCw size={20} style={{ color: '#3b82f6' }} />
+          </div>
+          <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Last Sync</p>
+          <p style={{ fontSize: 14, fontWeight: 'bold', color: '#fff', margin: '4px 0 0' }}>
+            {status.lastSync ? new Date(status.lastSync).toLocaleString() : 'Never'}
+          </p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: 40, height: 40, borderRadius: '50%', 
+            background: status.pendingChanges > 0 ? 'rgba(245,158,11,0.2)' : 'rgba(100,100,100,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 8px'
+          }}>
+            <Upload size={20} style={{ color: status.pendingChanges > 0 ? '#f59e0b' : '#666' }} />
+          </div>
+          <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Pending</p>
+          <p style={{ fontSize: 14, fontWeight: 'bold', color: status.pendingChanges > 0 ? '#f59e0b' : '#888', margin: '4px 0 0' }}>
+            {status.pendingChanges} changes
+          </p>
+        </div>
+      </div>
+
+      {/* Configuration Form */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>API Configuration</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Endpoint URL</label>
+            <input 
+              type="url" 
+              value={endpoint} 
+              onChange={e => setEndpoint(e.target.value)}
+              placeholder="https://your-api.com/sync"
+              style={{ 
+                width: '100%', 
+                padding: '10px 12px', 
+                background: '#1a1a1f', 
+                border: '1px solid #333', 
+                borderRadius: 8, 
+                color: '#fff', 
+                fontSize: 13 
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Key / Token</label>
+            <input 
+              type="password" 
+              value={apiKey} 
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="Your API key or token"
+              style={{ 
+                width: '100%', 
+                padding: '10px 12px', 
+                background: '#1a1a1f', 
+                border: '1px solid #333', 
+                borderRadius: 8, 
+                color: '#fff', 
+                fontSize: 13 
+              }}
+            />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button 
+            onClick={handleSave}
+            style={{ 
+              padding: '10px 20px', 
+              background: '#f59e0b', 
+              color: '#000', 
+              border: 'none', 
+              borderRadius: 8, 
+              fontSize: 13, 
+              fontWeight: 600, 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Save size={14} /> Save Configuration
+          </button>
+        </div>
+      </div>
+
+      {/* Sync Actions */}
+      {status.enabled && (
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>Sync Actions</h3>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button 
+              onClick={handleSyncNow}
+              disabled={!status.isOnline}
+              style={{ 
+                padding: '10px 20px', 
+                background: 'rgba(16,185,129,0.15)', 
+                color: '#34d399', 
+                border: '1px solid rgba(16,185,129,0.2)', 
+                borderRadius: 8, 
+                fontSize: 13, 
+                cursor: status.isOnline ? 'pointer' : 'not-allowed',
+                opacity: status.isOnline ? 1 : 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Upload size={14} /> Push to Cloud
+            </button>
+            <button 
+              onClick={handlePullFromCloud}
+              disabled={!status.isOnline}
+              style={{ 
+                padding: '10px 20px', 
+                background: 'rgba(59,130,246,0.15)', 
+                color: '#60a5fa', 
+                border: '1px solid rgba(59,130,246,0.2)', 
+                borderRadius: 8, 
+                fontSize: 13, 
+                cursor: status.isOnline ? 'pointer' : 'not-allowed',
+                opacity: status.isOnline ? 1 : 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Download size={14} /> Pull from Cloud
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info Box */}
+      <div style={{ 
+        background: 'rgba(59,130,246,0.1)', 
+        border: '1px solid rgba(59,130,246,0.2)', 
+        borderRadius: 12, 
+        padding: 16 
+      }}>
+        <p style={{ fontSize: 12, color: '#60a5fa', margin: 0 }}>
+          <strong>How it works:</strong> Cloud sync allows your data to be accessible from any device. 
+          When enabled, all changes are automatically synced to your configured API endpoint. 
+          Data is also cached locally in IndexedDB for offline access. You can use any REST API 
+          endpoint (Supabase, Firebase, custom backend) that accepts JSON data.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── AI Batch Update Section ───
 function AIBatchSection() {
   const [prompt, setPrompt] = useState('');
@@ -1593,6 +1864,8 @@ const SECTIONS: { id: SectionId; label: string; icon: any; category: string }[] 
   { id: 'mpesa', label: 'M-PESA Config', icon: Smartphone, category: 'Integrations' },
   { id: 'smsgateway', label: 'SMS Gateway', icon: MessageSquare, category: 'Integrations' },
   { id: 'authproviders', label: 'Auth Providers', icon: Shield, category: 'Integrations' },
+  // Cloud Sync (1)
+  { id: 'cloudconfig', label: 'Cloud Sync', icon: Cloud, category: 'Integrations' },
 ];
 
 function renderSection(id: SectionId) {
@@ -1630,6 +1903,8 @@ function renderSection(id: SectionId) {
     case 'mpesa': return <MPesaConfig />;
     case 'smsgateway': return <SMSGatewayConfig />;
     case 'authproviders': return <AuthProviderConfig />;
+    // Cloud sync section
+    case 'cloudconfig': return <CloudConfigSection />;
     default: return <DashboardSection />;
   }
 }

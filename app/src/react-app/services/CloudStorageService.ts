@@ -1,7 +1,7 @@
 // ============================================================
 // CloudStorageService - Free multi-tier storage system
 // Tier 1: IndexedDB (unlimited, free, local)
-// Tier 2: Google Sheets API (free, 500 requests/100 seconds)
+// Tier 2: REST API Cloud Sync (free, cross-device)
 // Tier 3: localStorage (backup, 5-10MB)
 // ============================================================
 
@@ -13,6 +13,239 @@ const BACKUP_STORE = 'backups';
 const AUDIT_STORE = 'auditLog';
 
 let db: IDBDatabase | null = null;
+
+// ─── Cloud Sync Configuration ───
+interface CloudConfig {
+  enabled: boolean;
+  apiEndpoint: string;
+  apiKey: string;
+  syncInterval: number;
+  lastSync: number | null;
+}
+
+const DEFAULT_CLOUD_CONFIG: CloudConfig = {
+  enabled: false,
+  apiEndpoint: '', // User configures their own endpoint
+  apiKey: '',
+  syncInterval: 30000, // 30 seconds
+  lastSync: null,
+};
+
+function getCloudConfig(): CloudConfig {
+  try {
+    const saved = localStorage.getItem('fuelpro_cloud_config');
+    return saved ? { ...DEFAULT_CLOUD_CONFIG, ...JSON.parse(saved) } : DEFAULT_CLOUD_CONFIG;
+  } catch { return DEFAULT_CLOUD_CONFIG; }
+}
+
+function saveCloudConfig(config: CloudConfig) {
+  localStorage.setItem('fuelpro_cloud_config', JSON.stringify(config));
+}
+
+// ─── Device/User Identification ───
+function getDeviceId(): string {
+  let deviceId = localStorage.getItem('fuelpro_device_id');
+  if (!deviceId) {
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('fuelpro_device_id', deviceId);
+  }
+  return deviceId;
+}
+
+function getUserId(): string {
+  return localStorage.getItem('fuelpro_user_id') || 'anonymous';
+}
+
+// ─── Cloud Sync Engine ───
+class CloudSyncEngine {
+  private config: CloudConfig;
+  private syncTimer: ReturnType<typeof setInterval> | null = null;
+  private pendingSync: Map<string, any> = new Map();
+  private isOnline: boolean = navigator.onLine;
+  private listeners: Map<string, Set<(data: any) => void>> = new Map();
+
+  constructor() {
+    this.config = getCloudConfig();
+    this.initOnlineListener();
+    if (this.config.enabled) this.startAutoSync();
+  }
+
+  configure(apiEndpoint: string, apiKey: string) {
+    this.config.apiEndpoint = apiEndpoint;
+    this.config.apiKey = apiKey;
+    this.config.enabled = true;
+    saveCloudConfig(this.config);
+    this.startAutoSync();
+    // Initial sync
+    this.pushToCloud();
+  }
+
+  disable() {
+    this.config.enabled = false;
+    this.stopAutoSync();
+    saveCloudConfig(this.config);
+  }
+
+  isEnabled(): boolean {
+    return this.config.enabled && Boolean(this.config.apiEndpoint && this.config.apiKey);
+  }
+
+  // ─── Sync Operations ───
+  async pushToCloud(): Promise<boolean> {
+    if (!this.isEnabled()) return false;
+    if (!this.isOnline) return false;
+
+    try {
+      // Collect all data
+      const allData: Record<string, any> = {};
+      const all = await dbGetAll();
+      for (const [key, value] of Object.entries(all)) {
+        if (key.startsWith('fuelpro_')) {
+          allData[key] = value;
+        }
+      }
+
+      // Add sync metadata
+      allData._syncMeta = {
+        deviceId: getDeviceId(),
+        userId: getUserId(),
+        timestamp: Date.now(),
+        version: '1.0.0',
+      };
+
+      // Push to cloud
+      const response = await fetch(this.config.apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Device-Id': getDeviceId(),
+        },
+        body: JSON.stringify({
+          action: 'sync',
+          data: allData,
+          deviceId: getDeviceId(),
+        }),
+      });
+
+      if (response.ok) {
+        this.config.lastSync = Date.now();
+        saveCloudConfig(this.config);
+        this.pendingSync.clear();
+        return true;
+      }
+    } catch (e) {
+      console.error('[CloudSync] Push failed:', e);
+    }
+    return false;
+  }
+
+  async pullFromCloud(): Promise<boolean> {
+    if (!this.isEnabled()) return false;
+    if (!this.isOnline) return false;
+
+    try {
+      const response = await fetch(`${this.config.apiEndpoint}/pull`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'X-Device-Id': getDeviceId(),
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const cloudData = result.data || result;
+        
+        // Merge cloud data (cloud wins for conflicts)
+        for (const [key, value] of Object.entries(cloudData)) {
+          if (key === '_syncMeta') continue;
+          
+          const localValue = await dbGet(key);
+          if (localValue === null || !localValue) {
+            await dbSet(key, value);
+            this.notifyListeners(key, value);
+          }
+        }
+        return true;
+      }
+    } catch (e) {
+      console.error('[CloudSync] Pull failed:', e);
+    }
+    return false;
+  }
+
+  queueSync(key: string, data: any) {
+    this.pendingSync.set(key, data);
+    if (this.isOnline && this.isEnabled()) {
+      this.pushToCloud();
+    }
+  }
+
+  // ─── Auto Sync ───
+  startAutoSync() {
+    if (this.syncTimer) return;
+    
+    this.syncTimer = setInterval(() => {
+      if (this.isOnline && this.isEnabled()) {
+        if (this.pendingSync.size > 0) {
+          this.pushToCloud();
+        } else {
+          this.pullFromCloud();
+        }
+      }
+    }, this.config.syncInterval);
+  }
+
+  stopAutoSync() {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
+  }
+
+  // ─── Event System ───
+  subscribe(key: string, callback: (data: any) => void): () => void {
+    if (!this.listeners.has(key)) {
+      this.listeners.set(key, new Set());
+    }
+    this.listeners.get(key)!.add(callback);
+    return () => this.listeners.get(key)?.delete(callback);
+  }
+
+  private notifyListeners(key: string, data: any) {
+    this.listeners.get(key)?.forEach(cb => {
+      try { cb(data); } catch (e) { console.error('[CloudSync] Listener error:', e); }
+    });
+  }
+
+  // ─── Online/Offline ───
+  private initOnlineListener() {
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      if (this.isEnabled()) {
+        this.pushToCloud();
+        this.pullFromCloud();
+      }
+    });
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+    });
+  }
+
+  getStatus() {
+    return {
+      enabled: this.isEnabled(),
+      isOnline: this.isOnline,
+      lastSync: this.config.lastSync,
+      pendingChanges: this.pendingSync.size,
+    };
+  }
+}
+
+const cloudSync = new CloudSyncEngine();
+
+// ─── IndexedDB Functions ───
 
 // Initialize IndexedDB
 function initDB(): Promise<IDBDatabase> {
@@ -359,3 +592,8 @@ export async function clearOldAudit(daysToKeep = 90): Promise<void> {
 
 // Make CloudStorage available globally
 (window as any).FuelProStorage = CloudStorage;
+(window as any).FuelProCloudSync = cloudSync;
+
+// Export for use in other modules
+export { cloudSync, CloudSyncEngine };
+export type { CloudConfig };

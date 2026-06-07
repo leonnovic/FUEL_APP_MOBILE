@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { cloudSync } from '@/react-app/services/CloudStorageService';
 
 // ─── Platform Data Types ───
 export interface PlatformSales {
@@ -90,6 +91,10 @@ interface PlatformDataContextType {
     color: string;
   }>;
   
+  // Cloud sync status
+  cloudStatus: { enabled: boolean; isOnline: boolean; lastSync: number | null; pendingChanges: number };
+  configureCloud: (endpoint: string, apiKey: string) => void;
+  
   // Loading state
   isLoading: boolean;
   lastUpdated: Date | null;
@@ -110,10 +115,9 @@ const KEYS = {
   ANALYTICS: 'fuelpro_analytics',
 };
 
-// ─── Cross-app data helper ───
+// ─── Cross-app data helper with cloud sync ───
 function getItem<T>(key: string, fallback: T): T {
   try {
-    // Try main app format first
     const data = localStorage.getItem(key);
     if (!data) return fallback;
     return JSON.parse(data);
@@ -124,6 +128,8 @@ function getItem<T>(key: string, fallback: T): T {
 
 function setItem(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
+  // Queue for cloud sync
+  cloudSync.queueSync(key, value);
   // Broadcast for cross-tab sync
   try {
     const bc = new BroadcastChannel('fuelpro_sync');
@@ -231,6 +237,13 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
       }));
   }, []);
 
+  // Cloud sync configuration
+  const cloudStatus = cloudSync.getStatus();
+  
+  const configureCloud = useCallback((endpoint: string, apiKey: string) => {
+    cloudSync.configure(endpoint, apiKey);
+  }, []);
+
   return (
     <PlatformDataContext.Provider
       value={{
@@ -244,6 +257,8 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
         addSale,
         addUser,
         getRecentActivity,
+        cloudStatus,
+        configureCloud,
         isLoading,
         lastUpdated,
       }}
