@@ -363,3 +363,371 @@ export const backups = mysqlTable("backups", {
 });
 
 export type Backup = typeof backups.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SOC-2 COMPLIANT AUDIT LOGGING (Enhanced)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const auditLogEntries = mysqlTable("audit_log_entries", {
+  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+  eventType: mysqlEnum("eventType", ["authentication", "authorization", "data_access", "data_modification", "configuration", "system"]).notNull(),
+  actorType: mysqlEnum("actorType", ["user", "system", "api_key", "service"]).notNull(),
+  actorId: varchar("actorId", { length: 255 }),
+  actorName: varchar("actorName", { length: 255 }),
+  actorEmail: varchar("actorEmail", { length: 320 }),
+  sessionId: varchar("sessionId", { length: 255 }),
+  resourceType: varchar("resourceType", { length: 100 }),
+  resourceId: varchar("resourceId", { length: 255 }),
+  resourceName: varchar("resourceName", { length: 255 }),
+  action: varchar("action", { length: 100 }).notNull(),
+  actionResult: mysqlEnum("actionResult", ["success", "failure", "denied", "partial"]).default("success").notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  requestMethod: varchar("requestMethod", { length: 10 }),
+  requestPath: varchar("requestPath", { length: 1000 }),
+  requestQuery: text("requestQuery"),
+  responseStatus: int("responseStatus"),
+  responseTime: int("responseTime"),
+  previousValue: text("previousValue"),
+  newValue: text("newValue"),
+  changedFields: text("changedFields"),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }),
+  stationId: bigint("stationId", { mode: "number", unsigned: true }),
+  country: varchar("country", { length: 100 }),
+  city: varchar("city", { length: 100 }),
+  latitude: varchar("latitude", { length: 20 }),
+  longitude: varchar("longitude", { length: 20 }),
+  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"]).default("low").notNull(),
+  riskFactors: text("riskFactors"),
+  isComplianceRelevant: boolean("isComplianceRelevant").default(false).notNull(),
+  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory", "permanent"]).default("standard").notNull(),
+  previousHash: varchar("previousHash", { length: 64 }),
+  entryHash: varchar("entryHash", { length: 64 }).notNull(),
+  signature: text("signature"),
+  eventTimestamp: timestamp("eventTimestamp").defaultNow().notNull(),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  tags: text("tags"),
+  metadata: text("metadata"),
+});
+
+export type AuditLogEntry = typeof auditLogEntries.$inferSelect;
+
+export const authEvents = mysqlTable("auth_events", {
+  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+  userId: bigint("userId", { mode: "number", unsigned: true }),
+  unionId: varchar("unionId", { length: 255 }),
+  email: varchar("email", { length: 320 }),
+  authMethod: mysqlEnum("authMethod", ["password", "magic_link", "oauth", "mfa_totp", "mfa_sms", "mfa_email", "api_key", "session"]).notNull(),
+  eventType: mysqlEnum("authEventType", ["login_success", "login_failure", "logout", "mfa_enabled", "mfa_disabled", "mfa_challenge", "mfa_failure", "password_changed", "password_reset_requested", "password_reset_completed", "session_created", "session_expired", "session_revoked", "api_key_created", "api_key_revoked", "account_locked", "account_unlocked"]).notNull(),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  success: boolean("success").default(true).notNull(),
+  failureReason: varchar("failureReason", { length: 255 }),
+  sessionId: varchar("sessionId", { length: 255 }),
+  expiresAt: timestamp("expiresAt"),
+  riskScore: int("riskScore"),
+  riskSignals: text("riskSignals"),
+  blockedByMFA: boolean("blockedByMFA").default(false).notNull(),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }),
+  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory"]).default("standard").notNull(),
+  entryHash: varchar("entryHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuthEvent = typeof authEvents.$inferSelect;
+
+export const dataAccessLog = mysqlTable("data_access_log", {
+  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+  userId: bigint("userId", { mode: "number", unsigned: true }),
+  userName: varchar("userName", { length: 255 }),
+  userEmail: varchar("userEmail", { length: 320 }),
+  resourceType: varchar("resourceType", { length: 100 }).notNull(),
+  resourceId: varchar("resourceId", { length: 255 }),
+  action: varchar("action", { length: 50 }).notNull(),
+  accessType: mysqlEnum("accessType", ["view", "export", "print", "share", "download"]).notNull(),
+  filters: text("filters"),
+  fieldsAccessed: text("fieldsAccessed"),
+  recordsAccessed: int("recordsAccessed").default(0).notNull(),
+  responseSize: bigint("responseSize", { mode: "number", unsigned: true }),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  sessionId: varchar("sessionId", { length: 255 }),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }),
+  stationId: bigint("stationId", { mode: "number", unsigned: true }),
+  isPII: boolean("isPII").default(false).notNull(),
+  isSensitive: boolean("isSensitive").default(false).notNull(),
+  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory"]).default("standard").notNull(),
+  entryHash: varchar("entryHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type DataAccessLog = typeof dataAccessLog.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ACCESS CONTROL TABLES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const permissions = mysqlTable("permissions", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 100 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  resourceCategory: mysqlEnum("resourceCategory", ["dashboard", "sales", "inventory", "payments", "reports", "users", "stations", "settings", "audit"]).notNull(),
+  actionType: mysqlEnum("actionType", ["create", "read", "update", "delete", "export", "manage"]).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Permission = typeof permissions.$inferSelect;
+
+export const roles = mysqlTable("roles", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  description: text("description"),
+  level: int("level").default(0).notNull(),
+  type: mysqlEnum("roleType", ["system", "custom", "founder"]).default("custom").notNull(),
+  isTeamScoped: boolean("isTeamScoped").default(false).notNull(),
+  isDataTypeScoped: boolean("isDataTypeScoped").default(false).notNull(),
+  isActionScoped: boolean("isActionScoped").default(false).notNull(),
+  permissions: text("permissions"),
+  canManageUsers: boolean("canManageUsers").default(false).notNull(),
+  canManageRoles: boolean("canManageRoles").default(false).notNull(),
+  canViewAuditLogs: boolean("canViewAuditLogs").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type Role = typeof roles.$inferSelect;
+
+export const teams = mysqlTable("teams", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  ownerId: bigint("ownerId", { mode: "number", unsigned: true }).notNull(),
+  settings: text("settings"),
+  maxMembers: int("maxMembers").default(10).notNull(),
+  maxStations: int("maxStations").default(5).notNull(),
+  features: text("features"),
+  status: mysqlEnum("teamStatus", ["active", "suspended", "archived"]).default("active").notNull(),
+  isolationKey: varchar("isolationKey", { length: 64 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type Team = typeof teams.$inferSelect;
+
+export const teamMembers = mysqlTable("team_members", {
+  id: serial("id").primaryKey(),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
+  customPermissions: text("customPermissions"),
+  deniedPermissions: text("deniedPermissions"),
+  status: mysqlEnum("memberStatus", ["active", "invited", "suspended", "removed"]).default("active").notNull(),
+  invitedAt: timestamp("invitedAt"),
+  joinedAt: timestamp("joinedAt"),
+  invitedBy: bigint("invitedBy", { mode: "number", unsigned: true }),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type TeamMember = typeof teamMembers.$inferSelect;
+
+export const dataScopes = mysqlTable("data_scopes", {
+  id: serial("id").primaryKey(),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }).notNull(),
+  resourceType: varchar("resourceType", { length: 50 }).notNull(),
+  filterConfig: text("filterConfig").notNull(),
+  roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }),
+  description: text("description"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type DataScope = typeof dataScopes.$inferSelect;
+
+export const actionScopes = mysqlTable("action_scopes", {
+  id: serial("id").primaryKey(),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }).notNull(),
+  roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number", unsigned: true }),
+  permissionCode: varchar("permissionCode", { length: 100 }).notNull(),
+  limitations: text("limitations"),
+  conditions: text("conditions"),
+  description: text("description"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type ActionScope = typeof actionScopes.$inferSelect;
+
+export const teamInvitations = mysqlTable("team_invitations", {
+  id: serial("id").primaryKey(),
+  teamId: bigint("teamId", { mode: "number", unsigned: true }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
+  invitedBy: bigint("invitedBy", { mode: "number", unsigned: true }).notNull(),
+  token: varchar("token", { length: 255 }).notNull().unique(),
+  status: mysqlEnum("invitationStatus", ["pending", "accepted", "declined", "expired"]).default("pending").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  acceptedAt: timestamp("acceptedAt"),
+  declinedAt: timestamp("declinedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TeamInvitation = typeof teamInvitations.$inferSelect;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA ISOLATION TABLES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const tenants = mysqlTable("tenants", {
+  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 255 }),
+  email: varchar("email", { length: 320 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  businessType: varchar("businessType", { length: 100 }),
+  registrationNumber: varchar("registrationNumber", { length: 100 }),
+  taxId: varchar("taxId", { length: 100 }),
+  isolationStrategy: mysqlEnum("isolationStrategy", ["row_level", "schema", "database"]).default("row_level").notNull(),
+  isolationKey: varchar("isolationKey", { length: 64 }).notNull().unique(),
+  dataResidency: mysqlEnum("dataResidency", ["us", "eu", "uk", "ap", "au", "ca", "in", "jp", "sg", "custom"]).default("us").notNull(),
+  dataRegion: varchar("dataRegion", { length: 100 }),
+  dataCenterId: varchar("dataCenterId", { length: 100 }),
+  maxUsers: int("maxUsers").default(10).notNull(),
+  maxStations: int("maxStations").default(5).notNull(),
+  maxStorageGB: int("maxStorageGB").default(50).notNull(),
+  status: mysqlEnum("tenantStatus", ["active", "suspended", "terminated", "trial", "pending"]).default("active").notNull(),
+  complianceTier: mysqlEnum("complianceTier", ["basic", "standard", "premium", "enterprise"]).default("standard").notNull(),
+  features: text("features"),
+  planId: bigint("planId", { mode: "number", unsigned: true }),
+  billingEmail: varchar("billingEmail", { length: 320 }),
+  billingAddress: text("billingAddress"),
+  trialEndsAt: timestamp("trialEndsAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  suspendedAt: timestamp("suspendedAt"),
+});
+
+export type Tenant = typeof tenants.$inferSelect;
+
+export const tenantDomains = mysqlTable("tenant_domains", {
+  id: serial("id").primaryKey(),
+  tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
+  domain: varchar("domain", { length: 255 }).notNull().unique(),
+  isPrimary: boolean("isPrimary").default(false).notNull(),
+  isVerified: boolean("isVerified").default(false).notNull(),
+  verificationToken: varchar("verificationToken", { length: 255 }),
+  sslEnabled: boolean("sslEnabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TenantDomain = typeof tenantDomains.$inferSelect;
+
+export const dataPartitions = mysqlTable("data_partitions", {
+  id: serial("id").primaryKey(),
+  tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  code: varchar("code", { length: 50 }).notNull(),
+  type: mysqlEnum("partitionType", ["station", "region", "department", "project", "custom"]).notNull(),
+  parentId: bigint("parentId", { mode: "number", unsigned: true }),
+  level: int("level").default(0).notNull(),
+  isolationKey: varchar("isolationKey", { length: 64 }).notNull(),
+  settings: text("settings"),
+  metadata: text("metadata"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type DataPartition = typeof dataPartitions.$inferSelect;
+
+export const crossTenantLinks = mysqlTable("cross_tenant_links", {
+  id: serial("id").primaryKey(),
+  sourceTenantId: bigint("sourceTenantId", { mode: "number", unsigned: true }).notNull(),
+  sourceType: varchar("sourceType", { length: 50 }).notNull(),
+  sourceId: bigint("sourceId", { mode: "number", unsigned: true }).notNull(),
+  targetTenantId: bigint("targetTenantId", { mode: "number", unsigned: true }).notNull(),
+  targetType: varchar("targetType", { length: 50 }).notNull(),
+  targetId: bigint("targetId", { mode: "number", unsigned: true }).notNull(),
+  linkType: mysqlEnum("linkType", ["parent_child", "partnership", "franchise", "vendor", "customer"]).notNull(),
+  permissions: text("permissions"),
+  status: mysqlEnum("linkStatus", ["active", "suspended", "terminated"]).default("active").notNull(),
+  approvedBy: bigint("approvedBy", { mode: "number", unsigned: true }),
+  approvedAt: timestamp("approvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type CrossTenantLink = typeof crossTenantLinks.$inferSelect;
+
+export const tenantEncryptionKeys = mysqlTable("tenant_encryption_keys", {
+  id: serial("id").primaryKey(),
+  tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
+  keyId: varchar("keyId", { length: 100 }).notNull().unique(),
+  keyVersion: int("keyVersion").notNull(),
+  encryptedKey: text("encryptedKey").notNull(),
+  algorithm: varchar("algorithm", { length: 50 }).default("AES-256-GCM").notNull(),
+  keyPurpose: mysqlEnum("keyPurpose", ["data_at_rest", "data_in_transit", "backups", "audit_logs"]).notNull(),
+  status: mysqlEnum("keyStatus", ["active", "rotating", "retired", "compromised"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  rotatedAt: timestamp("rotatedAt"),
+  expiresAt: timestamp("expiresAt"),
+  rotatedBy: bigint("rotatedBy", { mode: "number", unsigned: true }),
+});
+
+export type TenantEncryptionKey = typeof tenantEncryptionKeys.$inferSelect;
+
+export const tenantSettings = mysqlTable("tenant_settings", {
+  id: serial("id").primaryKey(),
+  tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  key: varchar("key", { length: 100 }).notNull(),
+  value: text("value").notNull(),
+  isEncrypted: boolean("isEncrypted").default(false).notNull(),
+  description: text("description"),
+  isPublic: boolean("isPublic").default(false).notNull(),
+  isRequired: boolean("isRequired").default(false).notNull(),
+  updatedBy: bigint("updatedBy", { mode: "number", unsigned: true }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type TenantSetting = typeof tenantSettings.$inferSelect;
+
+export const dataAccessPolicies = mysqlTable("data_access_policies", {
+  id: serial("id").primaryKey(),
+  tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  appliesTo: mysqlEnum("appliesTo", ["user", "role", "team", "all"]).notNull(),
+  targetId: bigint("targetId", { mode: "number", unsigned: true }),
+  resourceType: varchar("resourceType", { length: 50 }).notNull(),
+  resourceFilter: text("resourceFilter"),
+  allowedFields: text("allowedFields"),
+  deniedFields: text("deniedFields"),
+  maskedFields: text("maskedFields"),
+  allowedActions: text("allowedActions"),
+  deniedActions: text("deniedActions"),
+  conditions: text("conditions"),
+  priority: int("priority").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type DataAccessPolicy = typeof dataAccessPolicies.$inferSelect;
