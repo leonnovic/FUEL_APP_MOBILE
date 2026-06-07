@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/react-app/context/ThemeContext';
 import { LocalizationProvider } from '@/react-app/context/LocalizationContext';
 import { PermissionProvider } from '@/react-app/context/PermissionContext';
 import { FuelProvider } from "@/react-app/context/FuelContext";
+import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
@@ -96,30 +97,32 @@ export default function App() {
       <ThemeProvider>
         <LocalizationProvider>
           <PermissionProvider>
-            <Router>
-              <Routes>
-                {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                <Route path="/founder" element={
-                  <Suspense fallback={<RouteFallback />}>
-                    <FounderAccessV2 />
-                  </Suspense>
-                } />
-                <Route path="/founder-v1" element={<Navigate to="/founder" replace />} />
-                <Route path="/admin" element={<Navigate to="/founder" replace />} />
+            <PlatformDataProvider>
+              <Router>
+                <Routes>
+                  {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                  <Route path="/founder" element={
+                    <Suspense fallback={<RouteFallback />}>
+                      <FounderAccessV2 />
+                    </Suspense>
+                  } />
+                  <Route path="/founder-v1" element={<Navigate to="/founder" replace />} />
+                  <Route path="/admin" element={<Navigate to="/founder" replace />} />
 
-                {/* Password Reset - public */}
-                <Route path="/reset-password" element={<PasswordReset />} />
+                  {/* Password Reset - public */}
+                  <Route path="/reset-password" element={<PasswordReset />} />
 
-                {/* Invite acceptance - public */}
-                <Route path="/join/:inviteId" element={<InviteAccept />} />
+                  {/* Invite acceptance - public */}
+                  <Route path="/join/:inviteId" element={<InviteAccept />} />
 
-                {/* Main app - requires auth, shows loader while checking */}
-                <Route path="/" element={<MainAppLoader />} />
+                  {/* Main app - requires auth, shows loader while checking */}
+                  <Route path="/" element={<MainAppLoader />} />
 
-                {/* Catch all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Router>
+                  {/* Catch all */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Router>
+            </PlatformDataProvider>
           </PermissionProvider>
         </LocalizationProvider>
       </ThemeProvider>

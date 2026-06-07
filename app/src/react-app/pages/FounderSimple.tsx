@@ -18,6 +18,8 @@ import WebhookManager from '@/react-app/components/WebhookManager';
 import APIKeyManager from '@/react-app/components/APIKeyManager';
 import CacheControl from '@/react-app/components/CacheControl';
 import AuthProviderConfig from '@/react-app/components/AuthProviderConfig';
+// Import platform analytics for data-driven analytics
+import PlatformAnalytics from '@/react-app/components/PlatformAnalytics';
 
 const SESSION_KEY = 'fuelpro_founder_session';
 const DEFAULT_CREDS = { username: 'FOUNDER', password: 'fuelpro2026' };
@@ -418,34 +420,8 @@ function SecuritySection() {
 }
 
 function AnalyticsSection() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Analytics</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Platform performance metrics</p></div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-        {[{t:'Page Views',v:'12,458',c:'+12%',col:'#10b981'},{t:'Active Sessions',v:'234',c:'+5%',col:'#3b82f6'},{t:'Conversion Rate',v:'3.2%',c:'+0.4%',col:'#8b5cf6'},{t:'Avg Load Time',v:'1.2s',c:'-0.3s',col:'#f59e0b'},{t:'API Calls',v:'45.2K',c:'+8%',col:'#06b6d4'},{t:'Errors',v:'12',c:'-60%',col:'#ef4444'}].map(k => (
-          <div key={k.t} style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
-            <p style={{ fontSize: 11, color: '#666', margin: 0 }}>{k.t}</p>
-            <p style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: '4px 0 0' }}>{k.v}</p>
-            <p style={{ fontSize: 11, color: k.col, margin: '4px 0 0' }}>{k.c}</p>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 12px' }}>Sales Performance (30 Days)</h3>
-          <div style={{ height: 160, display: 'flex', alignItems: 'end', gap: 2 }}>
-            {Array.from({length:30},(_,i)=>20+Math.random()*60).map((h,i)=><div key={i} style={{flex:1,background:'rgba(245,158,11,0.2)',borderRadius:'3px 3px 0 0',height:`${h}%`}} />)}
-          </div>
-        </div>
-        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 12px' }}>User Growth</h3>
-          <div style={{ height: 160, display: 'flex', alignItems: 'end', gap: 2 }}>
-            {Array.from({length:30},(_,i)=>30+Math.sin(i*0.5)*20+Math.random()*15).map((h,i)=><div key={i} style={{flex:1,background:'rgba(59,130,246,0.2)',borderRadius:'3px 3px 0 0',height:`${h}%`}} />)}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // Use real data-driven Platform Analytics
+  return <PlatformAnalytics />;
 }
 
 function ConfigSection() {
