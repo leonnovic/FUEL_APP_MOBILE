@@ -1159,6 +1159,13 @@ function CacheSection() {
 
 // ─── Cloud Sync Configuration Section ───
 function CloudConfigSection() {
+  const [provider, setProvider] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).provider || 'custom'; } catch { }
+    }
+    return 'custom';
+  });
   const [endpoint, setEndpoint] = useState(() => {
     const config = localStorage.getItem('fuelpro_cloud_config');
     if (config) {
@@ -1173,12 +1180,65 @@ function CloudConfigSection() {
     }
     return '';
   });
+  const [seafileUsername, setSeafileUsername] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).seafileUsername || ''; } catch { }
+    }
+    return '';
+  });
+  const [seafilePassword, setSeafilePassword] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).seafilePassword || ''; } catch { }
+    }
+    return '';
+  });
+  const [seafileLibId, setSeafileLibId] = useState(() => {
+    const config = localStorage.getItem('fuelpro_cloud_config');
+    if (config) {
+      try { return JSON.parse(config).seafileLibId || ''; } catch { }
+    }
+    return '';
+  });
+  const [seafileLibs, setSeafileLibs] = useState<{ id: string; name: string }[]>([]);
+  const [isLoadingLibs, setIsLoadingLibs] = useState(false);
   const [status, setStatus] = useState<{ enabled: boolean; isOnline: boolean; lastSync: number | null; pendingChanges: number }>({
     enabled: false,
     isOnline: navigator.onLine,
     lastSync: null,
     pendingChanges: 0,
   });
+
+  // Load Seafile libraries when endpoint+credentials change
+  const loadSeafileLibs = async () => {
+    if (provider !== 'seafile' || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))) return;
+    setIsLoadingLibs(true);
+    try {
+      let token = apiKey;
+      // If no token, get one via credentials
+      if (!token && seafileUsername && seafilePassword) {
+        const loginRes = await fetch(`${endpoint.replace(/\/$/, '')}/api2/auth-token/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: seafileUsername, password: seafilePassword })
+        });
+        if (loginRes.ok) {
+          const data = await loginRes.json();
+          token = data.token;
+        }
+      }
+      if (!token) return;
+      const libsRes = await fetch(`${endpoint.replace(/\/$/, '')}/api2/repos/`, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      if (libsRes.ok) {
+        const libs = await libsRes.json();
+        setSeafileLibs(libs.map((l: any) => ({ id: l.id, name: l.name })));
+      }
+    } catch (e) { console.error('Failed to load Seafile libs', e); }
+    setIsLoadingLibs(false);
+  };
 
   useEffect(() => {
     const sync = (window as any).FuelProCloudSync;
@@ -1196,14 +1256,29 @@ function CloudConfigSection() {
 
   const handleSave = () => {
     const sync = (window as any).FuelProCloudSync;
-    if (sync && endpoint && apiKey) {
-      sync.configure(endpoint, apiKey);
-      setStatus(sync.getStatus());
-      toast('Cloud sync configured successfully!');
-    } else if (sync) {
-      sync.disable();
-      setStatus(sync.getStatus());
-      toast('Cloud sync disabled');
+    const config = {
+      provider,
+      apiEndpoint: endpoint,
+      apiKey,
+      seafileUsername,
+      seafilePassword,
+      seafileLibId,
+    };
+    localStorage.setItem('fuelpro_cloud_config', JSON.stringify(config));
+    if (sync) {
+      if (provider === 'seafile' && endpoint && (apiKey || (seafileUsername && seafilePassword)) && seafileLibId) {
+        sync.configure(endpoint, apiKey || 'token-from-creds', { provider: 'seafile', libId: seafileLibId, username: seafileUsername, password: seafilePassword });
+        setStatus(sync.getStatus());
+        toast('Seafile sync configured successfully!');
+      } else if (provider === 'custom' && endpoint && apiKey) {
+        sync.configure(endpoint, apiKey);
+        setStatus(sync.getStatus());
+        toast('Cloud sync configured successfully!');
+      } else {
+        sync.disable();
+        setStatus(sync.getStatus());
+        toast('Cloud sync disabled');
+      }
     }
   };
 
@@ -1221,6 +1296,11 @@ function CloudConfigSection() {
       sync.pullFromCloud();
       toast('Pulling from cloud...');
     }
+  };
+
+  const getEndpointPlaceholder = () => {
+    if (provider === 'seafile') return 'https://your-seafile-server.com';
+    return 'https://your-api.com/sync';
   };
 
   return (
@@ -1298,47 +1378,201 @@ function CloudConfigSection() {
         </div>
       </div>
 
+      {/* Provider Selection */}
+      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>Sync Provider</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { id: 'custom', label: 'Custom REST API', icon: '🔗' },
+            { id: 'seafile', label: 'Seafile', icon: '🗂️' },
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => setProvider(p.id)}
+              style={{
+                padding: '10px 16px',
+                background: provider === p.id ? 'rgba(245,158,11,0.15)' : 'transparent',
+                color: provider === p.id ? '#f59e0b' : '#888',
+                border: `1px solid ${provider === p.id ? 'rgba(245,158,11,0.3)' : '#333'}`,
+                borderRadius: 8,
+                fontSize: 13,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <span>{p.icon}</span> {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Configuration Form */}
       <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>API Configuration</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Endpoint URL</label>
-            <input 
-              type="url" 
-              value={endpoint} 
-              onChange={e => setEndpoint(e.target.value)}
-              placeholder="https://your-api.com/sync"
-              style={{ 
-                width: '100%', 
-                padding: '10px 12px', 
-                background: '#1a1a1f', 
-                border: '1px solid #333', 
-                borderRadius: 8, 
-                color: '#fff', 
-                fontSize: 13 
-              }}
-            />
+        <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>
+          {provider === 'seafile' ? 'Seafile Configuration' : 'API Configuration'}
+        </h3>
+        
+        {provider === 'seafile' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Seafile Server URL</label>
+              <input 
+                type="url" 
+                value={endpoint} 
+                onChange={e => setEndpoint(e.target.value)}
+                placeholder="https://your-seafile-server.com"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px 12px', 
+                  background: '#1a1a1f', 
+                  border: '1px solid #333', 
+                  borderRadius: 8, 
+                  color: '#fff', 
+                  fontSize: 13 
+                }}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Username / Email</label>
+                <input 
+                  type="text" 
+                  value={seafileUsername} 
+                  onChange={e => setSeafileUsername(e.target.value)}
+                  placeholder="your@email.com"
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    background: '#1a1a1f', 
+                    border: '1px solid #333', 
+                    borderRadius: 8, 
+                    color: '#fff', 
+                    fontSize: 13 
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Password</label>
+                <input 
+                  type="password" 
+                  value={seafilePassword} 
+                  onChange={e => setSeafilePassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    background: '#1a1a1f', 
+                    border: '1px solid #333', 
+                    borderRadius: 8, 
+                    color: '#fff', 
+                    fontSize: 13 
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Token (optional if using credentials)</label>
+              <input 
+                type="password" 
+                value={apiKey} 
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="Your Seafile API token"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px 12px', 
+                  background: '#1a1a1f', 
+                  border: '1px solid #333', 
+                  borderRadius: 8, 
+                  color: '#fff', 
+                  fontSize: 13 
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Library (Repository)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  value={seafileLibId}
+                  onChange={e => setSeafileLibId(e.target.value)}
+                  style={{ 
+                    flex: 1,
+                    padding: '10px 12px', 
+                    background: '#1a1a1f', 
+                    border: '1px solid #333', 
+                    borderRadius: 8, 
+                    color: '#fff', 
+                    fontSize: 13 
+                  }}
+                >
+                  <option value="">Select a library...</option>
+                  {seafileLibs.map(l => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={loadSeafileLibs}
+                  disabled={isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))}
+                  style={{ 
+                    padding: '10px 16px', 
+                    background: 'rgba(59,130,246,0.15)', 
+                    color: '#60a5fa', 
+                    border: '1px solid rgba(59,130,246,0.2)', 
+                    borderRadius: 8, 
+                    fontSize: 13, 
+                    cursor: 'pointer',
+                    opacity: (isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))) ? 0.5 : 1
+                  }}
+                >
+                  {isLoadingLibs ? 'Loading...' : 'Load Libs'}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
+                First enter server URL + credentials, then click "Load Libs" to fetch your libraries
+              </p>
+            </div>
           </div>
-          <div>
-            <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Key / Token</label>
-            <input 
-              type="password" 
-              value={apiKey} 
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="Your API key or token"
-              style={{ 
-                width: '100%', 
-                padding: '10px 12px', 
-                background: '#1a1a1f', 
-                border: '1px solid #333', 
-                borderRadius: 8, 
-                color: '#fff', 
-                fontSize: 13 
-              }}
-            />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Endpoint URL</label>
+              <input 
+                type="url" 
+                value={endpoint} 
+                onChange={e => setEndpoint(e.target.value)}
+                placeholder="https://your-api.com/sync"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px 12px', 
+                  background: '#1a1a1f', 
+                  border: '1px solid #333', 
+                  borderRadius: 8, 
+                  color: '#fff', 
+                  fontSize: 13 
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Key / Token</label>
+              <input 
+                type="password" 
+                value={apiKey} 
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="Your API key or token"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px 12px', 
+                  background: '#1a1a1f', 
+                  border: '1px solid #333', 
+                  borderRadius: 8, 
+                  color: '#fff', 
+                  fontSize: 13 
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button 
             onClick={handleSave}
@@ -1416,10 +1650,10 @@ function CloudConfigSection() {
         padding: 16 
       }}>
         <p style={{ fontSize: 12, color: '#60a5fa', margin: 0 }}>
-          <strong>How it works:</strong> Cloud sync allows your data to be accessible from any device. 
-          When enabled, all changes are automatically synced to your configured API endpoint. 
-          Data is also cached locally in IndexedDB for offline access. You can use any REST API 
-          endpoint (Supabase, Firebase, custom backend) that accepts JSON data.
+          <strong>Seafile Setup:</strong> Run your own Seafile server, then enter your server URL, 
+          login credentials, and select a library to sync your FuelPro data. Seafile provides 
+          high-performance, self-hosted file sync with end-to-end encryption support. Get a token 
+          from Account → Settings → Web API, or use your login credentials directly.
         </p>
       </div>
     </div>
