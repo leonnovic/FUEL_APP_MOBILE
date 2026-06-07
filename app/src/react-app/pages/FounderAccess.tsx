@@ -1,13 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Crown, Users, Building2, BarChart3, Shield, Activity, Server,
+  Crown, Users, Building2, 3, Shield, Activity, Server,
   HardDrive, Wifi, Clock, Search, Eye, EyeOff, Trash2, Plus,
-  Lock, Unlock, CheckCircle2, AlertTriangle, XCircle, Key,
-  Settings, FileText, ToggleLeft, ToggleRight, RefreshCw,
-  Database, Radio, Zap, Globe, ArrowLeft, ChevronRight,
-  Layers, FolderOpen, Save, Edit3, X, Copy, Check,
+  Lock, CheckCircle2, AlertTriangle, XCircle, Key,
+  Settings, ToggleRight, RefreshCw,
+  Database, Radio, Zap, Globe, ArrowLeft, Layers, Save, X, Copy, Check,
   Sparkles, Upload, Wand2, Terminal, Cpu, FileCode,
-  ShieldCheck, DatabaseBackup, Bell, Palette, Code, BarChart, Mail, ShieldAlert, FolderCog, Wrench,
+  ShieldCheck, DatabaseBackup, Bell, Palette, Code, Mail, ShieldAlert, FolderCog, Wrench,
   DollarSign, Tag, CreditCard
 } from 'lucide-react';
 import { validateFounderAuth } from '@/react-app/lib/founder-auth';
@@ -16,9 +15,7 @@ import {
   BrandingSection, ApiSection, AnalyticsSection, MaintenanceSection,
   EmailTemplatesSection, RateLimitSection, DataManagementSection,
   PricingManagerSection, SubscriptionDashboardSection, CouponSection,
-  PayoutSection, TrialAnalyticsSection, PerformanceSection, PaywallControlSection, PaymentMethodsSection,
-} from './founder-sections';
-import { genCode } from '@/react-app/lib/totp';
+  PayoutSection, TrialAnalyticsSection, PerformanceSection, PaywallControlSection, PaymentMethodsSection } from './founder-sections';
 import { useFounderBackend } from '@/react-app/hooks/useFounderBackend';
 import { trpc } from '@/providers/trpc';
 
@@ -130,8 +127,7 @@ export default function FounderAccess() {
     auditLog: backendAuditLog,
     auditLoading: auditBackendLoading,
     stationCount: backendStationCount,
-    salesAnalytics,
-  } = useFounderBackend();
+    salesAnalytics } = useFounderBackend();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -346,8 +342,7 @@ export default function FounderAccess() {
             discoveredUsers.push({
               authId: val.authId, authMethod: val.authMethod || 'unknown',
               name: val.name || 'Unknown', email: val.email || '',
-              role: val.role || 'owner', lastActive: 'Now', stations: 0, createdAt: 'Unknown',
-            });
+              role: val.role || 'owner', lastActive: 'Now', stations: 0, createdAt: 'Unknown' });
           }
         } catch { /* ignore */ }
       }
@@ -364,8 +359,7 @@ export default function FounderAccess() {
                 ownerName: s.ownerName || 'Unknown Owner',
                 members: (s.sharedUsers || []).length + 1,
                 createdAt: s.createdAt || 'Unknown', lastActive: s.updatedAt || s.createdAt || 'Unknown',
-                revenue: Math.floor(Math.random() * 500000 + 50000),
-              });
+                revenue: Math.floor(Math.random() * 500000 + 50000) });
             }
           });
         } catch { /* ignore */ }
@@ -499,12 +493,11 @@ export default function FounderAccess() {
     {
       label: 'Main',
       items: [
-        { id: 'overview' as SectionId, label: 'Overview', icon: BarChart3 },
+        { id: 'overview' as SectionId, label: 'Overview', icon: 3 },
         { id: 'users' as SectionId, label: 'All Users', icon: Users, count: users.length },
         { id: 'stations' as SectionId, label: 'All Stations', icon: Building2, count: effectiveStationCount },
-        { id: 'analytics' as SectionId, label: 'Analytics', icon: BarChart3 },
-      ],
-    },
+        { id: 'analytics' as SectionId, label: 'Analytics', icon: 3 },
+      ] },
     {
       label: 'Administration',
       items: [
@@ -512,16 +505,14 @@ export default function FounderAccess() {
         { id: 'audit' as SectionId, label: 'Audit Log', icon: Shield, count: auditLog.length },
         { id: 'flags' as SectionId, label: 'Feature Flags', icon: ToggleRight, count: featureFlags.length },
         { id: 'system' as SectionId, label: 'System Health', icon: Server },
-      ],
-    },
+      ] },
     {
       label: 'Security',
       items: [
         { id: 'security' as SectionId, label: 'Security & 2FA', icon: ShieldCheck },
         { id: 'ratelimit' as SectionId, label: 'Rate Limits', icon: ShieldAlert },
         { id: 'backup' as SectionId, label: 'Backup & Restore', icon: DatabaseBackup },
-      ],
-    },
+      ] },
     {
       label: 'Configuration',
       items: [
@@ -529,26 +520,23 @@ export default function FounderAccess() {
         { id: 'notifications' as SectionId, label: 'Notifications', icon: Bell },
         { id: 'branding' as SectionId, label: 'Branding', icon: Palette },
         { id: 'email' as SectionId, label: 'Email Templates', icon: Mail },
-      ],
-    },
+      ] },
     {
       label: 'Monetization',
       items: [
         { id: 'paywall' as SectionId, label: 'Paywall Control', icon: Lock },
         { id: 'paymentmethods' as SectionId, label: 'Payment Methods', icon: CreditCard },
         { id: 'pricing' as SectionId, label: 'Pricing Manager', icon: DollarSign },
-        { id: 'subdash' as SectionId, label: 'Sub. Dashboard', icon: BarChart3 },
+        { id: 'subdash' as SectionId, label: 'Sub. Dashboard', icon: 3 },
         { id: 'coupons' as SectionId, label: 'Coupons', icon: Tag },
         { id: 'payouts' as SectionId, label: 'Payments', icon: CreditCard },
         { id: 'trialanalytics' as SectionId, label: 'Trial Analytics', icon: Clock },
-      ],
-    },
+      ] },
     {
       label: 'Performance',
       items: [
         { id: 'performance' as SectionId, label: 'Performance Center', icon: Zap },
-      ],
-    },
+      ] },
     {
       label: 'Development',
       items: [
@@ -556,8 +544,7 @@ export default function FounderAccess() {
         { id: 'maintenance' as SectionId, label: 'Maintenance', icon: Wrench },
         { id: 'datamgmt' as SectionId, label: 'Data Manager', icon: FolderCog },
         { id: 'editor' as SectionId, label: 'AI Website Editor', icon: Sparkles, count: editorHistory.length },
-      ],
-    },
+      ] },
   ];
 
   const NavItem = ({ id, label, icon: Icon, count }: { id: SectionId; label: string; icon: any; count?: number }) => (
@@ -638,7 +625,7 @@ export default function FounderAccess() {
                 {[
                   { label: 'Users', value: users.length, icon: Users, color: 'text-blue-400' },
                   { label: 'Stations', value: effectiveStationCount, icon: Building2, color: 'text-green-400' },
-                  { label: 'Revenue', value: `KES ${effectiveRevenue.toLocaleString()}`, icon: BarChart3, color: 'text-amber-400' },
+                  { label: 'Revenue', value: `KES ${effectiveRevenue.toLocaleString()}`, icon: 3, color: 'text-amber-400' },
                   { label: 'Secrets', value: secrets.length, icon: Key, color: 'text-purple-400' },
                 ].map(s => (
                   <div key={s.label} className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
