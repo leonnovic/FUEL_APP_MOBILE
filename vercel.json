@@ -1,8 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static build - serving pre-built frontend'",
-  "outputDirectory": "frontend/dist",
-  "installCommand": "echo 'skip install'",
+  "buildCommand": "cd app && npm ci && npm run build",
+  "outputDirectory": "app/dist",
   "framework": null,
   "cleanUrls": true,
   "headers": [
