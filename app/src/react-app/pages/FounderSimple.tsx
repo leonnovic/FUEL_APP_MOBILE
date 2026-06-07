@@ -9,8 +9,15 @@ import {
   Layers, HardDrive, Code, FileJson, FileCode, Bell, Wifi,
   Clock, Server, Zap, Ban, Rocket, Cpu, Brush, Send,
   Package, Wrench, Info, Search, Copy, Check,
-  Sparkles, Lightbulb
+  Sparkles, Lightbulb, Smartphone, MessageSquare, Webhook
 } from 'lucide-react';
+// Import new integration components
+import MPesaConfig from '@/react-app/components/MPesaConfig';
+import SMSGatewayConfig from '@/react-app/components/SMSGatewayConfig';
+import WebhookManager from '@/react-app/components/WebhookManager';
+import APIKeyManager from '@/react-app/components/APIKeyManager';
+import CacheControl from '@/react-app/components/CacheControl';
+import AuthProviderConfig from '@/react-app/components/AuthProviderConfig';
 
 const SESSION_KEY = 'fuelpro_founder_session';
 const DEFAULT_CREDS = { username: 'FOUNDER', password: 'fuelpro2026' };
@@ -31,7 +38,9 @@ type SectionId =
   // Subscription & Company (3)
   | 'trialmgr' | 'companyprofile' | 'subscriptions'
   // AI & Advanced (1)
-  | 'aibatch';
+  | 'aibatch'
+  // Integrations (3)
+  | 'mpesa' | 'smsgateway' | 'authproviders';
 
 // ─── Auth Hook ───
 function useFounderAuth() {
@@ -1524,6 +1533,10 @@ const SECTIONS: { id: SectionId; label: string; icon: any; category: string }[] 
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, category: 'Billing' },
   // AI & Advanced (1)
   { id: 'aibatch', label: 'AI Batch Update', icon: Sparkles, category: 'AI' },
+  // Integrations (3)
+  { id: 'mpesa', label: 'M-PESA Config', icon: Smartphone, category: 'Integrations' },
+  { id: 'smsgateway', label: 'SMS Gateway', icon: MessageSquare, category: 'Integrations' },
+  { id: 'authproviders', label: 'Auth Providers', icon: Shield, category: 'Integrations' },
 ];
 
 function renderSection(id: SectionId) {
@@ -1557,6 +1570,10 @@ function renderSection(id: SectionId) {
     case 'companyprofile': return <CompanyProfileSection />;
     case 'subscriptions': return <SubscriptionsSection />;
     case 'aibatch': return <AIBatchSection />;
+    // Integration sections
+    case 'mpesa': return <MPesaConfig />;
+    case 'smsgateway': return <SMSGatewayConfig />;
+    case 'authproviders': return <AuthProviderConfig />;
     default: return <DashboardSection />;
   }
 }
