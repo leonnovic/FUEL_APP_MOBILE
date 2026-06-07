@@ -4,7 +4,7 @@ import { useStations } from '@/react-app/context/StationContext';
 import { useAuth } from '@/react-app/context/AuthContext';
 import { usePermissions } from '@/react-app/context/PermissionContext';
 import { useTenant } from '@/react-app/context/TenantContext';
-import { LocationProvider, useLocation } from '@/react-app/context/LocationContext';
+import { LocationProvider } from '@/react-app/context/LocationContext';
 import Header from '@/react-app/components/Header';
 import TabNavigation from '@/react-app/components/TabNavigation';
 import MobileBottomNav from '@/react-app/components/MobileBottomNav';
@@ -55,7 +55,7 @@ const PriceBoard = lazy(() => import('@/react-app/components/PriceBoard'));
 const SYNC_CHANNEL = 'fuelpro_sync';
 
 function useCrossTabSync() {
-  const broadcast = useCallback((event: string, data: any) => {
+  const broadcast = useCallback((event: string, data: unknown) => {
     try {
       const bc = new BroadcastChannel(SYNC_CHANNEL);
       bc.postMessage({ event, data, timestamp: Date.now() });
@@ -66,7 +66,7 @@ function useCrossTabSync() {
     }
   }, []);
 
-  const subscribe = useCallback((event: string, handler: (data: any) => void) => {
+  const subscribe = useCallback((event: string, handler: (data: unknown) => void) => {
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel(SYNC_CHANNEL);
