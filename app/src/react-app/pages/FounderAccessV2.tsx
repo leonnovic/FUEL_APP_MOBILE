@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router';
 import {
   LayoutDashboard, Users, Building2, Fuel, Settings, Shield,
   CreditCard, Tag, Key, Database, Receipt, BarChart3, Activity,
-  DollarSign, ShoppingCart, Wrench, ChevronLeft, ChevronRight,
+  DollarSign, ShoppingCart, ChevronLeft, ChevronRight,
   LogOut, Crown, RefreshCw, Plus, Edit3, Trash2, Eye, EyeOff,
-  CheckCircle2, AlertTriangle, X, Save, Moon, Sun, Menu, XCircle,
-  ChevronDown, ChevronUp, Search, Globe
-} from 'lucide-react';
+  CheckCircle2, AlertTriangle, X, Save, Menu } from 'lucide-react';
 
 // ─── Storage Keys ───
 const SESSION_KEY = 'fuelpro_founder_session';
