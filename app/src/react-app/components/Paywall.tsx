@@ -85,18 +85,6 @@ export default function Paywall({ onClose }: PaywallProps) {
     }, 3000);
   }, [phone, agreed, selectedTier]);
 
-  const handleSimulateSuccess = useCallback(() => {
-    const receipt = `MPESA${Date.now()}`;
-    const normalizedPhone = formatPhone(phone || '2547XXXXXXXX');
-    const newSub = activateTier(selectedTier, {
-      mpesaReceipt: receipt,
-      phone: normalizedPhone,
-    });
-    setSub(newSub);
-    logSubscriptionAction('activated', selectedTier, `Payment completed: ${receipt}`);
-    setStep('success');
-  }, [selectedTier, phone]);
-
   const currentTierData = TIERS.find(t => t.key === sub.tier);
   const selectedTierData = TIERS.find(t => t.key === selectedTier);
 
