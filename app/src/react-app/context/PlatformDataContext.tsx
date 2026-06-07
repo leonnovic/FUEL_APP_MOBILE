@@ -98,20 +98,22 @@ interface PlatformDataContextType {
 // ─── Context ───
 const PlatformDataContext = createContext<PlatformDataContextType | undefined>(undefined);
 
-// ─── Storage Keys ───
+// ─── Shared Storage Keys (aligned with main app) ───
+// Main app uses: fuelpro_stations_v3, fuelpro_users_v3, fuelpro_sales_v3, fuelpro_inventory_v3
 const KEYS = {
-  SALES: 'fuelpro_sales',
-  USERS: 'fuelpro_users',
-  STATIONS: 'fuelpro_stations',
-  INVENTORY: 'fuelpro_inventory',
+  SALES: 'fuelpro_sales_v3',
+  USERS: 'fuelpro_users_v3',
+  STATIONS: 'fuelpro_stations_v3',
+  INVENTORY: 'fuelpro_inventory_v3',
   COUPONS: 'fuelpro_coupons',
   ACTIVITY: 'fuelpro_activity_log',
   ANALYTICS: 'fuelpro_analytics',
 };
 
-// ─── Helper Functions ───
+// ─── Cross-app data helper ───
 function getItem<T>(key: string, fallback: T): T {
   try {
+    // Try main app format first
     const data = localStorage.getItem(key);
     if (!data) return fallback;
     return JSON.parse(data);
@@ -122,6 +124,14 @@ function getItem<T>(key: string, fallback: T): T {
 
 function setItem(key: string, value: unknown): void {
   localStorage.setItem(key, JSON.stringify(value));
+  // Broadcast for cross-tab sync
+  try {
+    const bc = new BroadcastChannel('fuelpro_sync');
+    bc.postMessage({ type: 'data_update', key, data: value, timestamp: Date.now() });
+    bc.close();
+  } catch {
+    localStorage.setItem('fuelpro_sync_event', JSON.stringify({ key, data: value, timestamp: Date.now() }));
+  }
 }
 
 // ─── Provider Component ───

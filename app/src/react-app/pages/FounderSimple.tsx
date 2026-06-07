@@ -21,6 +21,33 @@ import AuthProviderConfig from '@/react-app/components/AuthProviderConfig';
 // Import platform analytics for data-driven analytics
 import PlatformAnalytics from '@/react-app/components/PlatformAnalytics';
 
+// ─── Shared Storage Keys (aligned with main app) ───
+// Use the same keys as the main app for data sharing
+// Main app uses: fuelpro_stations_v3, fuelpro_users_v3, fuelpro_sales_v3, fuelpro_inventory_v3
+const STORAGE_KEYS = {
+  SALES: 'fuelpro_sales_v3',
+  USERS: 'fuelpro_users_v3',
+  STATIONS: 'fuelpro_stations_v3',
+  INVENTORY: 'fuelpro_inventory_v3',
+  COUPONS: 'fuelpro_coupons',
+  CONFIG: 'fuelpro_config',
+  API_KEYS: 'fuelpro_apikeys',
+  BACKUPS: 'fuelpro_backups',
+  TAB_CONFIG: 'fuelpro_tabconfig',
+  FEATURES: 'fuelpro_custom_features',
+  BATCH_UPDATES: 'fuelpro_batch_updates',
+  UPDATE_HISTORY: 'fuelpro_update_history',
+  ACCESS_LOGS: 'fuelpro_access_logs',
+  DEV_CONSOLE_HISTORY: 'fuelpro_devconsole_history',
+  THEME: 'fuelpro_theme',
+  NOTIFICATIONS: 'fuelpro_notifications',
+  WEBHOOKS: 'fuelpro_webhooks',
+  FOUNDER_2FA: 'fuelpro_founder_2fa',
+  FOUNDER_SESSIONS: 'fuelpro_founder_sessions',
+  ACTIVITY_LOG: 'fuelpro_activity_log',
+  PRICING_PLANS: 'fuelpro_pricing_plans',
+};
+
 const SESSION_KEY = 'fuelpro_founder_session';
 const DEFAULT_CREDS = { username: 'FOUNDER', password: 'fuelpro2026' };
 
@@ -120,19 +147,69 @@ function toast(msg: string, type: 'success' | 'error' = 'success') {
   setTimeout(() => el.remove(), 3000);
 }
 
-// ─── Shared: localStorage CRUD helpers ───
-function getItem(key: string, fallback: any = []) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
-function setItem(key: string, val: any) { localStorage.setItem(key, JSON.stringify(val)); }
+// ─── Shared: localStorage CRUD helpers (aligned with main app) ───
+// Uses cross-app compatible storage keys
+function getItem(key: string, fallback: any = []): any {
+  try {
+    // Try main app format first (primary)
+    const mainAppKeyMap: Record<string, string> = {
+      'fuelpro_sales_v3': 'fuelpro_sales_v3',
+      'fuelpro_users_v3': 'fuelpro_users_v3',
+      'fuelpro_stations_v3': 'fuelpro_stations_v3',
+      'fuelpro_inventory_v3': 'fuelpro_inventory_v3',
+    };
+    
+    if (mainAppKeyMap[key]) {
+      const data = localStorage.getItem(mainAppKeyMap[key]);
+      if (data) return JSON.parse(data);
+    }
+    
+    // Fallback to founder-specific key
+    const data = localStorage.getItem(key);
+    if (data) return JSON.parse(data);
+    
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setItem(key: string, val: any): void {
+  // Save to primary key
+  localStorage.setItem(key, JSON.stringify(val));
+  
+  // Sync to main app format keys
+  const mainAppKeyMap: Record<string, string> = {
+    'fuelpro_sales_v3': 'fuelpro_sales_v3',
+    'fuelpro_users_v3': 'fuelpro_users_v3',
+    'fuelpro_stations_v3': 'fuelpro_stations_v3',
+    'fuelpro_inventory_v3': 'fuelpro_inventory_v3',
+  };
+  
+  if (mainAppKeyMap[key]) {
+    localStorage.setItem(mainAppKeyMap[key], JSON.stringify(val));
+  }
+  
+  // Broadcast change for cross-tab sync
+  try {
+    const bc = new BroadcastChannel('fuelpro_sync');
+    bc.postMessage({ type: 'data_update', key, data: val, timestamp: Date.now() });
+    bc.close();
+  } catch {
+    localStorage.setItem('fuelpro_sync_event', JSON.stringify({ key, data: val, timestamp: Date.now() }));
+  }
+}
 
 // ═══════════════════════════════════════════════════
 // CORE SECTIONS (12)
 // ═══════════════════════════════════════════════════
 
 function DashboardSection() {
-  const sales = getItem('fuelpro_sales');
-  const inventory = getItem('fuelpro_inventory');
-  const users = getItem('fuelpro_users');
-  const stations = getItem('fuelpro_stations');
+  // Read from main app data keys (v3 format)
+  const sales = getItem('fuelpro_sales_v3', []);
+  const inventory = getItem('fuelpro_inventory_v3', []);
+  const users = getItem('fuelpro_users_v3', []);
+  const stations = getItem('fuelpro_stations_v3', []);
   const logs = getItem('fuelpro_access_logs', []).slice(0, 5);
   const totalRev = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.total) || 0), 0);
   return (
@@ -174,10 +251,10 @@ function DashboardSection() {
 }
 
 function UsersSection() {
-  const [users, setUsers] = useState(() => getItem('fuelpro_users'));
+  const [users, setUsers] = useState(() => getItem('fuelpro_users_v3', []));
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'user' });
-  const addUser = () => { if (!newUser.name.trim()) return; const updated = [...users, { ...newUser, id: Date.now(), status: 'active', createdAt: new Date().toISOString() }]; setUsers(updated); setItem('fuelpro_users', updated); setNewUser({ name: '', email: '', role: 'user' }); toast('User added'); };
-  const removeUser = (id: number) => { const updated = users.filter((u: any) => u.id !== id); setUsers(updated); setItem('fuelpro_users', updated); toast('User removed'); };
+  const addUser = () => { if (!newUser.name.trim()) return; const updated = [...users, { ...newUser, id: Date.now(), status: 'active', createdAt: new Date().toISOString() }]; setUsers(updated); setItem('fuelpro_users_v3', updated); setNewUser({ name: '', email: '', role: 'user' }); toast('User added'); };
+  const removeUser = (id: number) => { const updated = users.filter((u: any) => u.id !== id); setUsers(updated); setItem('fuelpro_users_v3', updated); toast('User removed'); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -210,10 +287,10 @@ function UsersSection() {
 }
 
 function StationsSection() {
-  const [stations, setStations] = useState(() => getItem('fuelpro_stations'));
+  const [stations, setStations] = useState(() => getItem('fuelpro_stations_v3', []));
   const [newStation, setNewStation] = useState({ name: '', location: '', phone: '' });
-  const addStation = () => { if (!newStation.name.trim()) return; const updated = [...stations, { ...newStation, id: Date.now(), status: 'active', revenue: 0, createdAt: new Date().toISOString() }]; setStations(updated); setItem('fuelpro_stations', updated); setNewStation({ name: '', location: '', phone: '' }); toast('Station created'); };
-  const removeStation = (id: number) => { const updated = stations.filter((s: any) => s.id !== id); setStations(updated); setItem('fuelpro_stations', updated); toast('Station removed'); };
+  const addStation = () => { if (!newStation.name.trim()) return; const updated = [...stations, { ...newStation, id: Date.now(), status: 'active', revenue: 0, createdAt: new Date().toISOString() }]; setStations(updated); setItem('fuelpro_stations_v3', updated); setNewStation({ name: '', location: '', phone: '' }); toast('Station created'); };
+  const removeStation = (id: number) => { const updated = stations.filter((s: any) => s.id !== id); setStations(updated); setItem('fuelpro_stations_v3', updated); toast('Station removed'); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Stations</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Manage all fuel stations</p></div>
@@ -242,7 +319,7 @@ function StationsSection() {
 }
 
 function SalesSection() {
-  const [sales] = useState(() => getItem('fuelpro_sales'));
+  const [sales] = useState(() => getItem('fuelpro_sales_v3', []));
   const totalRev = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.total) || 0), 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -271,9 +348,9 @@ function SalesSection() {
 }
 
 function InventorySection() {
-  const [items, setItems] = useState(() => getItem('fuelpro_inventory'));
+  const [items, setItems] = useState(() => getItem('fuelpro_inventory_v3', []));
   const [newItem, setNewItem] = useState({ fuelType: '', currentStock: '', capacity: '', pricePerLiter: '', alertThreshold: '' });
-  const addItem = () => { if (!newItem.fuelType.trim()) return; const updated = [...items, { ...newItem, id: Date.now(), currentStock: Number(newItem.currentStock), capacity: Number(newItem.capacity), pricePerLiter: Number(newItem.pricePerLiter), alertThreshold: Number(newItem.alertThreshold) }]; setItems(updated); setItem('fuelpro_inventory', updated); setNewItem({ fuelType: '', currentStock: '', capacity: '', pricePerLiter: '', alertThreshold: '' }); toast('Inventory item added'); };
+  const addItem = () => { if (!newItem.fuelType.trim()) return; const updated = [...items, { ...newItem, id: Date.now(), currentStock: Number(newItem.currentStock), capacity: Number(newItem.capacity), pricePerLiter: Number(newItem.pricePerLiter), alertThreshold: Number(newItem.alertThreshold) }]; setItems(updated); setItem('fuelpro_inventory_v3', updated); setNewItem({ fuelType: '', currentStock: '', capacity: '', pricePerLiter: '', alertThreshold: '' }); toast('Inventory item added'); };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Inventory</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Fuel stock across all stations</p></div>
