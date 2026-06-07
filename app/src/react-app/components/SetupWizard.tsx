@@ -161,7 +161,8 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       });
       if (newStation && newStation.id) {
         newStationId = newStation.id;
-        switchStation(newStationId);
+        // Switch to the new station immediately
+        switchStation(newStation.id);
       }
     } catch (err) {
       console.error('Station creation failed:', err);
@@ -170,41 +171,57 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     // Also write directly to localStorage as fallback
     // This ensures the station is available even if state hasn't propagated
     try {
-      const existing = JSON.parse(localStorage.getItem('fuelpro_stations_v3') || '[]');
-      if (!existing.some((s: any) => s.name === (data.stationName || 'My Fuel Station'))) {
-        const fallbackStation = {
-          id: `st_${Date.now()}`,
-          name: data.stationName || 'My Fuel Station',
-          location: data.location || 'Auto-detected',
-          description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          fuelTypes: ['PMS', 'AGO'],
-          pumpCount: (data.pmsCount || 0) + (data.agoCount || 0),
-          tankCount: 2,
-          managerName: '',
-          operatingHours: '24/7',
-          kraPin: data.kraPin || '',
-          phone: data.contacts || '',
-          email: data.email || '',
-          data: {},
-          theme: 'dark',
-          logo: '',
-          licenseNumber: '',
-          city: '',
-          countryCode: 'KE',
-          timezone: 'Africa/Nairobi',
-          coordinates: null,
-          managerPhone: '',
-          etrSerial: '',
-          taxRate: 16,
-        };
-        existing.push(fallbackStation);
+      const fallbackStation = {
+        id: newStationId || `st_${Date.now()}`,
+        name: data.stationName || 'My Fuel Station',
+        location: data.location || 'Auto-detected',
+        description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fuelTypes: ['PMS', 'AGO'],
+        pumpCount: (data.pmsCount || 0) + (data.agoCount || 0),
+        tankCount: 2,
+        managerName: '',
+        operatingHours: '24/7',
+        kraPin: data.kraPin || '',
+        phone: data.contacts || '',
+        email: data.email || '',
+        data: {},
+        theme: 'dark',
+        logo: '',
+        licenseNumber: '',
+        city: '',
+        countryCode: 'KE',
+        timezone: 'Africa/Nairobi',
+        coordinates: null,
+        managerPhone: '',
+        etrSerial: '',
+        taxRate: 16,
+        access: [{
+          username: (data.stationName || 'station').toLowerCase().replace(/\s+/g, '_'),
+          passwordHash: '',
+          role: 'owner' as const,
+          permissions: ['all'],
+          grantedAt: new Date().toISOString(),
+          grantedBy: 'system',
+        }],
+        sharedUsers: [],
+      };
+      
+      // Read existing stations
+      const existingData = localStorage.getItem('fuelpro_stations_v3');
+      let existing = existingData ? JSON.parse(existingData) : { stations: [], version: '3.0' };
+      
+      // Add new station if not exists
+      if (!existing.stations.some((s: any) => s.id === fallbackStation.id)) {
+        existing.stations = [...(existing.stations || []), fallbackStation];
         localStorage.setItem('fuelpro_stations_v3', JSON.stringify(existing));
-        localStorage.setItem('fuelpro_current_station_v3', fallbackStation.id);
-        newStationId = fallbackStation.id;
       }
+      
+      // Set current station
+      localStorage.setItem('fuelpro_current_station_v3', fallbackStation.id);
+      newStationId = fallbackStation.id;
     } catch (e) {
       console.error('Fallback station save failed:', e);
     }
@@ -224,15 +241,12 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_name`, data.stationName || 'My Fuel Station');
     localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_location`, data.location || detectedLocation || 'Main Station Location');
 
-    // Wait for state updates to propagate before calling onComplete
-    // This ensures StationContext has the new station when Home.tsx checks stations.length
+    // Call onComplete and reload to refresh all state
+    onComplete();
+    // Force a clean reload so all contexts reload fresh
     setTimeout(() => {
-      onComplete();
-      // Force reload so StationContext picks up the new station
-      if (newStationId) {
-        setTimeout(() => window.location.reload(), 500);
-      }
-    }, 800);
+      window.location.href = window.location.pathname;
+    }, 500);
   };
 
   const renderStepContent = () => {

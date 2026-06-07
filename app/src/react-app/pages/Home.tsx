@@ -285,8 +285,10 @@ function HomeContent() {
     if (showSetupWizard) {
       return <SetupWizard onComplete={() => {
         setShowSetupWizard(false);
-        // Force reload to pick up the newly created station
-        setTimeout(() => window.location.reload(), 100);
+        // Clear localStorage flags and reload
+        localStorage.setItem('fuelpro_setup_complete', 'true');
+        // Use replaceState to avoid history issues and reload
+        window.location.href = window.location.pathname + '?t=' + Date.now();
       }} />;
     }
     const showAccessMode = stations.length > 0;
