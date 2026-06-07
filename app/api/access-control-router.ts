@@ -4,10 +4,9 @@
 
 import { z } from "zod";
 import { initTRPC, TRPCError } from "@trpc/server";
-import { router: parentRouter } from "./router";
-import { accessControl, PERMISSIONS, DEFAULT_ROLES } from "../lib/access-control";
-import { auditService } from "../lib/audit-service";
-import { db } from "@db/connection";
+import { accessControl, PERMISSIONS, DEFAULT_ROLES } from "./lib/access-control";
+import { auditService } from "./lib/audit-service";
+import { getDb } from "./queries/connection";
 import { 
   permissions, 
   roles, 
@@ -15,11 +14,11 @@ import {
   teamMembers, 
   dataScopes, 
   actionScopes,
-  teamInvitations 
-} from "@db/access-control-schema";
+  teamInvitations,
+  auditLogEntries,
+} from "@db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import crypto from "crypto";
 
 const t = initTRPC.context<any>().create();
 

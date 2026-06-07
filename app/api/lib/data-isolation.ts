@@ -9,7 +9,7 @@
  * - Query augmentation
  */
 
-import { db } from "@db/connection";
+import { getDb } from "@db/connection";
 import { 
   tenants, 
   teams, 
@@ -20,6 +20,8 @@ import {
   roles,
 } from "@db/schema";
 import { and, eq } from "drizzle-orm";
+
+const db = getDb();
 
 export interface TenantContext {
   tenantId: number;

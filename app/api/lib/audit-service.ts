@@ -10,11 +10,13 @@
  * - Retention policy enforcement
  */
 
-import { db } from "@db/connection";
+import { getDb } from "@db/connection";
 import { auditLogEntries, authEvents, dataAccessLog } from "@db/schema";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
+
+const db = getDb();
 
 export interface AuditContext {
   userId?: number;

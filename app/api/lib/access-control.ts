@@ -9,9 +9,8 @@
  * - Permission inheritance
  */
 
-import { db } from "@db/connection";
+import { getDb } from "@db/connection";
 import {
-  permissions,
   roles,
   teams,
   teamMembers,
@@ -19,6 +18,8 @@ import {
   actionScopes,
 } from "@db/schema";
 import { eq, and, inArray } from "drizzle-orm";
+
+const db = getDb();
 
 // Permission codes
 export const PERMISSIONS = {
