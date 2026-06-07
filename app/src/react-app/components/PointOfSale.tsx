@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { ShoppingCart, Plus, Minus, Trash2, Printer, CreditCard, Smartphone, Banknote, Receipt, X, Check, Settings, QrCode } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, Printer, CreditCard, Smartphone, Banknote, Receipt, X, Check, Settings, QrCode, Star, Award } from 'lucide-react';
 import { useFuel } from '@/react-app/context/FuelContext';
+import { useLocation } from '@/react-app/context/LocationContext';
 import { formatNumber } from '@/react-app/utils/formatUtils';
 import QRCode from 'qrcode';
+import { useLoyalty } from '@/react-app/lib/useLoyalty';
+import { LoyaltyCustomer, TIER_COLORS } from '@/react-app/lib/loyaltyProgram';
 
 interface CartItem {
   id: string;
@@ -41,6 +44,7 @@ interface POSTransaction {
 
 export default function PointOfSale() {
   const { state, dispatch } = useFuel();
+  const location = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mpesa' | 'card' | 'bank'>('cash');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -58,6 +62,59 @@ export default function PointOfSale() {
   const [stkPushStatus, setStkPushStatus] = useState<'idle' | 'pending' | 'success' | 'failed'>('idle');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const receiptRef = useRef<HTMLDivElement>(null);
+
+  // ─── Loyalty Integration ───
+  const stationId = location.currentStation?.id || 'default';
+  const { customers, earnPoints, findCustomerByPhone, findCustomerByCard, config: loyaltyConfig } = useLoyalty(stationId);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState<LoyaltyCustomer | null>(null);
+  const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
+  const [loyaltyLookupMode, setLoyaltyLookupMode] = useState<'phone' | 'card'>('phone');
+
+  // Loyalty lookup by phone or card number
+  const lookupLoyaltyCustomer = (input: string) => {
+    let customer = findCustomerByPhone(input);
+    if (!customer) {
+      customer = findCustomerByCard(input);
+    }
+    setLoyaltyCustomer(customer || null);
+    return customer;
+  };
+
+  // Auto-lookup when phone changes
+  useEffect(() => {
+    if (customerPhone && customerPhone.length >= 7) {
+      const found = lookupLoyaltyCustomer(customerPhone);
+      if (!found) {
+        setLoyaltyCustomer(null);
+      }
+    } else if (!customerPhone) {
+      setLoyaltyCustomer(null);
+    }
+  }, [customerPhone]);
+
+  // Award points after successful transaction
+  const awardLoyaltyPoints = (transaction: POSTransaction) => {
+    if (!loyaltyCustomer || !loyaltyConfig?.isEnabled) return;
+    
+    // Calculate total liters from fuel items
+    const fuelItems = transaction.items.filter(item => item.litres);
+    const totalLiters = fuelItems.reduce((sum, item) => sum + (item.litres || 0), 0);
+    const fuelType = fuelItems[0]?.fuelType || 'PMS';
+    
+    if (totalLiters > 0) {
+      earnPoints(
+        loyaltyCustomer.id,
+        transaction.id,
+        transaction.total,
+        totalLiters,
+        fuelType,
+        state.user?.name || 'POS'
+      );
+      
+      // Refresh customer data
+      setLoyaltyCustomer(prev => prev ? findCustomerByPhone(prev.phone) || prev : null);
+    }
+  };
 
   // KRA ETR Settings from company data
   const etrConfig = {
@@ -300,6 +357,13 @@ export default function PointOfSale() {
 
     // Sync fuel sales to salesHistory for reporting
     syncFuelSalesToHistory(cart, timestamp, paymentMethod);
+
+    // ─── Award Loyalty Points ───
+    const transactionForLoyalty: POSTransaction = {
+      ...transactionData,
+      qrCodeData: ''
+    };
+    awardLoyaltyPoints(transactionForLoyalty);
 
     // Add credit sale to delivery tracking if customer has a name
     if (customerName && paymentMethod !== 'cash' && paymentMethod !== 'mpesa') {
@@ -675,7 +739,71 @@ export default function PointOfSale() {
         <div className="space-y-4">
           {/* Customer Info (Optional) */}
           <div className="card">
-            <h3 className="text-sm font-semibold mb-3 text-gray-600 dark:text-gray-400">Customer Info (Optional)</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Customer Info (Optional)</h3>
+              {loyaltyConfig?.isEnabled && (
+                <button
+                  onClick={() => setShowLoyaltyScanner(!showLoyaltyScanner)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg"
+                >
+                  <Award size={12} />
+                  {loyaltyCustomer ? 'Loyalty Active' : 'Add Loyalty'}
+                </button>
+              )}
+            </div>
+            
+            {/* Loyalty Customer Status */}
+            {loyaltyCustomer && (
+              <div className={`mb-3 p-3 rounded-lg ${TIER_COLORS[loyaltyCustomer.tier].bg}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Star size={16} className={TIER_COLORS[loyaltyCustomer.tier].text} />
+                    <div>
+                      <p className={`text-sm font-semibold ${TIER_COLORS[loyaltyCustomer.tier].text}`}>
+                        {loyaltyCustomer.name}
+                      </p>
+                      <p className={`text-xs ${TIER_COLORS[loyaltyCustomer.tier].text}`}>
+                        {loyaltyCustomer.tier} Member • {loyaltyCustomer.points.toLocaleString()} pts
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setLoyaltyCustomer(null); setCustomerPhone(''); }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Loyalty Scanner Modal */}
+            {showLoyaltyScanner && (
+              <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-xs text-gray-500 mb-2">Enter phone number or card number</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customerPhone}
+                    onChange={(e) => {
+                      setCustomerPhone(e.target.value);
+                      if (e.target.value.length >= 7) {
+                        lookupLoyaltyCustomer(e.target.value);
+                      }
+                    }}
+                    placeholder="Phone or Card Number"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border dark:bg-gray-700 dark:border-gray-600"
+                  />
+                  <button
+                    onClick={() => setShowLoyaltyScanner(false)}
+                    className="px-3 py-2 text-sm text-gray-500"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <input
                 type="text"
