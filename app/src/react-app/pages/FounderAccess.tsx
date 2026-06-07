@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import {
   Crown, Users, Building2, 3, Shield, Activity, Server,
@@ -66,6 +67,23 @@ interface FeatureFlag {
 }
 
 /* ─── Founder Password Storage ─── */
+
+interface FAConfig {
+  enabled?: boolean;
+  secret?: string;
+}
+
+interface StationData {
+  id: string;
+  name?: string;
+  location?: string;
+  createdBy?: string;
+  ownerName?: string;
+  sharedUsers?: any[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 const FOUNDER_PASSWORD_KEY = 'fuelpro_founder_password';
 const FOUNDER_SESSION_KEY = 'fuelpro_founder_session';
 const FOUNDER_2FA_KEY = 'fuelpro_founder_2fa';
@@ -202,7 +220,7 @@ export default function FounderAccess() {
       || validateFounderAuth(loginUsername.trim(), loginPassword);
     if (isValid) {
       // Check if 2FA is enabled
-      let faConfig: any = null;
+      let faConfig: FAConfig | null = null;
       try {
         const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
         if (faSaved) faConfig = JSON.parse(faSaved);
@@ -245,7 +263,7 @@ export default function FounderAccess() {
       return;
     }
 
-    let faConfig: any = null;
+    let faConfig: FAConfig | null = null;
     try {
       const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
       if (faSaved) faConfig = JSON.parse(faSaved);
@@ -351,7 +369,7 @@ export default function FounderAccess() {
         try {
           const val = JSON.parse(localStorage.getItem(key) || '{}');
           const stationsList = val.stations || (Array.isArray(val) ? val : val.id ? [val] : []);
-          stationsList.forEach((s: any) => {
+          stationsList.forEach((s: StationData) => {
             if (s && s.id && !discoveredStations.some(ds => ds.id === s.id)) {
               discoveredStations.push({
                 id: s.id, name: s.name || 'Unnamed Station',
@@ -547,7 +565,7 @@ export default function FounderAccess() {
       ] },
   ];
 
-  const NavItem = ({ id, label, icon: Icon, count }: { id: SectionId; label: string; icon: any; count?: number }) => (
+  const NavItem = ({ id, label, icon: Icon, count }: { id: SectionId; label: string; icon: React.ElementType; count?: number }) => (
     <button onClick={() => setActiveSection(id)}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
         activeSection === id ? 'bg-amber-500/15 text-amber-300 border-l-2 border-amber-400' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]'
