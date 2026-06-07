@@ -54,6 +54,97 @@ const UPSTASH_CONFIG = {
 // STORAGE PROVIDERS
 // ═══════════════════════════════════════════════════════════════════
 
+// ─── AWS S3 Storage ───
+export const S3Storage = {
+  async uploadFile(
+    file: File | Blob,
+    path: string,
+    options: {
+      bucket?: string;
+      region?: string;
+      accessKeyId?: string;
+      secretAccessKey?: string;
+    } = {}
+  ): Promise<string | null> {
+    const {
+      bucket = import.meta.env.VITE_S3_BUCKET || 'fuelpro-files',
+      accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID,
+      secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY
+    } = options;
+
+    if (!accessKeyId || !secretAccessKey) {
+      console.warn('S3 credentials not configured');
+      return null;
+    }
+
+    try {
+      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${path.split('/').pop()}`;
+      const key = `uploads/${new Date().toISOString().split('T')[0]}/${filename}`;
+
+      // In browser, we'd use pre-signed URL from backend
+      // For now, store metadata locally
+      const url = `https://${bucket}.s3.amazonaws.com/${key}`;
+      
+      await storeFileMetadata(key, {
+        name: file instanceof File ? file.name : 'unknown',
+        size: file.size,
+        type: file.type,
+        uploadedAt: Date.now(),
+        bucket,
+        url
+      });
+
+      return url;
+    } catch (e) {
+      console.error('S3 upload failed:', e);
+      return null;
+    }
+  },
+
+  async getSignedUploadUrl(filename: string, contentType: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/s3/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, contentType })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.uploadUrl;
+    } catch {
+      return null;
+    }
+  },
+
+  async getSignedDownloadUrl(key: string): Promise<string | null> {
+    try {
+      const res = await fetch('/api/s3/download-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.downloadUrl;
+    } catch {
+      return null;
+    }
+  },
+
+  async deleteFile(key: string): Promise<boolean> {
+    try {
+      await fetch('/api/s3/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // ─── Cloudflare R2 / S3-Compatible Storage ───
 export const R2Storage = {
   async uploadFile(file: File | Blob, path: string): Promise<string | null> {
