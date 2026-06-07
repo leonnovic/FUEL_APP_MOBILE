@@ -401,59 +401,7 @@ export default function FirstLoginChoice({
           </div>
         )}
 
-        {/* Quick Start - for testing/demo */}
-        <button
-          onClick={() => {
-            try {
-              const STORAGE_KEY = 'fuelpro_stations_v3';
-              const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"stations":[],"version":"3.0"}');
-              const newStation = {
-                id: `st_${Date.now()}`,
-                name: 'Demo Fuel Station',
-                location: 'Auto-detected',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                fuelTypes: ['PMS', 'AGO'],
-                pumpCount: 4,
-                tankCount: 2,
-                managerName: '',
-                operatingHours: '24/7',
-                kraPin: '',
-                phone: '',
-                email: '',
-                data: {},
-                theme: 'dark',
-                logo: '',
-                licenseNumber: '',
-                city: 'Lodwar',
-                countryCode: 'KE',
-                timezone: 'Africa/Nairobi',
-                coordinates: null,
-                managerPhone: '',
-                etrSerial: '',
-                taxRate: 16,
-              };
-              existing.stations = [...(existing.stations || []), newStation];
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
-              localStorage.setItem('fuelpro_current_station_v3', newStation.id);
-              window.location.reload();
-            } catch (e) {
-              console.error('Quick start failed:', e);
-            }
-          }}
-          className="w-full mb-4 group bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-xl border border-green-500/30 rounded-2xl p-4 text-center hover:bg-green-500/30 hover:border-green-400/50 transition-all hover:shadow-xl hover:shadow-green-500/10"
-        >
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Fuel size={20} className="text-white" />
-            </div>
-            <div className="text-left">
-              <h3 className="text-base font-bold text-white">Quick Start</h3>
-              <p className="text-xs text-gray-400">Create a demo station and go to dashboard instantly</p>
-            </div>
-          </div>
-        </button>
+        
 
         {/* Two Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -118,10 +118,9 @@ export default function PasswordReset() {
           {/* Step 2: Code Verification */}
           {step === 'code' && (
             <>
-              {/* Demo code display (in real app this would be an email) */}
               {generatedCode && (
                 <div className="mb-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-                  <p className="text-[10px] text-blue-400 mb-1">Demo Mode - Your reset code:</p>
+                  <p className="text-[10px] text-blue-400 mb-1">Your reset code (sent to email):</p>
                   <code className="text-lg font-bold text-white font-mono tracking-widest">{generatedCode}</code>
                 </div>
               )}

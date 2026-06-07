@@ -300,17 +300,6 @@ export default function Paywall({ onClose }: PaywallProps) {
               <Zap size={18} /> Pay Ksh {selectedTierData.priceKES.toLocaleString()} via M-PESA
             </button>
 
-            {/* Simulate button for demo */}
-            <button
-              onClick={handleSimulateSuccess}
-              style={{
-                width: '100%', marginTop: 8, padding: 10, background: 'transparent', color: '#6b7280', border: '1px dashed #374151',
-                borderRadius: 10, fontSize: 11, cursor: 'pointer',
-              }}
-            >
-              [Demo: Simulate successful payment]
-            </button>
-
             <p style={{ fontSize: 10, color: '#4b5563', textAlign: 'center', marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <Lock size={10} /> Secured by Safaricom M-PESA. Kenya Data Protection Act 2019 compliant.
             </p>

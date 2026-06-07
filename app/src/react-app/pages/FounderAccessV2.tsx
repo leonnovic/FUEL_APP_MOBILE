@@ -469,8 +469,11 @@ function SecuritySection() {
     setPwError(''); setPwSuccess('');
     if (newPw !== confirmPw) { setPwError('Passwords do not match'); return; }
     if (newPw.length < 6) { setPwError('Min 6 characters'); return; }
-    if (currentPw !== DEFAULT_CREDS.password) { setPwError('Current password incorrect'); return; }
-    setPwSuccess('Password updated (demo mode)');
+    const storedCreds = JSON.parse(localStorage.getItem('fuelpro_founder_creds') || '{}');
+    if (currentPw !== (storedCreds.password || DEFAULT_CREDS.password)) { setPwError('Current password incorrect'); return; }
+    // Save new password
+    localStorage.setItem('fuelpro_founder_creds', JSON.stringify({ ...storedCreds, password: newPw }));
+    setPwSuccess('Password updated successfully');
     setCurrentPw(''); setNewPw(''); setConfirmPw('');
   };
 

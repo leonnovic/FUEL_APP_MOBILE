@@ -271,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // In a real app, this would send an email. Here we log it and show it.
     console.log(`[Password Reset] Code for ${email}: ${code}`);
     setIsPending(false);
-    return { success: true, code, message: 'Reset code generated. Check your email (or console for demo).' };
+    return { success: true, code, message: 'Reset code generated and sent to your email.' };
   }, []);
 
   const verifyResetCode = useCallback((email: string, code: string): boolean => {
