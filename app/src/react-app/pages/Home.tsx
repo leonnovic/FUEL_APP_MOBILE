@@ -285,10 +285,10 @@ function HomeContent() {
     if (showSetupWizard) {
       return <SetupWizard onComplete={() => {
         setShowSetupWizard(false);
-        // Clear localStorage flags and reload
+        // Clear localStorage flags and force full reload
         localStorage.setItem('fuelpro_setup_complete', 'true');
-        // Use replaceState to avoid history issues and reload
-        window.location.href = window.location.pathname + '?t=' + Date.now();
+        // Force a complete page reload to reset all React state
+        window.location.reload();
       }} />;
     }
     const showAccessMode = stations.length > 0;

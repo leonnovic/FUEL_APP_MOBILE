@@ -241,12 +241,9 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_name`, data.stationName || 'My Fuel Station');
     localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_location`, data.location || detectedLocation || 'Main Station Location');
 
-    // Call onComplete and reload to refresh all state
+    // Mark setup complete and signal completion
+    // Home.tsx will handle the reload
     onComplete();
-    // Force a clean reload so all contexts reload fresh
-    setTimeout(() => {
-      window.location.href = window.location.pathname;
-    }, 500);
   };
 
   const renderStepContent = () => {
