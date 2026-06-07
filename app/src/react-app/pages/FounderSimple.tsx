@@ -128,6 +128,10 @@ function setItem(key: string, val: any) { localStorage.setItem(key, JSON.stringi
 
 function DashboardSection() {
   const sales = getItem('fuelpro_sales');
+  const inventory = getItem('fuelpro_inventory');
+  const users = getItem('fuelpro_users');
+  const stations = getItem('fuelpro_stations');
+  const logs = getItem('fuelpro_access_logs', []).slice(0, 5);
   const totalRev = sales.reduce((sum: number, s: any) => sum + (parseFloat(s.total) || 0), 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -135,10 +139,10 @@ function DashboardSection() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
         <KpiCard title="Total Revenue" value={`$${totalRev.toLocaleString()}`} icon={DollarSign} color="#f59e0b" />
         <KpiCard title="Total Sales" value={sales.length} icon={ShoppingCart} color="#10b981" />
-        <KpiCard title="Inventory Items" value={getItem('fuelpro_inventory').length} icon={Database} color="#3b82f6" />
-        <KpiCard title="Users" value={getItem('fuelpro_users').length} icon={Users} color="#8b5cf6" />
-        <KpiCard title="Stations" value={getItem('fuelpro_stations').length} icon={Building2} color="#06b6d4" />
-        <KpiCard title="Coupons" value={getItem('fuelpro_coupons', [{},{},{}]).length} icon={Tag} color="#ec4899" />
+        <KpiCard title="Inventory Items" value={inventory.length} icon={Database} color="#3b82f6" />
+        <KpiCard title="Users" value={users.length} icon={Users} color="#8b5cf6" />
+        <KpiCard title="Stations" value={stations.length} icon={Building2} color="#06b6d4" />
+        <KpiCard title="Coupons" value={getItem('fuelpro_coupons', []).length} icon={Tag} color="#ec4899" />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
         <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
@@ -152,13 +156,15 @@ function DashboardSection() {
         </div>
         <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16 }}>
           <h3 style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}><Activity size={14} style={{ color: '#10b981' }} /> Recent Activity</h3>
-          {[{a:'Sale recorded',d:'Fuel sale #1042',t:'2m ago',c:'#10b981'},{a:'Inventory updated',d:'Tank 1 refilled',t:'15m ago',c:'#3b82f6'},{a:'New user',d:'Manager created',t:'1h ago',c:'#8b5cf6'},{a:'Price change',d:'Petrol updated',t:'3h ago',c:'#f59e0b'},{a:'Backup created',d:'Daily auto-backup',t:'5h ago',c:'#666'}].map((item,i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: i < 4 ? '1px solid #1a1a1a' : 'none' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.c }} />
-              <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 11, color: '#fff', margin: 0 }}>{item.a}</p><p style={{ fontSize: 10, color: '#555', margin: 0 }}>{item.d}</p></div>
-              <span style={{ fontSize: 10, color: '#444' }}>{item.t}</span>
+          {logs.length > 0 ? logs.map((item: any, i: number) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: i < logs.length - 1 ? '1px solid #1a1a1a' : 'none' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color || '#10b981' }} />
+              <div style={{ flex: 1, minWidth: 0 }}><p style={{ fontSize: 11, color: '#fff', margin: 0 }}>{item.action || item.description || 'Activity'}</p><p style={{ fontSize: 10, color: '#555', margin: 0 }}>{item.details || item.user || ''}</p></div>
+              <span style={{ fontSize: 10, color: '#444' }}>{item.time || item.timestamp || ''}</span>
             </div>
-          ))}
+          )) : (
+            <p style={{ textAlign: 'center', color: '#555', fontSize: 12, padding: 20 }}>No recent activity. Use the app to generate activity logs.</p>
+          )}
         </div>
       </div>
     </div>
@@ -306,22 +312,22 @@ function InventorySection() {
 }
 
 function PricingSection() {
-  const plans = [
+  const plans = getItem('fuelpro_pricing_plans', [
     { name: 'Basic', price: '$29/mo', users: '3', stations: '1', features: ['Core POS', 'Sales tracking', 'Basic reports'] },
     { name: 'Professional', price: '$79/mo', users: '10', stations: '3', features: ['All Basic', 'Inventory', 'Payroll', 'Advanced analytics'] },
     { name: 'Enterprise', price: '$199/mo', users: 'Unlimited', stations: 'Unlimited', features: ['All Pro', 'Multi-station', 'API access', 'Priority support'] },
-  ];
+  ]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Pricing Plans</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Manage subscription tiers</p></div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {plans.map(plan => (
-          <div key={plan.name} style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+        {plans.map((plan: any, idx: number) => (
+          <div key={idx} style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
             <h3 style={{ fontSize: 16, fontWeight: 'bold', color: '#fff', margin: 0 }}>{plan.name}</h3>
             <p style={{ fontSize: 24, fontWeight: 'bold', color: '#f59e0b', margin: '8px 0' }}>{plan.price}</p>
             <p style={{ fontSize: 11, color: '#888' }}>Users: <span style={{ color: '#fff' }}>{plan.users}</span> &middot; Stations: <span style={{ color: '#fff' }}>{plan.stations}</span></p>
             <ul style={{ margin: '12px 0', padding: 0, listStyle: 'none' }}>
-              {plan.features.map(f => <li key={f} style={{ fontSize: 11, color: '#666', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={10} style={{ color: '#10b981' }} /> {f}</li>)}
+              {(plan.features || []).map((f: string, i: number) => <li key={i} style={{ fontSize: 11, color: '#666', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle2 size={10} style={{ color: '#10b981' }} /> {f}</li>)}
             </ul>
             <button style={{ width: '100%', padding: '8px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>Edit Plan</button>
           </div>
@@ -332,10 +338,7 @@ function PricingSection() {
 }
 
 function CouponsSection() {
-  const [coupons, setCoupons] = useState(() => getItem('fuelpro_coupons', [
-    { code: 'WELCOME50', type: 'percentage', value: 50, uses: 0, max: 100, status: 'active' },
-    { code: 'FUELPRO25', type: 'percentage', value: 25, uses: 12, max: 200, status: 'active' },
-  ]));
+  const [coupons, setCoupons] = useState(() => getItem('fuelpro_coupons', []));
   const [newCoupon, setNewCoupon] = useState({ code: '', type: 'percentage', value: '', max: '' });
   const addCoupon = () => { if (!newCoupon.code.trim()) return; const updated = [...coupons, { ...newCoupon, value: Number(newCoupon.value), max: Number(newCoupon.max), uses: 0, status: 'active' }]; setCoupons(updated); setItem('fuelpro_coupons', updated); setNewCoupon({ code: '', type: 'percentage', value: '', max: '' }); toast('Coupon added'); };
   return (
@@ -351,7 +354,7 @@ function CouponsSection() {
         <button onClick={addCoupon} style={{ padding: '8px 12px', background: 'rgba(236,72,153,0.15)', color: '#ec4899', border: '1px solid rgba(236,72,153,0.2)', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer' }}><Plus size={14} /> Add</button>
       </div>
       <DataTable headers={['Code', 'Type', 'Value', 'Uses', 'Max', 'Status']}>
-        {coupons.map((c: any, i: number) => (
+        {coupons.length > 0 ? coupons.map((c: any, i: number) => (
           <tr key={i} style={{ borderBottom: '1px solid #1a1a1a' }}>
             <td style={{ padding: '10px 12px', color: '#fff', fontFamily: 'monospace', fontSize: 13 }}>{c.code}</td>
             <td style={{ padding: '10px 12px', color: '#888', fontSize: 11, textTransform: 'capitalize' }}>{c.type}</td>
@@ -360,7 +363,7 @@ function CouponsSection() {
             <td style={{ padding: '10px 12px', color: '#aaa', fontSize: 13 }}>{c.max}</td>
             <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>{c.status}</span></td>
           </tr>
-        ))}
+        )) : <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#555', fontSize: 13 }}>No coupons yet. Add your first coupon above.</td></tr>}
       </DataTable>
     </div>
   );
