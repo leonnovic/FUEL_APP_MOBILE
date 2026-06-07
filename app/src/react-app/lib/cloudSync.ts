@@ -2,6 +2,10 @@
 // Uses Firebase (primary) + Supabase (backup) + localStorage (fallback)
 // Auto-switches between providers for maximum reliability
 
+// Import unified cloud storage (includes R2, Upstash, Seafile, Custom API)
+export * from './cloudStorage';
+import { swr, invalidateSWR, getSWRStats, cloudStorage } from './cloudStorage';
+
 // ═══════════════════════════════════════════════════
 // PROVIDER 1: Firebase Realtime Database
 // ═══════════════════════════════════════════════════
@@ -330,3 +334,11 @@ export function getCloudStatus(): {
     totalRecords,
   };
 }
+
+// ═══════════════════════════════════════════════════
+// RE-EXPORT CLOUD STORAGE FEATURES
+// ═══════════════════════════════════════════════════
+
+// Re-export for convenience
+export { swr, invalidateSWR, getSWRStats, cloudStorage };
+export type { FuelProCloudSync, SyncStatus, CloudConfig } from './cloudStorage';

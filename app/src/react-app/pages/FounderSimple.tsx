@@ -21,6 +21,8 @@ import CacheControl from '@/react-app/components/CacheControl';
 import AuthProviderConfig from '@/react-app/components/AuthProviderConfig';
 // Import platform analytics for data-driven analytics
 import PlatformAnalytics from '@/react-app/components/PlatformAnalytics';
+// Import unified cloud storage (includes R2, Upstash, Seafile, Supabase, Firebase, Custom API)
+import { FuelProCloudSync, cloudStorage, swr, getSWRStats, SupabaseStorage } from '@/react-app/lib/cloudStorage';
 
 // ─── Shared Storage Keys (aligned with main app) ───
 // Use the same keys as the main app for data sharing
@@ -1162,9 +1164,9 @@ function CloudConfigSection() {
   const [provider, setProvider] = useState(() => {
     const config = localStorage.getItem('fuelpro_cloud_config');
     if (config) {
-      try { return JSON.parse(config).provider || 'custom'; } catch { }
+      try { return JSON.parse(config).provider || 'supabase'; } catch { }
     }
-    return 'custom';
+    return 'supabase';
   });
   const [endpoint, setEndpoint] = useState(() => {
     const config = localStorage.getItem('fuelpro_cloud_config');
@@ -1203,6 +1205,7 @@ function CloudConfigSection() {
   });
   const [seafileLibs, setSeafileLibs] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingLibs, setIsLoadingLibs] = useState(false);
+  const [swrStats, setSwrStats] = useState({ size: 0, keys: [] as string[] });
   const [status, setStatus] = useState<{ enabled: boolean; isOnline: boolean; lastSync: number | null; pendingChanges: number }>({
     enabled: false,
     isOnline: navigator.onLine,
@@ -1216,7 +1219,6 @@ function CloudConfigSection() {
     setIsLoadingLibs(true);
     try {
       let token = apiKey;
-      // If no token, get one via credentials
       if (!token && seafileUsername && seafilePassword) {
         const loginRes = await fetch(`${endpoint.replace(/\/$/, '')}/api2/auth-token/`, {
           method: 'POST',
@@ -1248,37 +1250,45 @@ function CloudConfigSection() {
     const handleOffline = () => setStatus(prev => ({ ...prev, isOnline: false }));
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
+    // Update SWR stats
+    const statsInterval = setInterval(() => {
+      try {
+        const stats = getSWRStats();
+        setSwrStats(stats);
+      } catch { }
+    }, 5000);
+    
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(statsInterval);
     };
   }, []);
 
   const handleSave = () => {
     const sync = (window as any).FuelProCloudSync;
-    const config = {
-      provider,
-      apiEndpoint: endpoint,
-      apiKey,
-      seafileUsername,
-      seafilePassword,
-      seafileLibId,
-    };
+    const config: any = { provider };
+    
+    if (provider === 'supabase' || provider === 'firebase') {
+      config.apiEndpoint = endpoint;
+      config.apiKey = apiKey;
+    } else if (provider === 'seafile') {
+      config.apiEndpoint = endpoint;
+      config.apiKey = apiKey;
+      config.seafileUsername = seafileUsername;
+      config.seafilePassword = seafilePassword;
+      config.seafileLibId = seafileLibId;
+    } else if (provider === 'custom') {
+      config.apiEndpoint = endpoint;
+      config.apiKey = apiKey;
+    }
+    
     localStorage.setItem('fuelpro_cloud_config', JSON.stringify(config));
     if (sync) {
-      if (provider === 'seafile' && endpoint && (apiKey || (seafileUsername && seafilePassword)) && seafileLibId) {
-        sync.configure(endpoint, apiKey || 'token-from-creds', { provider: 'seafile', libId: seafileLibId, username: seafileUsername, password: seafilePassword });
-        setStatus(sync.getStatus());
-        toast('Seafile sync configured successfully!');
-      } else if (provider === 'custom' && endpoint && apiKey) {
-        sync.configure(endpoint, apiKey);
-        setStatus(sync.getStatus());
-        toast('Cloud sync configured successfully!');
-      } else {
-        sync.disable();
-        setStatus(sync.getStatus());
-        toast('Cloud sync disabled');
-      }
+      sync.configure(config);
+      setStatus(sync.getStatus());
+      toast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} sync configured!`);
     }
   };
 
@@ -1300,14 +1310,23 @@ function CloudConfigSection() {
 
   const getEndpointPlaceholder = () => {
     if (provider === 'seafile') return 'https://your-seafile-server.com';
+    if (provider === 'supabase') return 'https://your-project.supabase.co';
+    if (provider === 'firebase') return 'https://your-project.firebaseio.com';
     return 'https://your-api.com/sync';
   };
+
+  const providers = [
+    { id: 'supabase', label: 'Supabase', icon: '🔺', desc: 'PostgreSQL + Realtime + Storage' },
+    { id: 'firebase', label: 'Firebase', icon: '🔥', desc: 'Realtime Database + Auth' },
+    { id: 'seafile', label: 'Seafile', icon: '🗂️', desc: 'Self-hosted file sync' },
+    { id: 'custom', label: 'Custom API', icon: '🔗', desc: 'Any REST endpoint' },
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Cloud Sync Configuration</h2>
-        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Enable cross-device data synchronization</p>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Cloud Storage & Sync</h2>
+        <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Enterprise-grade multi-cloud data synchronization</p>
       </div>
 
       {/* Status Card */}
@@ -1317,7 +1336,7 @@ function CloudConfigSection() {
         borderRadius: 12, 
         padding: 20,
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
         gap: 16
       }}>
         <div style={{ textAlign: 'center' }}>
@@ -1331,7 +1350,7 @@ function CloudConfigSection() {
           </div>
           <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Cloud Sync</p>
           <p style={{ fontSize: 14, fontWeight: 'bold', color: status.enabled ? '#10b981' : '#ef4444', margin: '4px 0 0' }}>
-            {status.enabled ? 'Enabled' : 'Disabled'}
+            {status.enabled ? 'Active' : 'Disabled'}
           </p>
         </div>
         <div style={{ textAlign: 'center' }}>
@@ -1373,7 +1392,21 @@ function CloudConfigSection() {
           </div>
           <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Pending</p>
           <p style={{ fontSize: 14, fontWeight: 'bold', color: status.pendingChanges > 0 ? '#f59e0b' : '#888', margin: '4px 0 0' }}>
-            {status.pendingChanges} changes
+            {status.pendingChanges}
+          </p>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: 40, height: 40, borderRadius: '50%', 
+            background: 'rgba(139,92,246,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 8px'
+          }}>
+            <HardDrive size={20} style={{ color: '#8b5cf6' }} />
+          </div>
+          <p style={{ fontSize: 11, color: '#666', margin: 0 }}>Cache</p>
+          <p style={{ fontSize: 14, fontWeight: 'bold', color: '#8b5cf6', margin: '4px 0 0' }}>
+            {swrStats.size} items
           </p>
         </div>
       </div>
@@ -1381,28 +1414,30 @@ function CloudConfigSection() {
       {/* Provider Selection */}
       <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>Sync Provider</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[
-            { id: 'custom', label: 'Custom REST API', icon: '🔗' },
-            { id: 'seafile', label: 'Seafile', icon: '🗂️' },
-          ].map(p => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+          {providers.map(p => (
             <button
               key={p.id}
               onClick={() => setProvider(p.id)}
               style={{
-                padding: '10px 16px',
+                padding: '12px 16px',
                 background: provider === p.id ? 'rgba(245,158,11,0.15)' : 'transparent',
                 color: provider === p.id ? '#f59e0b' : '#888',
                 border: `1px solid ${provider === p.id ? 'rgba(245,158,11,0.3)' : '#333'}`,
                 borderRadius: 8,
                 fontSize: 13,
                 cursor: 'pointer',
+                textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6
+                gap: 10
               }}
             >
-              <span>{p.icon}</span> {p.label}
+              <span style={{ fontSize: 18 }}>{p.icon}</span>
+              <div>
+                <div style={{ fontWeight: 500 }}>{p.label}</div>
+                <div style={{ fontSize: 10, color: '#666' }}>{p.desc}</div>
+              </div>
             </button>
           ))}
         </div>
@@ -1411,7 +1446,10 @@ function CloudConfigSection() {
       {/* Configuration Form */}
       <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>
-          {provider === 'seafile' ? 'Seafile Configuration' : 'API Configuration'}
+          {provider === 'supabase' ? 'Supabase Configuration' : 
+           provider === 'firebase' ? 'Firebase Configuration' : 
+           provider === 'seafile' ? 'Seafile Configuration' : 
+           'Custom API Configuration'}
         </h3>
         
         {provider === 'seafile' ? (
@@ -1423,174 +1461,56 @@ function CloudConfigSection() {
                 value={endpoint} 
                 onChange={e => setEndpoint(e.target.value)}
                 placeholder="https://your-seafile-server.com"
-                style={{ 
-                  width: '100%', 
-                  padding: '10px 12px', 
-                  background: '#1a1a1f', 
-                  border: '1px solid #333', 
-                  borderRadius: 8, 
-                  color: '#fff', 
-                  fontSize: 13 
-                }}
+                style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }}
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
-                <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Username / Email</label>
-                <input 
-                  type="text" 
-                  value={seafileUsername} 
-                  onChange={e => setSeafileUsername(e.target.value)}
-                  placeholder="your@email.com"
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 12px', 
-                    background: '#1a1a1f', 
-                    border: '1px solid #333', 
-                    borderRadius: 8, 
-                    color: '#fff', 
-                    fontSize: 13 
-                  }}
-                />
+                <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Username</label>
+                <input type="text" value={seafileUsername} onChange={e => setSeafileUsername(e.target.value)} placeholder="your@email.com" style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Password</label>
-                <input 
-                  type="password" 
-                  value={seafilePassword} 
-                  onChange={e => setSeafilePassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 12px', 
-                    background: '#1a1a1f', 
-                    border: '1px solid #333', 
-                    borderRadius: 8, 
-                    color: '#fff', 
-                    fontSize: 13 
-                  }}
-                />
+                <input type="password" value={seafilePassword} onChange={e => setSeafilePassword(e.target.value)} placeholder="••••••••" style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
               </div>
             </div>
             <div>
-              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Token (optional if using credentials)</label>
-              <input 
-                type="password" 
-                value={apiKey} 
-                onChange={e => setApiKey(e.target.value)}
-                placeholder="Your Seafile API token"
-                style={{ 
-                  width: '100%', 
-                  padding: '10px 12px', 
-                  background: '#1a1a1f', 
-                  border: '1px solid #333', 
-                  borderRadius: 8, 
-                  color: '#fff', 
-                  fontSize: 13 
-                }}
-              />
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Token (optional)</label>
+              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Your Seafile API token" style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
             </div>
             <div>
-              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Library (Repository)</label>
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>Library</label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  value={seafileLibId}
-                  onChange={e => setSeafileLibId(e.target.value)}
-                  style={{ 
-                    flex: 1,
-                    padding: '10px 12px', 
-                    background: '#1a1a1f', 
-                    border: '1px solid #333', 
-                    borderRadius: 8, 
-                    color: '#fff', 
-                    fontSize: 13 
-                  }}
-                >
+                <select value={seafileLibId} onChange={e => setSeafileLibId(e.target.value)} style={{ flex: 1, padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }}>
                   <option value="">Select a library...</option>
-                  {seafileLibs.map(l => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
+                  {seafileLibs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
-                <button 
-                  onClick={loadSeafileLibs}
-                  disabled={isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))}
-                  style={{ 
-                    padding: '10px 16px', 
-                    background: 'rgba(59,130,246,0.15)', 
-                    color: '#60a5fa', 
-                    border: '1px solid rgba(59,130,246,0.2)', 
-                    borderRadius: 8, 
-                    fontSize: 13, 
-                    cursor: 'pointer',
-                    opacity: (isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))) ? 0.5 : 1
-                  }}
-                >
+                <button onClick={loadSeafileLibs} disabled={isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))} style={{ padding: '10px 16px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, fontSize: 13, cursor: 'pointer', opacity: (isLoadingLibs || !endpoint || (!apiKey && (!seafileUsername || !seafilePassword))) ? 0.5 : 1 }}>
                   {isLoadingLibs ? 'Loading...' : 'Load Libs'}
                 </button>
               </div>
-              <p style={{ fontSize: 11, color: '#666', marginTop: 4 }}>
-                First enter server URL + credentials, then click "Load Libs" to fetch your libraries
-              </p>
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Endpoint URL</label>
-              <input 
-                type="url" 
-                value={endpoint} 
-                onChange={e => setEndpoint(e.target.value)}
-                placeholder="https://your-api.com/sync"
-                style={{ 
-                  width: '100%', 
-                  padding: '10px 12px', 
-                  background: '#1a1a1f', 
-                  border: '1px solid #333', 
-                  borderRadius: 8, 
-                  color: '#fff', 
-                  fontSize: 13 
-                }}
-              />
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>
+                {provider === 'supabase' ? 'Supabase Project URL' : provider === 'firebase' ? 'Firebase Database URL' : 'API Endpoint URL'}
+              </label>
+              <input type="url" value={endpoint} onChange={e => setEndpoint(e.target.value)} placeholder={getEndpointPlaceholder()} style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
             </div>
             <div>
-              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>API Key / Token</label>
-              <input 
-                type="password" 
-                value={apiKey} 
-                onChange={e => setApiKey(e.target.value)}
-                placeholder="Your API key or token"
-                style={{ 
-                  width: '100%', 
-                  padding: '10px 12px', 
-                  background: '#1a1a1f', 
-                  border: '1px solid #333', 
-                  borderRadius: 8, 
-                  color: '#fff', 
-                  fontSize: 13 
-                }}
-              />
+              <label style={{ fontSize: 11, color: '#666', marginBottom: 4, display: 'block' }}>
+                {provider === 'supabase' ? 'Supabase Anon/Service Key' : provider === 'firebase' ? 'Firebase API Key' : 'API Key / Token'}
+              </label>
+              <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={provider === 'supabase' ? 'eyJhbGci...' : provider === 'firebase' ? 'AIza...' : 'Your API key'} style={{ width: '100%', padding: '10px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
             </div>
           </div>
         )}
+        
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button 
-            onClick={handleSave}
-            style={{ 
-              padding: '10px 20px', 
-              background: '#f59e0b', 
-              color: '#000', 
-              border: 'none', 
-              borderRadius: 8, 
-              fontSize: 13, 
-              fontWeight: 600, 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Save size={14} /> Save Configuration
+          <button onClick={handleSave} style={{ padding: '10px 20px', background: '#f59e0b', color: '#000', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Save size={14} /> Save & Connect
           </button>
         </div>
       </div>
@@ -1600,60 +1520,22 @@ function CloudConfigSection() {
         <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 16px' }}>Sync Actions</h3>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button 
-              onClick={handleSyncNow}
-              disabled={!status.isOnline}
-              style={{ 
-                padding: '10px 20px', 
-                background: 'rgba(16,185,129,0.15)', 
-                color: '#34d399', 
-                border: '1px solid rgba(16,185,129,0.2)', 
-                borderRadius: 8, 
-                fontSize: 13, 
-                cursor: status.isOnline ? 'pointer' : 'not-allowed',
-                opacity: status.isOnline ? 1 : 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}
-            >
+            <button onClick={handleSyncNow} disabled={!status.isOnline} style={{ padding: '10px 20px', background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, fontSize: 13, cursor: status.isOnline ? 'pointer' : 'not-allowed', opacity: status.isOnline ? 1 : 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Upload size={14} /> Push to Cloud
             </button>
-            <button 
-              onClick={handlePullFromCloud}
-              disabled={!status.isOnline}
-              style={{ 
-                padding: '10px 20px', 
-                background: 'rgba(59,130,246,0.15)', 
-                color: '#60a5fa', 
-                border: '1px solid rgba(59,130,246,0.2)', 
-                borderRadius: 8, 
-                fontSize: 13, 
-                cursor: status.isOnline ? 'pointer' : 'not-allowed',
-                opacity: status.isOnline ? 1 : 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}
-            >
+            <button onClick={handlePullFromCloud} disabled={!status.isOnline} style={{ padding: '10px 20px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, fontSize: 13, cursor: status.isOnline ? 'pointer' : 'not-allowed', opacity: status.isOnline ? 1 : 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Download size={14} /> Pull from Cloud
             </button>
           </div>
         </div>
       )}
 
-      {/* Info Box */}
-      <div style={{ 
-        background: 'rgba(59,130,246,0.1)', 
-        border: '1px solid rgba(59,130,246,0.2)', 
-        borderRadius: 12, 
-        padding: 16 
-      }}>
+      {/* Features Info */}
+      <div style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 12, padding: 16 }}>
         <p style={{ fontSize: 12, color: '#60a5fa', margin: 0 }}>
-          <strong>Seafile Setup:</strong> Run your own Seafile server, then enter your server URL, 
-          login credentials, and select a library to sync your FuelPro data. Seafile provides 
-          high-performance, self-hosted file sync with end-to-end encryption support. Get a token 
-          from Account → Settings → Web API, or use your login credentials directly.
+          <strong>Enterprise Features:</strong> Multi-provider sync (Supabase, Firebase, Seafile, Custom API) • 
+          SWR caching for instant loads • Real-time WebSocket updates • Offline-first architecture • 
+          Cross-device session management via Upstash Redis • Zero-egress file storage via Cloudflare R2
         </p>
       </div>
     </div>
