@@ -1687,6 +1687,7 @@ export default function FounderAccess() {
   const devSections = SECTIONS.filter(s => s.category === 'Dev');
   const billingSections = SECTIONS.filter(s => s.category === 'Billing');
   const aiSections = SECTIONS.filter(s => s.category === 'AI');
+  const integrationsSections = SECTIONS.filter(s => s.category === 'Integrations');
 
   const renderSidebarButton = (s: typeof SECTIONS[0]) => {
     const Icon = s.icon;
@@ -1728,6 +1729,10 @@ export default function FounderAccess() {
         {aiSections.length > 0 && <>
           {!collapsed && <p style={{ fontSize: 9, color: '#444', textTransform: 'uppercase', letterSpacing: 1, padding: '12px 10px 4px', margin: 0 }}>AI</p>}
           {aiSections.map(renderSidebarButton)}
+        </>}
+        {integrationsSections.length > 0 && <>
+          {!collapsed && <p style={{ fontSize: 9, color: '#444', textTransform: 'uppercase', letterSpacing: 1, padding: '12px 10px 4px', margin: 0 }}>Integrations</p>}
+          {integrationsSections.map(renderSidebarButton)}
         </>}
       </nav>
       <div style={{ padding: 8, borderTop: '1px solid #222' }}>
