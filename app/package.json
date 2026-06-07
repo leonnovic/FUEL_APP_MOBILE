@@ -87,9 +87,6 @@
     "cap:add:android": "npx cap add android",
     "cap:build": "npm run build && npx cap sync && cd android && ./gradlew assembleRelease"
   },
-  "overrides": {
-    "tmp": "0.2.7"
-  },
   "build": {
     "appId": "com.fuelpro.app",
     "productName": "FuelPro",
