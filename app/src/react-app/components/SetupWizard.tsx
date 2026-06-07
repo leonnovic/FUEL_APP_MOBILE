@@ -7,6 +7,8 @@ import {
 import { useFuel } from '../context/FuelContext';
 import { useStations } from '../context/StationContext';
 
+const DEFAULT_CURRENCY = 'KSh ';
+
 interface WizardData {
   // Step 1: Station Info
   stationName: string;
