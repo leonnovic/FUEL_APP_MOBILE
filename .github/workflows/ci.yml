@@ -14,54 +14,36 @@ jobs:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: app/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: ./app
-        run: npm ci
-
-      - name: Run ESLint
+      - run: npm run lint || true
         working-directory: ./app
-        run: npm run lint || true
-
-      - name: Type check
+      - run: npx tsc --noEmit --skipLibCheck 2>/dev/null || echo "TypeScript check completed"
         working-directory: ./app
-        run: npx tsc --noEmit --skipLibCheck 2>/dev/null || echo "TypeScript check completed"
 
   build:
     name: Build Application
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: app/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: ./app
-        run: npm ci
-
-      - name: Build app
+      - run: npm run build
         working-directory: ./app
-        run: npm run build
         env:
           CI: true
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: app/dist
@@ -71,44 +53,29 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: app/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: ./app
-        run: npm ci
-
-      - name: Run npm audit
+      - run: npm audit --audit-level=high || npm audit || true
         working-directory: ./app
-        run: npm audit --audit-level=high || npm audit || true
 
   deploy-vercel:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
-    needs:
-      - build
+    needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: dist
           path: app/dist
-
-      - name: Deploy to Vercel Production
-        run: cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
+      - run: cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
