@@ -114,4 +114,4 @@ jobs:
           cd app
           npx vercel@latest deploy --token=${{ vars.VERCEL_TOKEN }} ${{ github.event_name == 'pull_request' && '--prod=false' || '--prod' }} --yes
         env:
-          VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}# CI/CD Pipeline validation check
