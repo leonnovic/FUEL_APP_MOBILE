@@ -93,7 +93,7 @@ jobs:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
     needs: build
-    if: secrets.VERCEL_TOKEN != ''
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -109,9 +109,7 @@ jobs:
           name: dist
           path: app/dist
 
-      - name: Deploy to Vercel
+      - name: Deploy to Vercel Production
         run: |
           cd app
-          npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} ${{ github.event_name == 'pull_request' && '--prod=false' || '--prod' }} --yes
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
