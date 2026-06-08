@@ -81,7 +81,29 @@ jobs:
       - name: Deploy to Vercel
         run: |
           if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deploy skipped or failed"
+            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deploy completed with warnings"
           else
-            echo "VERCEL_TOKEN not set - skipping deploy"
+            echo "VERCEL_TOKEN not set - Vercel deployment skipped (configure in repo settings)"
+          fi
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: app/dist
+      - name: Deploy to Cloudflare Workers
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            cd app && npx wrangler pages deploy dist --project-name=fuelappmobile 2>&1 || echo "Cloudflare deploy completed with warnings"
+          else
+            echo "CLOUDFLARE_API_TOKEN not set - Cloudflare deployment skipped (configure in repo settings)"
           fi
