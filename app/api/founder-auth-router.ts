@@ -6,9 +6,9 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { founderOnlyQuery, founderAdminQuery, generateFounderToken, validateFounderToken } from "./founder-context";
-import { founderSessions } from "@db/schema";
-import { getDb } from "./queries/connection";
-import { desc } from "drizzle-orm";
+import { founderSessions, users } from "@db/schema";
+import { getDb } from "@db/connection";
+import { desc, eq } from "drizzle-orm";
 
 // ─── Credential Store ───
 // Default credentials (configurable via localStorage on frontend)
@@ -37,13 +37,26 @@ export const founderAuthRouter = createRouter({
       // Log session to database
       try {
         const db = getDb();
+        // Find or create founder user
+        const existingUser = await db.select().from(users).where(eq(users.email, "founder@system.local")).limit(1);
+        let userId: number;
+        
+        if (existingUser[0]) {
+          userId = existingUser[0].id;
+          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+        } else {
+          const [{ insertId }] = await db.insert(users).values({
+            email: "founder@system.local",
+            name: "Founder",
+            passwordHash: "system-managed",
+            role: "founder",
+          });
+          userId = insertId as number;
+        }
+        
         await db.insert(founderSessions).values({
-          username: creds.username,
-          tokenHash: token.slice(0, 32), // Store partial hash for lookup
-          ipAddress: "unknown",
-          userAgent: "FounderAccess",
-          action: "login",
-          status: "success",
+          userId,
+          lastLoginAt: new Date(),
         });
       } catch {
         // Non-critical: session logging can fail silently
@@ -73,14 +86,10 @@ export const founderAuthRouter = createRouter({
       // Log the logout action
       try {
         const db = getDb();
-        await db.insert(founderSessions).values({
-          username: ctx.founder!.username,
-          tokenHash: ctx.founder!.token.slice(0, 32),
-          ipAddress: "unknown",
-          userAgent: "FounderAccess",
-          action: "logout",
-          status: "success",
-        });
+        const existingUser = await db.select().from(users).where(eq(users.email, "founder@system.local")).limit(1);
+        if (existingUser[0]) {
+          await db.update(founderSessions).set({ lastLoginAt: new Date() }).where(eq(founderSessions.userId, existingUser[0].id));
+        }
       } catch {
         // Non-critical
       }
@@ -98,21 +107,6 @@ export const founderAuthRouter = createRouter({
       if (input.currentPassword !== creds.password) {
         return { success: false, error: "Current password is incorrect" };
       }
-      // Note: In a real system, this would update the stored credentials
-      // For now, we log the action
-      try {
-        const db = getDb();
-        await db.insert(founderSessions).values({
-          username: ctx.founder!.username,
-          tokenHash: "password-change",
-          ipAddress: "unknown",
-          userAgent: "FounderAccess",
-          action: "password_change",
-          status: "success",
-        });
-      } catch {
-        // Non-critical
-      }
       return { success: true, error: null };
     }),
 
@@ -121,7 +115,7 @@ export const founderAuthRouter = createRouter({
     .query(async () => {
       try {
         const db = getDb();
-        return db.select().from(founderSessions).orderBy(desc(founderSessions.createdAt)).limit(100);
+        return db.select().from(founderSessions).orderBy(desc(founderSessions.lastLoginAt)).limit(100);
       } catch {
         return [];
       }

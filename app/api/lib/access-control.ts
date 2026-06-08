@@ -16,6 +16,11 @@ import {
   teamMembers,
   dataScopes,
   actionScopes,
+  permissions,
+  type DataScope,
+  type ActionScope,
+  type Role,
+  type Team,
 } from "@db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -102,6 +107,7 @@ export const RESOURCE_CATEGORIES = {
   reports: ["reports:view", "reports:create", "reports:export"],
   settings: ["settings:view", "settings:update", "settings:manage"],
   audit: ["audit:view", "audit:export"],
+  // Note: roles and teams permissions use "settings" as their resource category
   roles: ["roles:create", "roles:read", "roles:update", "roles:delete"],
   teams: ["teams:create", "teams:read", "teams:update", "teams:delete", "teams:manage"],
 };
@@ -309,7 +315,7 @@ export class AccessControlService {
     userId: number,
     teamId: number,
     resourceType: string
-  ): Promise<dataScopes.$inferSelect[]> {
+  ): Promise<DataScope[]> {
     // Get user's memberships
     const memberships = await db
       .select()
@@ -364,7 +370,7 @@ export class AccessControlService {
     userId: number,
     teamId: number,
     permissionCode: string
-  ): Promise<actionScopes.$inferSelect | null> {
+  ): Promise<ActionScope | null> {
     const memberships = await db
       .select()
       .from(teamMembers)
@@ -420,7 +426,7 @@ export class AccessControlService {
   /**
    * Get user's teams
    */
-  async getUserTeams(userId: number): Promise<teams.$inferSelect[]> {
+  async getUserTeams(userId: number): Promise<Team[]> {
     const memberships = await db
       .select({ teamId: teamMembers.teamId })
       .from(teamMembers)
@@ -446,7 +452,7 @@ export class AccessControlService {
   async getUserTeamRole(
     userId: number,
     teamId: number
-  ): Promise<roles.$inferSelect | null> {
+  ): Promise<Role | null> {
     const membership = await db
       .select()
       .from(teamMembers)
@@ -478,20 +484,38 @@ export class AccessControlService {
   async seedDefaults(): Promise<void> {
     // Seed permissions
     const allPermissions = Object.values(PERMISSIONS);
-    const resourceCategories: Array<keyof typeof RESOURCE_CATEGORIES> = Object.keys(RESOURCE_CATEGORIES) as any;
+    // Map of RESOURCE_CATEGORIES keys to valid database enum values
+    const categoryMapping: Record<string, string> = {
+      dashboard: "dashboard",
+      sales: "sales",
+      inventory: "inventory",
+      payments: "payments",
+      stations: "stations",
+      users: "users",
+      reports: "reports",
+      settings: "settings",
+      audit: "audit",
+      roles: "settings", // roles permissions use settings category
+      teams: "settings", // teams permissions use settings category
+    };
 
     for (const perm of allPermissions) {
-      const [category] = resourceCategories.filter((cat) =>
-        RESOURCE_CATEGORIES[cat].includes(perm)
-      );
-      const actionType = perm.split(":")[1] as any;
+      // Find which category contains this permission
+      let category = "settings";
+      for (const [cat, perms] of Object.entries(RESOURCE_CATEGORIES)) {
+        if (perms.includes(perm)) {
+          category = categoryMapping[cat] || "settings";
+          break;
+        }
+      }
+      const actionType = perm.split(":")[1] || "manage";
 
       await db.insert(permissions).values({
         code: perm,
         name: perm.replace(":", " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-        resourceCategory: category || "settings",
-        actionType: actionType || "manage",
-      }).onDuplicateKeyIgnore();
+        resourceCategory: category as any,
+        actionType: actionType as any,
+      }).catch(() => {}); // Ignore duplicate errors
     }
 
     // Seed roles
@@ -499,7 +523,7 @@ export class AccessControlService {
       await db.insert(roles).values({
         ...role,
         permissions: JSON.stringify(role.permissions),
-      }).onDuplicateKeyIgnore();
+      }).catch(() => {}); // Ignore duplicate errors
     }
   }
 }

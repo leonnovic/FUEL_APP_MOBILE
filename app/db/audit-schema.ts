@@ -26,6 +26,7 @@ import {
   timestamp,
   bigint,
   boolean,
+  int,
   index,
   uniqueIndex,
 } from "drizzle-orm/mysql-core";

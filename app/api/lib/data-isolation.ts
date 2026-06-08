@@ -18,6 +18,7 @@ import {
   dataAccessPolicies,
   teamMembers,
   roles,
+  type DataAccessPolicy,
 } from "@db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -134,12 +135,12 @@ export function createScopedQuery(table: any, context: TenantContext) {
       
       // Add tenant filter
       if (table.isolationKey) {
-        query = query.where(eq(table.isolationKey, context.isolationKey));
+        query = query.where(eq((table as any).isolationKey, context.isolationKey));
       }
       
       // Add station filter if provided
       if (filters?.stationId && table.stationId) {
-        query = query.where(eq(table.stationId, filters.stationId));
+        query = query.where(eq((table as any).stationId, filters.stationId));
       }
       
       return query;
@@ -147,13 +148,13 @@ export function createScopedQuery(table: any, context: TenantContext) {
 
     // Find single record with ownership check
     findOne: async (id: number) => {
-      const record = await db.query[table].findFirst({
-        where: (t, { and, eq }) => 
+      const record = await (db.query as any)[table]?.findFirst?.({
+        where: (t: any, { and, eq }: any) => 
           and(
             eq(t.id, id),
             context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
           ),
-      });
+      }) || null;
       
       if (!record) return null;
       
@@ -176,8 +177,8 @@ export function createScopedQuery(table: any, context: TenantContext) {
     // Update with tenant isolation
     update: async (id: number, data: any) => {
       // First verify ownership
-      const existing = await db.query[table].findFirst({
-        where: (t, { and, eq }) =>
+      const existing = await (db.query as any)[table]?.findFirst?.({
+        where: (t: any, { and, eq }: any) =>
           and(
             eq(t.id, id),
             context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
@@ -195,14 +196,14 @@ export function createScopedQuery(table: any, context: TenantContext) {
       return db
         .update(table)
         .set(data)
-        .where(eq(table.id, id));
+        .where(eq((table as any).id, id));
     },
 
     // Delete with tenant isolation
     delete: async (id: number) => {
       // Verify ownership first
-      const existing = await db.query[table].findFirst({
-        where: (t, { and, eq }) =>
+      const existing = await (db.query as any)[table]?.findFirst?.({
+        where: (t: any, { and, eq }: any) =>
           and(
             eq(t.id, id),
             context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
@@ -217,7 +218,7 @@ export function createScopedQuery(table: any, context: TenantContext) {
         throw new Error("Access denied: Cannot delete resources from different tenant");
       }
 
-      return db.delete(table).where(eq(table.id, id));
+      return db.delete(table).where(eq((table as any).id, id));
     },
   };
 }
@@ -288,7 +289,7 @@ export async function getDataAccessPolicy(
 /**
  * Apply data masking based on access policy
  */
-export function applyDataMasking(data: any, policy: dataAccessPolicies.$inferSelect | null): any {
+export function applyDataMasking(data: any, policy: DataAccessPolicy | null): any {
   if (!policy) return data;
 
   let result = { ...data };

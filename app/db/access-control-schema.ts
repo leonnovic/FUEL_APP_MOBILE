@@ -18,6 +18,7 @@ import {
   timestamp,
   bigint,
   boolean,
+  int,
   index,
 } from "drizzle-orm/mysql-core";
 
