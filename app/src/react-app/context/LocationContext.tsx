@@ -65,6 +65,7 @@ interface LocationContextType {
   // Current location
   currentCountry: CountryProfile;
   currentLocation: StationLocation | null;
+  currentStation: StationLocation | null; // alias for currentLocation for compatibility
   allCountries: CountryProfile[];
   
   // Getters
@@ -343,6 +344,7 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
     <LocationContext.Provider value={{
       currentCountry,
       currentLocation,
+      currentStation: currentLocation, // alias for compatibility
       allCountries: COUNTRY_LIST,
       getCountry,
       getStationLocation,

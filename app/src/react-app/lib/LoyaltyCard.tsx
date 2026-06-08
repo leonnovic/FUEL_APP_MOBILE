@@ -356,6 +356,3 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     </div>
   );
 }
-
-export { LoyaltyCard };
-export default LoyaltyCard;

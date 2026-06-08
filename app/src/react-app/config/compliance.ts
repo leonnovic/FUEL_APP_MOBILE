@@ -810,5 +810,3 @@ export function getAllComplianceCountries(): { key: string; code: string; name: 
     .map(([code, config]) => ({ key: code.toLowerCase(), code, name: config.countryName }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
-
-export type { ComplianceConfig };

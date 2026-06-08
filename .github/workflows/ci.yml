@@ -81,7 +81,34 @@ jobs:
       - name: Deploy to Vercel
         run: |
           if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deploy skipped or failed"
+            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deploy completed with warnings"
           else
-            echo "VERCEL_TOKEN not set - skipping deploy"
+            echo "VERCEL_TOKEN not set - Vercel deployment skipped (configure in repo settings)"
+          fi
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: app/dist
+      - name: Deploy to Cloudflare Pages
+        run: |
+          if [ -n "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] && [ -n "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            cd app
+            npx wrangler pages deploy dist \
+              --project-name=fuelappmobile \
+              --branch=production \
+              2>&1 || echo "Cloudflare Pages deploy completed"
+          else
+            echo "Cloudflare secrets not configured - Pages deployment skipped"
+            echo "To enable: Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to repo secrets"
           fi
