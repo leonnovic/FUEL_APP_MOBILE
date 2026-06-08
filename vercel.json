@@ -1,7 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "cd app && npm install && npx vite build",
+  "buildCommand": "cd app && npm run build",
   "outputDirectory": "app/dist",
+  "installCommand": "cd app && npm install",
   "framework": null,
   "cleanUrls": true,
   "headers": [
@@ -24,21 +25,31 @@
       ]
     },
     {
-      "source": "/manifest.json",
+      "source": "/boot.js",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600" }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Content-Type", "value": "application/javascript" }
       ]
     },
     {
-      "source": "/service-worker.js",
+      "source": "/(.*).js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*).css",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     }
   ],
   "routes": [
-    { "handle": "filesystem" },
-    { "source": "/api/(.*)", "destination": "/api/trpc/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+    { "src": "/api/(.*)", "dest": "/api/$1" }
+  ],
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs18.x"
+    }
+  }
 }

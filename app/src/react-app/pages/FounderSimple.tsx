@@ -23,6 +23,7 @@ import AuthProviderConfig from '@/react-app/components/AuthProviderConfig';
 import PlatformAnalytics from '@/react-app/components/PlatformAnalytics';
 // Import unified cloud storage (includes R2, Upstash, Seafile, Supabase, Firebase, Custom API)
 import { FuelProCloudSync, cloudStorage, swr, getSWRStats, SupabaseStorage } from '@/react-app/lib/cloudStorage';
+import { useRealUsers } from '@/react-app/hooks/useRealUsers';
 
 // ─── Shared Storage Keys (aligned with main app) ───
 // Use the same keys as the main app for data sharing
@@ -256,37 +257,120 @@ function DashboardSection() {
 }
 
 function UsersSection() {
-  const [users, setUsers] = useState(() => getItem('fuelpro_users_v3', []));
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'user' });
-  const addUser = () => { if (!newUser.name.trim()) return; const updated = [...users, { ...newUser, id: Date.now(), status: 'active', createdAt: new Date().toISOString() }]; setUsers(updated); setItem('fuelpro_users_v3', updated); setNewUser({ name: '', email: '', role: 'user' }); toast('User added'); };
-  const removeUser = (id: number) => { const updated = users.filter((u: any) => u.id !== id); setUsers(updated); setItem('fuelpro_users_v3', updated); toast('User removed'); };
+  // Use real backend data via tRPC
+  const { users, stats, isLoading, loadingUsers, refreshUsers, updateRole, updateStatus } = useRealUsers();
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
+  const [filter, setFilter] = useState<'all' | 'user' | 'admin'>('all');
+  
+  // Stats from backend
+  const totalUsers = stats?.total || users?.length || 0;
+  const recentUsers = stats?.recent7Days || 0;
+  
+  // Filter users based on role
+  const filteredUsers = filter === 'all' ? users : users.filter((u: any) => u.role === filter);
+  
+  const handleRefresh = () => {
+    refreshUsers();
+    toast('Refreshing users...');
+  };
+  
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div><h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Users</h2><p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Manage platform users and roles</p></div>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: 0 }}>Users</h2>
+          <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>Manage platform users and roles (Live Backend)</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={handleRefresh} style={{ padding: '8px 12px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <select value={filter} onChange={e => setFilter(e.target.value as any)} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 12 }}>
+            <option value="all">All ({totalUsers})</option>
+            <option value="user">Users</option>
+            <option value="admin">Admins</option>
+          </select>
+        </div>
       </div>
-      <div style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-        <input placeholder="Name" value={newUser.name} onChange={e => setNewUser({...newUser,name:e.target.value})} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
-        <input placeholder="Email" value={newUser.email} onChange={e => setNewUser({...newUser,email:e.target.value})} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }} />
-        <select value={newUser.role} onChange={e => setNewUser({...newUser,role:e.target.value})} style={{ padding: '8px 12px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 13 }}>
-          <option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option>
-        </select>
-        <button onClick={addUser} style={{ padding: '8px 12px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer' }}><Plus size={14} /> Add User</button>
+      
+      {/* Stats Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <p style={{ fontSize: 10, color: '#666', margin: 0 }}>TOTAL USERS</p>
+          <p style={{ fontSize: 20, fontWeight: 'bold', color: '#fff', margin: '4px 0 0' }}>{totalUsers}</p>
+        </div>
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <p style={{ fontSize: 10, color: '#666', margin: 0 }}>THIS WEEK</p>
+          <p style={{ fontSize: 20, fontWeight: 'bold', color: '#34d399', margin: '4px 0 0' }}>+{recentUsers}</p>
+        </div>
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <p style={{ fontSize: 10, color: '#666', margin: 0 }}>ADMINS</p>
+          <p style={{ fontSize: 20, fontWeight: 'bold', color: '#f59e0b', margin: '4px 0 0' }}>{stats?.byRole?.find((r: any) => r.role === 'admin')?.count || 0}</p>
+        </div>
+        <div style={{ background: '#111', border: '1px solid #222', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <p style={{ fontSize: 10, color: '#666', margin: 0 }}>ACTIVE</p>
+          <p style={{ fontSize: 20, fontWeight: 'bold', color: '#60a5fa', margin: '4px 0 0' }}>{stats?.byStatus?.find((s: any) => s.status === 'active')?.count || 0}</p>
+        </div>
       </div>
-      <DataTable headers={['ID', 'Name', 'Email', 'Role', 'Status', 'Actions']}>
-        {users.length > 0 ? users.map((u: any, i: number) => (
-          <tr key={u.id || i} style={{ borderBottom: '1px solid #1a1a1a' }}>
-            <td style={{ padding: '10px 12px', color: '#666', fontSize: 11, fontFamily: 'monospace' }}>#{i+1}</td>
-            <td style={{ padding: '10px 12px', color: '#fff', fontSize: 13 }}>{u.name || '—'}</td>
-            <td style={{ padding: '10px 12px', color: '#888', fontSize: 11 }}>{u.email || '—'}</td>
-            <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, background: u.role==='admin'?'rgba(245,158,11,0.1)':'rgba(59,130,246,0.1)', color: u.role==='admin'?'#f59e0b':'#60a5fa' }}>{u.role || 'user'}</span></td>
-            <td style={{ padding: '10px 12px' }}><span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>{u.status || 'active'}</span></td>
-            <td style={{ padding: '10px 12px', display: 'flex', gap: 4 }}>
-              <button onClick={() => removeUser(u.id)} style={{ padding: 4, color: '#f87171', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={12} /></button>
-            </td>
-          </tr>
-        )) : <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: '#555', fontSize: 13 }}>No users yet. Add your first user above.</td></tr>}
-      </DataTable>
+      
+      {/* Loading State */}
+      {isLoading && (
+        <div style={{ padding: 20, textAlign: 'center', color: '#666' }}>
+          <RefreshCw size={20} style={{ animation: 'spin 1s linear infinite' }} /> Loading users from backend...
+        </div>
+      )}
+      
+      {/* Users Table */}
+      {!isLoading && (
+        <DataTable headers={['ID', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Created', 'Actions']}>
+          {filteredUsers && filteredUsers.length > 0 ? filteredUsers.map((u: any, i: number) => (
+            <tr key={u.id || i} style={{ borderBottom: '1px solid #1a1a1a' }}>
+              <td style={{ padding: '10px 12px', color: '#666', fontSize: 11, fontFamily: 'monospace' }}>#{u.id || i+1}</td>
+              <td style={{ padding: '10px 12px', color: '#fff', fontSize: 13 }}>{u.name || '—'}</td>
+              <td style={{ padding: '10px 12px', color: '#888', fontSize: 11 }}>{u.email || '—'}</td>
+              <td style={{ padding: '10px 12px', color: '#888', fontSize: 11 }}>{u.phone || '—'}</td>
+              <td style={{ padding: '10px 12px' }}>
+                <select 
+                  value={u.role} 
+                  onChange={async (e) => {
+                    if (confirm(`Change ${u.name || u.email}'s role to ${e.target.value}?`)) {
+                      const result = await updateRole(u.id, e.target.value);
+                      toast(result.success ? 'Role updated' : 'Failed to update role');
+                    }
+                  }}
+                  style={{ padding: '4px 8px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 11, cursor: 'pointer' }}>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </td>
+              <td style={{ padding: '10px 12px' }}>
+                <select 
+                  value={u.status} 
+                  onChange={async (e) => {
+                    if (confirm(`Change ${u.name || u.email}'s status to ${e.target.value}?`)) {
+                      const result = await updateStatus(u.id, e.target.value);
+                      toast(result.success ? 'Status updated' : 'Failed to update status');
+                    }
+                  }}
+                  style={{ padding: '4px 8px', background: '#1a1a1f', border: '1px solid #333', borderRadius: 6, color: '#fff', fontSize: 11, cursor: 'pointer' }}>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="banned">Banned</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </td>
+              <td style={{ padding: '10px 12px', color: '#666', fontSize: 11 }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
+              <td style={{ padding: '10px 12px', display: 'flex', gap: 4 }}>
+                <button onClick={() => setSelectedUser(u.id)} style={{ padding: 4, color: '#60a5fa', background: 'none', border: 'none', cursor: 'pointer' }}><Eye size={12} /></button>
+              </td>
+            </tr>
+          )) : (
+            <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#555', fontSize: 13 }}>
+              {loadingUsers ? 'Loading...' : 'No users found. Users sign up through the main app.'}
+            </td></tr>
+          )}
+        </DataTable>
+      )}
     </div>
   );
 }
@@ -1585,7 +1669,11 @@ function AIBatchSection() {
           if (p.includes('diesel') && prices.length === 1) fuelPrices[stationId].diesel = parseFloat(prices[0]);
 
           localStorage.setItem('fuelpro_fuel_prices_v2', JSON.stringify(fuelPrices));
-          response = `✅ Fuel prices updated for station ${stationId}:\n• Petrol: Ksh ${fuelPrices[stationId].petrol || 'unchanged'}\n• Diesel: Ksh ${fuelPrices[stationId].diesel || 'unchanged'}\n\nSynced to Price Board.`;
+          response = `✅ Fuel prices updated for station ${stationId}:
+• Petrol: Ksh ${fuelPrices[stationId].petrol || 'unchanged'}
+• Diesel: Ksh ${fuelPrices[stationId].diesel || 'unchanged'}
+
+Synced to Price Board.`;
           actionTaken = true;
         }
       }
@@ -1600,21 +1688,34 @@ function AIBatchSection() {
         const expenses = JSON.parse(localStorage.getItem('fuelpro_expenses_v2') || '[]');
         expenses.push({ id: `exp_${Date.now()}`, name, amount, category, date: new Date().toISOString().split('T')[0], createdAt: new Date().toISOString() });
         localStorage.setItem('fuelpro_expenses_v2', JSON.stringify(expenses));
-        response = `✅ Expense added:\n• Name: ${name}\n• Amount: Ksh ${amount.toLocaleString()}\n• Category: ${category}\n• Date: ${new Date().toLocaleDateString()}`;
+        response = `✅ Expense added:
+• Name: ${name}
+• Amount: Ksh ${amount.toLocaleString()}
+• Category: ${category}
+• Date: ${new Date().toLocaleDateString()}`;
         actionTaken = true;
       }
       // Salary update
       else if (p.includes('salary') || p.includes('employee')) {
         const percentMatch = p.match(/(\d+(?:\.\d+)?)\s*%/);
         const percent = percentMatch ? parseFloat(percentMatch[1]) : 5;
-        response = `✅ Salary update processed:\n• ${percent}% increase applied to all employees\n• Payroll recalculated\n• Updated amounts will reflect in the next pay cycle`;
+        response = `✅ Salary update processed:
+• ${percent}% increase applied to all employees
+• Payroll recalculated
+• Updated amounts will reflect in the next pay cycle`;
         actionTaken = true;
       }
       // Report generation
       else if (p.includes('report') || p.includes('generate')) {
         const monthMatch = p.match(/(january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2})/i);
         const month = monthMatch ? monthMatch[1] : 'current';
-        response = `✅ Report generated:\n• Period: ${month} 2026\n• Stations: All active stations\n• Data sources: Sales, Inventory, Expenses\n• Format: Summary with charts\n\nView in Analytics → Reports tab.`;
+        response = `✅ Report generated:
+• Period: ${month} 2026
+• Stations: All active stations
+• Data sources: Sales, Inventory, Expenses
+• Format: Summary with charts
+
+View in Analytics → Reports tab.`;
         actionTaken = true;
       }
       // Backup
@@ -1634,7 +1735,10 @@ function AIBatchSection() {
         a.click();
         URL.revokeObjectURL(url);
         const keys = Object.keys(allData).length;
-        response = `✅ Full backup created and downloaded:\n• ${keys} data keys exported\n• Size: ${(blob.size / 1024).toFixed(1)} KB\n• File: fuelpro_backup_${new Date().toISOString().split('T')[0]}.json`;
+        response = `✅ Full backup created and downloaded:
+• ${keys} data keys exported
+• Size: ${(blob.size / 1024).toFixed(1)} KB
+• File: fuelpro_backup_${new Date().toISOString().split('T')[0]}.json`;
         actionTaken = true;
       }
       // Exchange rate
@@ -1644,7 +1748,9 @@ function AIBatchSection() {
         const fromCurr = p.match(/(\w{3})\s+to/)?.[1]?.toUpperCase() || 'USD';
         const toCurr = p.match(/to\s+(\w{3})/)?.[1]?.toUpperCase() || 'KES';
         localStorage.setItem('fuelpro_exchange_rate', JSON.stringify({ from: fromCurr, to: toCurr, rate, updatedAt: new Date().toISOString() }));
-        response = `✅ Exchange rate set:\n• ${fromCurr} → ${toCurr}: ${rate}\n• Updated: ${new Date().toLocaleString()}`;
+        response = `✅ Exchange rate set:
+• ${fromCurr} → ${toCurr}: ${rate}
+• Updated: ${new Date().toLocaleString()}`;
         actionTaken = true;
       }
       // Inventory alert
@@ -1652,12 +1758,24 @@ function AIBatchSection() {
         const thresholdMatch = p.match(/(\d+(?:\.\d+)?)/);
         const threshold = thresholdMatch ? parseFloat(thresholdMatch[1]) : 5000;
         const fuelType = p.includes('diesel') ? 'diesel' : p.includes('petrol') ? 'petrol' : 'all';
-        response = `✅ Inventory alert configured:\n• Fuel type: ${fuelType.toUpperCase()}\n• Low stock threshold: ${threshold.toLocaleString()} litres\n• Alert method: In-app + Notification\n• Will trigger when stock drops below threshold`;
+        response = `✅ Inventory alert configured:
+• Fuel type: ${fuelType.toUpperCase()}
+• Low stock threshold: ${threshold.toLocaleString()} litres
+• Alert method: In-app + Notification
+• Will trigger when stock drops below threshold`;
         actionTaken = true;
       }
 
       if (!actionTaken) {
-        response = `⚠️ I understood: "${prompt}"\n\nHowever, I need more details to process this. Try:\n• "Set Petrol price to 180.50 for station S1"\n• "Add expense \"Maintenance\" amount 5000"\n• "Generate March 2026 report"\n• "Backup all data"\n\nOr select an example below.`;
+        response = `⚠️ I understood: "${prompt}"
+
+However, I need more details to process this. Try:
+• "Set Petrol price to 180.50 for station S1"
+• "Add expense \"Maintenance\" amount 5000"
+• "Generate March 2026 report"
+• "Backup all data"
+
+Or select an example below.`;
       }
 
       setResult(response);
