@@ -657,5 +657,3 @@ function SystemTab() {
     </div>
   );
 }
-
-export default AdminDashboard;

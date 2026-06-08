@@ -38,18 +38,17 @@ export const founderAuthRouter = createRouter({
       try {
         const db = getDb();
         // Find or create founder user
-        const existingUser = await db.select().from(users).where(eq(users.email, "founder@system.local")).limit(1);
+        const existingUser = await db.select().from(users).where(eq(users.unionId, "founder-system")).limit(1);
         let userId: number;
         
         if (existingUser[0]) {
           userId = existingUser[0].id;
-          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+          await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, userId));
         } else {
           const [{ insertId }] = await db.insert(users).values({
-            email: "founder@system.local",
+            unionId: "founder-system",
             name: "Founder",
-            passwordHash: "system-managed",
-            role: "founder",
+            role: "admin",
           });
           userId = insertId as number;
         }

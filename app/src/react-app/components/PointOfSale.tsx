@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, Printer, CreditCard, Smartphone, Banknote, Receipt, X, Check, Settings, QrCode, Star, Award } from 'lucide-react';
 import { useFuel } from '@/react-app/context/FuelContext';
+import { useAuth } from '@/react-app/context/AuthContext';
 import { useLocation } from '@/react-app/context/LocationContext';
 import { formatNumber } from '@/react-app/utils/formatUtils';
 import QRCode from 'qrcode';
@@ -63,8 +64,11 @@ export default function PointOfSale() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const receiptRef = useRef<HTMLDivElement>(null);
 
+  // ─── Auth ───
+  const { user: authUser } = useAuth();
+
   // ─── Loyalty Integration ───
-  const stationId = location.currentStation?.id || 'default';
+  const stationId = location.currentStation?.stationId || 'default';
   const { customers, earnPoints, findCustomerByPhone, findCustomerByCard, config: loyaltyConfig } = useLoyalty(stationId);
   const [loyaltyCustomer, setLoyaltyCustomer] = useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
@@ -108,7 +112,7 @@ export default function PointOfSale() {
         transaction.total,
         totalLiters,
         fuelType,
-        state.user?.name || 'POS'
+        authUser?.name || 'POS'
       );
       
       // Refresh customer data

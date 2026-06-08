@@ -18,7 +18,7 @@ import {
   TIER_COLORS,
   getTierProgress
 } from '../lib/loyaltyProgram';
-import { formatNumber } from '../react-app/utils/formatUtils';
+import { formatNumber } from '../utils/formatUtils';
 
 interface StationLoyaltyManagerProps {
   stationId: string;

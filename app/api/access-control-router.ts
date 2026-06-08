@@ -327,7 +327,8 @@ export const accessControlRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const previous = await db.select().from(teamMembers).where(eq(teamMembers.id, input.memberId)).limit(1);
+      const previousArr = await db.select().from(teamMembers).where(eq(teamMembers.id, input.memberId)).limit(1);
+      const previous = previousArr[0];
 
       await db
         .update(teamMembers)
@@ -492,7 +493,7 @@ export const accessControlRouter = t.router({
     .input(
       z.object({
         resourceType: z.string(),
-        filterConfig: z.record(z.any()),
+        filterConfig: z.record(z.string(), z.any()),
         roleId: z.number().optional(),
         userId: z.number().optional(),
         description: z.string().optional(),

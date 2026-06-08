@@ -239,5 +239,3 @@ export default function AdminLogin() {
     </div>
   );
 }
-
-export default AdminLogin;
