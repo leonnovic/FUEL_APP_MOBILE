@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import {
-  Crown, Users, Building2, 3, Shield, Activity, Server,
+  Crown, Users, Building2, Shield, Activity, Server,
   HardDrive, Wifi, Clock, Search, Eye, EyeOff, Trash2, Plus,
   Lock, CheckCircle2, AlertTriangle, XCircle, Key,
   Settings, ToggleRight, RefreshCw,

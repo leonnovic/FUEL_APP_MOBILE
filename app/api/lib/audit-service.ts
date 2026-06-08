@@ -11,10 +11,11 @@
  */
 
 import { getDb } from "@db/connection";
-import { auditLogEntries, authEvents, dataAccessLog } from "@db/schema";
+import { auditLogEntries, authEvents, dataAccessLog, integrityLog } from "@db/audit-schema";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
+import { desc, and, gte, lte } from "drizzle-orm";
 
 const db = getDb();
 
@@ -28,6 +29,10 @@ export interface AuditContext {
   sessionId?: string;
   ipAddress?: string;
   userAgent?: string;
+  country?: string;
+  city?: string;
+  latitude?: string;
+  longitude?: string;
 }
 
 export interface LogEventOptions {
@@ -92,12 +97,14 @@ class AuditService {
   private async initializeHashChain(): Promise<void> {
     if (this.hashChainInitialized) return;
 
-    const lastEntry = await db.query.integrityLog.findFirst({
-      orderBy: (il, { desc }) => [desc(il.periodEnd)],
-    });
+    const lastEntry = await db
+      .select()
+      .from(integrityLog)
+      .orderBy(desc(integrityLog.periodEnd))
+      .limit(1);
 
-    if (lastEntry) {
-      this.lastHash = lastEntry.lastEntryHash;
+    if (lastEntry[0]) {
+      this.lastHash = lastEntry[0].lastEntryHash;
     } else {
       // Initialize with genesis hash
       this.lastHash = crypto.createHash("sha256").update("genesis").digest("hex");
@@ -310,10 +317,13 @@ class AuditService {
     const entries = await db
       .select()
       .from(auditLogEntries)
-      .where((al, { and, gte, lte }) =>
-        and(gte(al.eventTimestamp, startDate), lte(al.eventTimestamp, endDate))
+      .where(
+        and(
+          gte(auditLogEntries.eventTimestamp, startDate),
+          lte(auditLogEntries.eventTimestamp, endDate)
+        )
       )
-      .orderBy((al) => al.id);
+      .orderBy(auditLogEntries.id);
 
     let previousHash: string | null = null;
     const errors: string[] = [];
@@ -355,10 +365,13 @@ class AuditService {
     const entries = await db
       .select()
       .from(auditLogEntries)
-      .where((al, { and, gte, lte }) =>
-        and(gte(al.eventTimestamp, startOfDay), lte(al.eventTimestamp, endOfDay))
+      .where(
+        and(
+          gte(auditLogEntries.eventTimestamp, startOfDay),
+          lte(auditLogEntries.eventTimestamp, endOfDay)
+        )
       )
-      .orderBy((al) => al.id);
+      .orderBy(auditLogEntries.id);
 
     if (entries.length === 0) return;
 
@@ -425,7 +438,7 @@ export function createAuditMiddleware() {
     input?: any;
   }) => {
     const startTime = Date.now();
-    const auditCtx = AuditContext ? AuditContext : {
+    const auditCtx: AuditContext = {
       ipAddress: ctx.req?.headers?.get?.("x-forwarded-for") || "unknown",
       userAgent: ctx.req?.headers?.get?.("user-agent"),
     };

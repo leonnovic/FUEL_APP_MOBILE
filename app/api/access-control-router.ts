@@ -6,7 +6,7 @@ import { z } from "zod";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { accessControl, PERMISSIONS, DEFAULT_ROLES } from "./lib/access-control";
 import { auditService } from "./lib/audit-service";
-import { getDb } from "./queries/connection";
+import { getDb } from "@db/connection";
 import { 
   permissions, 
   roles, 
@@ -20,7 +20,16 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-const t = initTRPC.context<any>().create();
+const db = getDb();
+const t = initTRPC.context<TrpcContext>().create();
+
+// ─── Context Type ───
+interface TrpcContext {
+  user?: { id: number; name?: string; email?: string };
+  teamId?: number;
+  stationId?: number;
+  req?: Request;
+}
 
 // ─── Permission Check Middleware ───
 
@@ -103,10 +112,8 @@ export const accessControlRouter = t.router({
   getRole: t.procedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
-      const role = await db.query.roles.findFirst({
-        where: (r, { eq }) => eq(r.id, input.id),
-      });
-      return role;
+      const role = await db.select().from(roles).where(eq(roles.id, input.id)).limit(1);
+      return role[0] || null;
     }),
 
   // Create role (requires ROLES_CREATE permission)
@@ -171,9 +178,7 @@ export const accessControlRouter = t.router({
       const { id, ...updates } = input;
       
       // Get previous value for audit
-      const previous = await db.query.roles.findFirst({
-        where: (r, { eq }) => eq(r.id, id),
-      });
+      const previous = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
 
       if (updates.permissions) {
         updates.permissions = JSON.stringify(updates.permissions) as any;
@@ -251,10 +256,8 @@ export const accessControlRouter = t.router({
       // Get role details for each member
       const enriched = await Promise.all(
         members.map(async (member) => {
-          const role = await db.query.roles.findFirst({
-            where: (r, { eq }) => eq(r.id, member.roleId),
-          });
-          return { ...member, role };
+          const roleResult = await db.select().from(roles).where(eq(roles.id, member.roleId)).limit(1);
+          return { ...member, role: roleResult[0] || null };
         })
       );
 
@@ -324,9 +327,7 @@ export const accessControlRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const previous = await db.query.teamMembers.findFirst({
-        where: (tm, { eq }) => eq(tm.id, input.memberId),
-      });
+      const previous = await db.select().from(teamMembers).where(eq(teamMembers.id, input.memberId)).limit(1);
 
       await db
         .update(teamMembers)
@@ -426,23 +427,24 @@ export const accessControlRouter = t.router({
   acceptInvitation: t.procedure
     .input(z.object({ token: z.string() }))
     .mutation(async ({ input }) => {
-      const invitation = await db.query.teamInvitations.findFirst({
-        where: (ti, { and, eq }) =>
-          and(eq(ti.token, input.token), eq(ti.status, "pending")),
-      });
+      const invitation = await db.select().from(teamInvitations)
+        .where(and(eq(teamInvitations.token, input.token), eq(teamInvitations.status, "pending")))
+        .limit(1);
 
-      if (!invitation) {
+      const inv = invitation[0];
+      
+      if (!inv) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Invitation not found or expired",
         });
       }
 
-      if (invitation.expiresAt < new Date()) {
+      if (inv.expiresAt < new Date()) {
         await db
           .update(teamInvitations)
           .set({ status: "expired" })
-          .where(eq(teamInvitations.id, invitation.id));
+          .where(eq(teamInvitations.id, inv.id));
 
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -452,11 +454,11 @@ export const accessControlRouter = t.router({
 
       // Create team membership
       await db.insert(teamMembers).values({
-        teamId: invitation.teamId,
+        teamId: inv.teamId,
         userId: 0, // Would come from authenticated user
-        roleId: invitation.roleId,
+        roleId: inv.roleId,
         status: "active",
-        invitedBy: invitation.invitedBy,
+        invitedBy: inv.invitedBy,
         joinedAt: new Date(),
       });
 
@@ -464,7 +466,7 @@ export const accessControlRouter = t.router({
       await db
         .update(teamInvitations)
         .set({ status: "accepted", acceptedAt: new Date() })
-        .where(eq(teamInvitations.id, invitation.id));
+        .where(eq(teamInvitations.id, inv.id));
 
       return { success: true };
     }),
