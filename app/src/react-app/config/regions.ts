@@ -132,7 +132,7 @@ const PHONE_CODES: Record<string, string> = {
 };
 
 // ─── 8 core countries with detailed configs ───
-const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
+export const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
   kenya: {
     country: 'Kenya', countryCode: 'KE', currency: 'KES', currencySymbol: 'KSh',
     taxAuthority: 'Kenya Revenue Authority', taxAuthorityShort: 'KRA', vatRate: 0.16, vatName: 'VAT',

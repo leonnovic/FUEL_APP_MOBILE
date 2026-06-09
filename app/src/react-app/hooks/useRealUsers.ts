@@ -95,15 +95,15 @@ export function useRealUsers() {
   // Mutations for user management
   const updateRoleMutation = trpc.userMgmt.updateRole.useMutation({
     onSuccess: () => {
-      queryClient.invalidate({ queryKey: ['userMgmt.list'] });
-      queryClient.invalidate({ queryKey: ['userMgmt.stats'] });
+      queryClient.invalidateQueries({ queryKey: ['userMgmt.list'] });
+      queryClient.invalidateQueries({ queryKey: ['userMgmt.stats'] });
     },
   });
 
   const updateStatusMutation = trpc.userMgmt.updateStatus.useMutation({
     onSuccess: () => {
-      queryClient.invalidate({ queryKey: ['userMgmt.list'] });
-      queryClient.invalidate({ queryKey: ['userMgmt.stats'] });
+      queryClient.invalidateQueries({ queryKey: ['userMgmt.list'] });
+      queryClient.invalidateQueries({ queryKey: ['userMgmt.stats'] });
     },
   });
 
@@ -140,8 +140,8 @@ export function useRealUsers() {
   }, [updateStatusMutation, localUsers]);
 
   const refreshUsers = useCallback(() => {
-    queryClient.invalidate({ queryKey: ['userMgmt.list'] });
-    queryClient.invalidate({ queryKey: ['userMgmt.stats'] });
+    queryClient.invalidateQueries({ queryKey: ['userMgmt.list'] });
+    queryClient.invalidateQueries({ queryKey: ['userMgmt.stats'] });
     try {
       const stored = localStorage.getItem('fuelpro_users_v3');
       if (stored) setLocalUsers(JSON.parse(stored));

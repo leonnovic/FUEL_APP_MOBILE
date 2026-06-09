@@ -74,10 +74,14 @@ export interface CommunicationConfig {
   countryCode: string;
   emergencyNumbers: { label: string; number: string }[];
   localCarriers: string[];
+  defaultMessage?: string;
+  whatsappEnabled?: boolean;
 }
 
 export interface UnitMeasures {
   fuelVolume: string; // "liters", "gallons", "litres"
+  volume?: string; // alias for fuelVolume
+  currency?: string; // "KES", "USD"
   distance: string; // "km", "miles"
   weight: string; // "kg", "lbs"
   tankCapacity: string;
@@ -1343,40 +1347,98 @@ function generateCountryProfile(code: string, name: string, currency: string): C
   return {
     id: code.toUpperCase(),
     name,
+    shortName: code.toUpperCase(),
     flag: getFlagEmoji(code),
-    currency: { code: currency, name: currency, symbol: currency },
+    region: 'Africa',
+    languages: ['en'],
+    defaultLanguage: 'en',
+    currency: { 
+      code: currency, 
+      symbol: currency, 
+      name: currency,
+      isoCode: currency,
+      subunit: 'cents',
+      exchangeRateToUSD: 1
+    },
     timezone: TIMEZONES[code.toUpperCase()] || 'UTC',
-    languages: [{ code: 'en', name: 'English' }],
     dateFormat: 'DD/MM/YYYY',
-    phoneCode: PHONE_CODES[code.toUpperCase()] || '',
-    vat: { name: 'VAT', rate: TAX_RATES[code.toUpperCase()] || 0 },
-    fuel: {
-      types: [
-        { id: 'petrol', name: 'Petrol', label: 'Petrol', color: '#FF6B35' },
-        { id: 'diesel', name: 'Diesel', label: 'Diesel', color: '#1E3A8A' },
-        { id: 'kerosene', name: 'Kerosene', label: 'Kerosene', color: '#059669' },
-      ],
-      units: 'Litres',
+    timeFormat: '24h',
+    numberFormat: '1,000.00',
+    mobileMoney: [],
+    revenueAuthority: {
+      name: 'Revenue Authority',
+      shortName: 'RA',
+      pinLabel: 'Tax ID',
+      website: '',
+      vatRate: TAX_RATES[code.toUpperCase()] || 0,
+      vatName: 'VAT',
+      exciseDuty: 0,
+      withholdingTax: 0,
+      roadMaintenanceLevy: 0,
+      petroleumDevelopmentLevy: 0,
+      regulatoryLevy: 0,
+      customsDuty: 0,
+      supportPhone: '',
+      supportEmail: '',
+      etimsRequired: false,
+      electronicInvoiceRequired: false,
+      fiscalDeviceRequired: false,
+      monthlyReturnDue: '20th',
+      annualReturnDue: '31st March',
+      eFilingPortal: '',
     },
-    receipt: {
-      businessName: `${name} Fuel Station`,
-      businessReg: '',
-      pin: '',
-      vatNumber: '',
-      email: '',
-      phone: '',
-      footer: `Thank you for your business!`,
+    payroll: {
+      payeThreshold: 24000,
+      payeRates: [{ from: 0, to: 24000, rate: 0 }, { from: 24001, to: 32333, rate: 0.25 }, { from: 32334, to: 500000, rate: 0.3 }, { from: 500001, to: 800000, rate: 0.325 }, { from: 800001, to: Infinity, rate: 0.35 }],
+      nssfRequired: true,
+      nssfLabel: 'NSSF',
+      nssfEmployeeRate: 0.06,
+      nssfEmployerRate: 0.06,
+      nhifRequired: true,
+      nhifLabel: 'NHIF',
+      nhifRates: [{ minSalary: 0, maxSalary: 5999, amount: 150 }, { minSalary: 6000, maxSalary: 7999, amount: 300 }, { minSalary: 8000, maxSalary: 11999, amount: 400 }, { minSalary: 12000, maxSalary: 14999, amount: 500 }, { minSalary: 15000, maxSalary: 19999, amount: 600 }, { minSalary: 20000, maxSalary: 24999, amount: 750 }, { minSalary: 25000, maxSalary: 29999, amount: 850 }, { minSalary: 30000, maxSalary: 34999, amount: 900 }, { minSalary: 35000, maxSalary: 39999, amount: 950 }, { minSalary: 40000, maxSalary: 44999, amount: 1000 }, { minSalary: 45000, maxSalary: 49999, amount: 1100 }, { minSalary: 50000, maxSalary: 59999, amount: 1200 }, { minSalary: 60000, maxSalary: 69999, amount: 1300 }, { minSalary: 70000, maxSalary: 79999, amount: 1400 }, { minSalary: 80000, maxSalary: 89999, amount: 1500 }, { minSalary: 90000, maxSalary: 99999, amount: 1600 }, { minSalary: 100000, maxSalary: Infinity, amount: 1700 }],
+      housingLevy: false,
+      housingLevyRate: 0,
+      pensionFund: true,
+      pensionRate: 0.05,
+      statutoryHolidays: ['01-01', '04-10', '04-11', '05-01', '06-01', '10-10', '10-20', '12-12', '12-25', '12-26'],
+      minimumWage: 15000,
+      workingHoursPerWeek: 45,
+      overtimeRate: 1.5,
+      severancePayRequired: true,
+      severanceFormula: '12 days per year of service',
     },
-    compliance: {
-      taxAuthority: `${name} Tax Authority`,
-      taxAuthShort: `${code}TA`,
-      taxAuthWebsite: '',
-      receiptFormat: `${code}-{station}-{date}-{sequence}`,
-      etrRequired: (TAX_RATES[code.toUpperCase()] || 0) > 0,
-      etrSystem: `${code} E-Receipt`,
-      licenseBody: `${code}ERA`,
+    paymentMethods: [],
+    communication: { 
+      smsGateway: '', 
+      smsShortcode: '', 
+      whatsappFormat: '', 
+      phoneFormat: '', 
+      countryCode: code.toUpperCase(), 
+      emergencyNumbers: [], 
+      localCarriers: [], 
+      defaultMessage: '', 
+      whatsappEnabled: false 
+    },
+    units: { 
+      fuelVolume: 'litres', 
+      volume: 'litres', 
+      currency: currency, 
+      distance: 'km', 
+      weight: 'kg', 
+      tankCapacity: 'litres',
+      fuelEfficiency: 'km/L'
+    },
+    newsSources: [],
+    complianceDocuments: [],
+    fuelRegulations: {
+      priceControlled: false,
+      priceSettingBody: 'Ministry of Energy',
+      priceReviewFrequency: 'monthly',
+      licensingRequired: false,
+      licenseBody: 'Energy Regulator',
       environmentalLevy: 0,
-      qualityStandardsBody: '',
+      qualityStandardsBody: 'Standards Bureau',
     },
   };
 }

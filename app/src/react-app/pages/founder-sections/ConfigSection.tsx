@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Settings, Globe, Clock, DollarSign, Save, RotateCcw, CheckCircle2, ChevronDown } from 'lucide-react';
 import SearchableCountryDropdown from '@/react-app/components/SearchableCountryDropdown';
 import { ALL_COUNTRIES } from '@/react-app/lib/world-country-utils';
@@ -48,7 +47,8 @@ const CONFIG_KEY = 'fuelpro_site_config';
 
 /** Get all IANA timezones grouped by continent */
 function getGroupedTimezones(): Record<string, string[]> {
-  const all = Intl.supportedValuesOf?.('timeZone') || [
+  const intlExtended = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+  const all = intlExtended.supportedValuesOf?.('timeZone') || [
     'UTC', 'Africa/Nairobi', 'Africa/Kampala', 'Africa/Dar_es_Salaam', 'Africa/Lagos', 'Africa/Johannesburg',
     'Africa/Accra', 'Africa/Kigali', 'America/New_York', 'America/Los_Angeles', 'America/Chicago',
     'America/Toronto', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',

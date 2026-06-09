@@ -196,12 +196,12 @@ function RecentActivity({ getRecentActivity }: {
 
 // ─── System Health Component ───
 function SystemHealth({ lastUpdated }: { lastUpdated: Date | null }) {
-  const checks = [
-    { name: 'Database', status: 'healthy' as const, detail: 'localStorage operational' },
-    { name: 'API Keys', status: 'healthy' as const, detail: 'Configured' },
-    { name: 'M-PESA', status: 'warning' as const, detail: 'Not configured' },
-    { name: 'SMS Gateway', status: 'warning' as const, detail: 'Not configured' },
-    { name: 'Sync', status: 'healthy' as const, detail: 'Real-time sync active' },
+  const checks: Array<{ name: string; status: 'healthy' | 'warning' | 'error'; detail: string }> = [
+    { name: 'Database', status: 'healthy', detail: 'localStorage operational' },
+    { name: 'API Keys', status: 'healthy', detail: 'Configured' },
+    { name: 'M-PESA', status: 'warning', detail: 'Not configured' },
+    { name: 'SMS Gateway', status: 'warning', detail: 'Not configured' },
+    { name: 'Sync', status: 'healthy', detail: 'Real-time sync active' },
   ];
 
   return (

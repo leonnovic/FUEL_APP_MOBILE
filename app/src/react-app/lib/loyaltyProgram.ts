@@ -305,15 +305,3 @@ export function calculateDiscount(
   // Free item
   return 0;
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// EXPORT ALL
-// ═══════════════════════════════════════════════════════════════════
-
-export type {
-  LoyaltyCustomer,
-  StationReward,
-  LoyaltyTransaction,
-  StationLoyaltyConfig,
-  LoyaltyStats
-};

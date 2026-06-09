@@ -323,8 +323,10 @@ export default function DocumentCenter() {
         <input
           ref={folderInputRef}
           type="file"
-          webkitdirectory="true"
-          directory="true"
+          // @ts-ignore - webkitdirectory is not in TypeScript types but works in browsers
+          webkitdirectory=""
+          // @ts-ignore
+          directory=""
           multiple
           onChange={handleFolderSelect}
           style={{ display: 'none' }}

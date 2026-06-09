@@ -7,7 +7,7 @@ const SYNC_STORE = 'sync_queue';
 const SYNC_META = 'sync_meta';
 const BROADCAST_KEY = 'fuelpro_broadcast';
 
-interface SyncItem {
+export interface SyncItem {
   id: string;
   collection: string;
   operation: 'create' | 'update' | 'delete';

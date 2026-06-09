@@ -643,7 +643,7 @@ export default function FounderAccess() {
                 {[
                   { label: 'Users', value: users.length, icon: Users, color: 'text-blue-400' },
                   { label: 'Stations', value: effectiveStationCount, icon: Building2, color: 'text-green-400' },
-                  { label: 'Revenue', value: `KES ${effectiveRevenue.toLocaleString()}`, icon: 3, color: 'text-amber-400' },
+                  { label: 'Revenue', value: `KES ${effectiveRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-amber-400' },
                   { label: 'Secrets', value: secrets.length, icon: Key, color: 'text-purple-400' },
                 ].map(s => (
                   <div key={s.label} className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">

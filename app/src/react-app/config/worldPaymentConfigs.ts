@@ -12,6 +12,7 @@ export interface CountryPaymentConfig {
   countryCode: string;
   countryName: string;
   defaultCurrency: string;
+  flag?: string;
   paymentMethods: PaymentMethod[];
 }
 

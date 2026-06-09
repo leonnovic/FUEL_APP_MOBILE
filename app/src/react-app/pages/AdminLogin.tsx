@@ -45,18 +45,11 @@ export default function AdminLogin() {
       });
 
       // Log successful login
-      auditLogger.login({
-        id: 'temp',
-        email,
-        name: email.split('@')[0],
-        role: 'admin',
-        permissions: Object.values(PERMISSIONS),
-        stationIds: ['*'],
-        isActive: true,
-        lastLogin: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }, true);
+      auditLogger.log({
+        action: 'LOGIN',
+        userId: email,
+        details: { email, role: 'admin' }
+      } as any);
 
       navigate('/admin/dashboard');
     } catch (e) {
@@ -69,18 +62,11 @@ export default function AdminLogin() {
       }
       
       // Log failed login
-      auditLogger.login({
-        id: 'temp',
-        email,
-        name: email.split('@')[0],
-        role: 'admin',
-        permissions: [],
-        stationIds: [],
-        isActive: false,
-        lastLogin: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }, false);
+      auditLogger.log({
+        action: 'LOGIN_FAILED',
+        userId: email,
+        details: { email, error: errorMessage }
+      } as any);
     } finally {
       setIsSubmitting(false);
     }
@@ -239,5 +225,3 @@ export default function AdminLogin() {
     </div>
   );
 }
-
-export default AdminLogin;

@@ -131,7 +131,7 @@ export function createScopedQuery(table: any, context: TenantContext) {
   return {
     // Find all records for this tenant
     findAll: async (filters?: Partial<QueryFilter>) => {
-      let query = db.select().from(table);
+      let query: any = db.select().from(table);
       
       // Add tenant filter
       if (table.isolationKey) {

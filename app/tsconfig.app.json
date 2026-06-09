@@ -34,7 +34,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": false,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ]
   },
   "include": [

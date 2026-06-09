@@ -50,7 +50,7 @@ const requirePermission = (permission: string) =>
     }
 
     const hasPermission = await accessControl.hasPermission(
-      ctx.user.id,
+      ctx.user!.id,
       permission,
       { teamId: ctx.teamId }
     );
@@ -59,12 +59,12 @@ const requirePermission = (permission: string) =>
       // Log the denied access
       await auditService.logEvent(
         {
-          userId: ctx.user.id,
+          userId: ctx.user!.id,
           userName: ctx.user.name,
           userEmail: ctx.user.email,
           teamId: ctx.teamId,
-          ipAddress: ctx.req?.headers?.get?.("x-forwarded-for"),
-          userAgent: ctx.req?.headers?.get?.("user-agent"),
+          ipAddress: ctx.req?.headers?.get?.("x-forwarded-for") ?? undefined,
+          userAgent: ctx.req?.headers?.get?.("user-agent") ?? undefined,
         },
         {
           eventType: "authorization",
@@ -95,7 +95,7 @@ export const accessControlRouter = t.router({
       return [];
     }
 
-    return accessControl.getUserPermissions(ctx.user.id, ctx.teamId);
+    return accessControl.getUserPermissions(ctx.user!.id, ctx.teamId);
   }),
 
   // Get all available permissions
@@ -142,11 +142,11 @@ export const accessControlRouter = t.router({
         canManageUsers: input.canManageUsers || false,
         canManageRoles: input.canManageRoles || false,
         canViewAuditLogs: input.canViewAuditLogs || false,
-        createdBy: ctx.user.id,
+        createdBy: ctx.user!.id,
       });
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "create",
@@ -181,13 +181,13 @@ export const accessControlRouter = t.router({
       const previous = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
 
       if (updates.permissions) {
-        updates.permissions = JSON.stringify(updates.permissions) as any;
+        (updates as unknown as { permissions?: string }).permissions = JSON.stringify(updates.permissions);
       }
 
-      await db.update(roles).set(updates).where(eq(roles.id, id));
+      await db.update(roles).set(updates as any).where(eq(roles.id, id));
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "update",
@@ -227,7 +227,7 @@ export const accessControlRouter = t.router({
         .where(eq(roles.id, input.id));
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "delete",
@@ -303,7 +303,7 @@ export const accessControlRouter = t.router({
       });
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "add_member",
@@ -335,13 +335,13 @@ export const accessControlRouter = t.router({
         .where(eq(teamMembers.id, input.memberId));
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "update_role",
           resourceType: "team_member",
           resourceId: input.memberId.toString(),
-          previousValue: { roleId: previous?.roleId },
+          previousValue: { roleId: previous?.[0]?.roleId },
           newValue: { roleId: input.roleId },
           isComplianceRelevant: true,
         }
@@ -368,7 +368,7 @@ export const accessControlRouter = t.router({
         .where(eq(teamMembers.id, input.memberId));
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: targetTeamId },
+        { userId: ctx.user!.id, teamId: targetTeamId },
         {
           eventType: "data_modification",
           action: "remove_member",
@@ -401,7 +401,7 @@ export const accessControlRouter = t.router({
         teamId: input.teamId,
         email: input.email,
         roleId: input.roleId,
-        invitedBy: ctx.user.id,
+        invitedBy: ctx.user!.id,
         token,
         status: "pending",
         expiresAt,
@@ -410,7 +410,7 @@ export const accessControlRouter = t.router({
       // In production, send email here
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "invite_user",
@@ -492,7 +492,7 @@ export const accessControlRouter = t.router({
     .input(
       z.object({
         resourceType: z.string(),
-        filterConfig: z.record(z.any()),
+        filterConfig: z.record(z.string(), z.any()),
         roleId: z.number().optional(),
         userId: z.number().optional(),
         description: z.string().optional(),
@@ -503,13 +503,13 @@ export const accessControlRouter = t.router({
         teamId: ctx.teamId!,
         resourceType: input.resourceType,
         filterConfig: JSON.stringify(input.filterConfig),
-        roleId: input.roleId || 0,
+        roleId: input.roleId ?? 0,
         userId: input.userId,
         description: input.description,
-      });
+      } as any);
 
       await auditService.logEvent(
-        { userId: ctx.user.id, teamId: ctx.teamId },
+        { userId: ctx.user!.id, teamId: ctx.teamId },
         {
           eventType: "data_modification",
           action: "create",

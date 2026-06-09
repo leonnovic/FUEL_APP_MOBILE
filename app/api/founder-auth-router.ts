@@ -9,6 +9,7 @@ import { founderOnlyQuery, founderAdminQuery, generateFounderToken, validateFoun
 import { founderSessions, users } from "@db/schema";
 import { getDb } from "@db/connection";
 import { desc, eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 // ─── Credential Store ───
 // Default credentials (configurable via localStorage on frontend)
@@ -43,14 +44,15 @@ export const founderAuthRouter = createRouter({
         
         if (existingUser[0]) {
           userId = existingUser[0].id;
-          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+          await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, userId));
         } else {
           const [{ insertId }] = await db.insert(users).values({
+            unionId: "founder-" + nanoid(16),
             email: "founder@system.local",
             name: "Founder",
             passwordHash: "system-managed",
-            role: "founder",
-          });
+            role: "admin",
+          } as any);
           userId = insertId as number;
         }
         

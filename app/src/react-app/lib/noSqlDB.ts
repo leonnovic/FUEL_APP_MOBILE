@@ -3,6 +3,8 @@
  * Client-side document store with offline-first capability
  */
 
+import React, { useState, useEffect } from 'react';
+
 interface Document<T = any> {
   id: string;
   _rev?: string;

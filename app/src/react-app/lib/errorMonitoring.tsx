@@ -27,14 +27,12 @@ export function initErrorMonitoring() {
   }
 
   // Dynamic import Sentry
-  import('sentry-react').then(({ init, BrowserTracing }) => {
-    init({
+  import('@sentry/react').then((Sentry) => {
+    Sentry.init({
       dsn: SENTRY_DSN,
-      integrations: [
-        new BrowserTracing({
-          tracePropagationTargets: ['localhost', /^\//],
-        }),
-      ],
+      integrations: (integrations: any[]) => {
+        return integrations.filter(i => !['BrowserTracing'].includes(i.name));
+      },
       tracesSampleRate: 0.1,
       replaysSessionSampleRate: 0.1,
       replaysOnErrorSampleRate: 1.0,
@@ -42,7 +40,7 @@ export function initErrorMonitoring() {
       release: 'fuelpro@1.0.0',
       beforeSend(event) {
         // Filter out non-actionable errors
-        if (event.exception?.values?.some(e => 
+        if (event.exception?.values?.some((e: any) => 
           e.type === 'ResizeObserver loop' ||
           e.type === 'Non-Error promise rejection'
         )) {
@@ -73,8 +71,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     // Report to Sentry
     if (SENTRY_DSN) {
-      import('sentry-react').then(({ captureException }) => {
-        captureException(error, { extra: errorInfo });
+      import('@sentry/react').then((Sentry) => {
+        Sentry.captureException(error, { extra: errorInfo as any });
       }).catch(() => {});
     }
   }
@@ -185,27 +183,27 @@ export const analytics = {
 };
 
 // Performance monitoring
-export const performance = {
+export const perfMonitor = {
   mark(name: string) {
-    if (typeof performance !== 'undefined') {
-      performance.mark(name);
+    if (typeof window !== 'undefined' && window.performance) {
+      window.performance.mark(name);
     }
   },
 
   measure(name: string, startMark: string, endMark?: string) {
-    if (typeof performance !== 'undefined') {
+    if (typeof window !== 'undefined' && window.performance) {
       if (endMark) {
-        performance.measure(name, startMark, endMark);
+        window.performance.measure(name, startMark, endMark);
       } else {
-        performance.measure(name, startMark);
+        window.performance.measure(name, startMark);
       }
     }
   },
 
   getMetrics() {
-    if (typeof performance === 'undefined') return null;
+    if (typeof window === 'undefined' || !window.performance) return null;
     
-    const entries = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+    const entries = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
     if (!entries) return null;
 
     return {
@@ -222,7 +220,7 @@ export const performance = {
 
 // React hook for analytics
 export function useAnalytics() {
-  return { analytics, performance };
+  return { analytics, perfMonitor };
 }
 
 import React from 'react';

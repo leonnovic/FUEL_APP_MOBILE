@@ -334,7 +334,7 @@ function UsersSection() {
                   value={u.role} 
                   onChange={async (e) => {
                     if (confirm(`Change ${u.name || u.email}'s role to ${e.target.value}?`)) {
-                      const result = await updateRole(u.id, e.target.value);
+                      const result = await updateRole(u.id, e.target.value as 'user' | 'admin');
                       toast(result.success ? 'Role updated' : 'Failed to update role');
                     }
                   }}
@@ -348,7 +348,7 @@ function UsersSection() {
                   value={u.status} 
                   onChange={async (e) => {
                     if (confirm(`Change ${u.name || u.email}'s status to ${e.target.value}?`)) {
-                      const result = await updateStatus(u.id, e.target.value);
+                      const result = await updateStatus(u.id, e.target.value as 'active' | 'suspended' | 'banned' | 'pending');
                       toast(result.success ? 'Status updated' : 'Failed to update status');
                     }
                   }}
@@ -2128,7 +2128,7 @@ function renderSection(id: SectionId) {
     case 'theme': return <ThemeSection />;
     case 'notifications': return <NotificationsSection />;
     case 'environment': return <EnvironmentSection />;
-    case 'webhooks': return <WebhookSection />;
+    case 'webhooks': return <WebhooksSection />;
     case 'cache': return <CacheSection />;
     case 'trialmgr': return <TrialManagerSection />;
     case 'companyprofile': return <CompanyProfileSection />;

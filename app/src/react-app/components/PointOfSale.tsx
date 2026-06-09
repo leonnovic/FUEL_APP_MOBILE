@@ -64,7 +64,7 @@ export default function PointOfSale() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // ─── Loyalty Integration ───
-  const stationId = location.currentStation?.id || 'default';
+  const stationId = location.currentLocation?.stationId || 'default';
   const { customers, earnPoints, findCustomerByPhone, findCustomerByCard, config: loyaltyConfig } = useLoyalty(stationId);
   const [loyaltyCustomer, setLoyaltyCustomer] = useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
@@ -108,7 +108,7 @@ export default function PointOfSale() {
         transaction.total,
         totalLiters,
         fuelType,
-        state.user?.name || 'POS'
+        transaction.cashier || 'POS'
       );
       
       // Refresh customer data

@@ -8,22 +8,33 @@ import { getCountryByCode } from '@/react-app/lib/world-country-utils';
 
 /** Get the first available country profile as universal fallback */
 function getUniversalFallback(): CountryProfile {
-  return COUNTRY_LIST[0] || getCountryById('US') || {
+  const fallback = getCountryById('US') || COUNTRY_LIST[0];
+  if (fallback) return fallback;
+  
+  // Minimal fallback that satisfies the type
+  return {
     id: 'US', name: 'United States', shortName: 'USA',
-    currency: { code: 'USD', symbol: '$', name: 'US Dollar' },
-    timezone: 'America/New_York', flag: '🇺🇸',
-    phone: { prefix: '+1' }, vatRate: 0,
-    revenueAuthority: { name: 'IRS', shortName: 'IRS', website: 'https://irs.gov', vatRate: 0, exciseDuty: 0, roadMaintenanceLevy: 0, petroleumDevelopmentLevy: 0, regulatoryLevy: 0, monthlyReturnDue: '15th', eFilingPortal: 'https://irs.gov' },
-    payroll: { nssfLabel: 'Social Security', nssfEmployeeRate: 0.062, nssfEmployerRate: 0.062, payeThreshold: 0, payeRates: [], nhifLabel: 'Health Insurance', nhifRates: [], minimumWage: 7.25, housingLevy: false, housingLevyRate: 0 },
-    paymentMethods: [{ id: 'card', name: 'Card', type: 'card', provider: 'Bank', chargeRate: 0.015 }, { id: 'cash', name: 'Cash', type: 'cash', provider: 'Cash', chargeRate: 0 }],
-    mobileMoney: [],
-    fuelRegulations: { priceSettingBody: 'Department of Energy', licenseBody: 'State Authority', priceReviewFrequency: 'Monthly', requiresEfd: false, requiresEtr: false, requiresEtims: false, fuelTypes: ['Petrol', 'Diesel'], requiresGhsCompliance: false, pumpCalibrationRequired: false },
-    units: { volume: 'gallons', currency: 'USD', distance: 'miles', weight: 'lbs' },
+    flag: '🇺🇸',
+    region: 'Americas',
+    languages: ['en'],
     defaultLanguage: 'en',
-    complianceDocuments: [],
-    communication: { defaultMessage: '', whatsappEnabled: false, smsEnabled: false },
+    currency: { code: 'USD', symbol: '$', name: 'US Dollar', isoCode: 'USD', subunit: 'cents', exchangeRateToUSD: 1 },
+    timezone: 'America/New_York',
+    dateFormat: 'MM/DD/YYYY',
+    timeFormat: '12h',
+    numberFormat: '1,000.00',
+    phone: { prefix: '+1' },
+    vatRate: 0,
+    mobileMoney: [],
+    revenueAuthority: { name: 'IRS', shortName: 'IRS', website: 'https://irs.gov', vatRate: 0, vatName: 'Tax', exciseDuty: 0, withholdingTax: 0, roadMaintenanceLevy: 0, petroleumDevelopmentLevy: 0, regulatoryLevy: 0, customsDuty: 0, supportPhone: '', supportEmail: '', etimsRequired: false, electronicInvoiceRequired: false, fiscalDeviceRequired: false, monthlyReturnDue: '15th', annualReturnDue: 'April 15', eFilingPortal: 'https://irs.gov' },
+    payroll: { payeThreshold: 0, payeRates: [], nssfRequired: false, nssfLabel: 'Social Security', nssfEmployeeRate: 0.062, nssfEmployerRate: 0.062, nhifRequired: false, nhifLabel: 'Health Insurance', nhifRates: [], housingLevy: false, housingLevyRate: 0, pensionFund: false, pensionRate: 0, statutoryHolidays: [], minimumWage: 7.25, workingHoursPerWeek: 40, overtimeRate: 1.5, severancePayRequired: false, severanceFormula: '' },
+    paymentMethods: [{ id: 'card', name: 'Card', type: 'card', provider: 'Bank', chargeRate: 0.015 }, { id: 'cash', name: 'Cash', type: 'cash', provider: 'Cash', chargeRate: 0 }],
+    communication: { smsGateway: '', smsShortcode: '', whatsappFormat: '', phoneFormat: '', countryCode: 'US', emergencyNumbers: [], localCarriers: [] },
+    units: { fuelVolume: 'gallons', distance: 'miles', weight: 'lbs', tankCapacity: 'gallons', fuelEfficiency: 'mpg' },
+    fuelRegulations: { priceSettingBody: 'Department of Energy', licenseBody: 'State Authority', priceReviewFrequency: 'Monthly', requiresEfd: false, requiresEtr: false, requiresEtims: false, fuelTypes: ['Petrol', 'Diesel'], requiresGhsCompliance: false, pumpCalibrationRequired: false },
     newsSources: [],
-  } as CountryProfile;
+    complianceDocuments: [],
+  } as unknown as CountryProfile;
 }
 
 /** Get user's detected country code from any source */
@@ -153,8 +164,8 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
     saveStationCountries(stationCountries);
   }, [stationCountries]);
 
-  const getCountry = useCallback((code: string) => {
-    return getCountryById(code) || getCountryByCode(code.toUpperCase()) || getUniversalFallback();
+  const getCountry = useCallback((code: string): CountryProfile => {
+    return getCountryById(code) || (getCountryByCode(code.toUpperCase()) as unknown as CountryProfile) || getUniversalFallback();
   }, []);
 
   const getStationLocation = useCallback((sid: string) => {
@@ -196,7 +207,7 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
 
   const setStationCountry = useCallback((sid: string, countryCode: string) => {
     const upperCode = countryCode.toUpperCase();
-    const country = getCountryById(upperCode) || getCountryByCode(upperCode);
+    const country = getCountryById(upperCode) as CountryProfile | undefined;
     setStationCountries(prev => ({
       ...prev,
       [sid]: {
@@ -324,7 +335,7 @@ export function LocationProvider({ children, stationId }: { children: React.Reac
     } catch {
       // Fallback: try country detection with approximate coords
       const resolved = resolveUserCountry();
-      const country = getCountryById(resolved) || getCountryByCode(resolved);
+      const country = getCountryById(resolved) || (getCountryByCode(resolved) as unknown as { name: string } | undefined);
       if (country) {
         // Use capital city approximate coordinates if available
         setPreciseLocation({ lat: 0, lng: 0, accuracy: 100000, address: country.name });

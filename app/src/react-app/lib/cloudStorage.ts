@@ -22,7 +22,7 @@
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════
 
-interface CloudConfig {
+export interface CloudConfig {
   provider: 'supabase' | 'firebase' | 'seafile' | 'custom';
   apiEndpoint?: string;
   apiKey?: string;
@@ -31,6 +31,16 @@ interface CloudConfig {
     username?: string;
     password?: string;
   };
+}
+
+export interface SyncStatus {
+  enabled?: boolean;
+  isConnected?: boolean;
+  isOnline?: boolean;
+  lastSync: number | null;
+  pendingChanges: number;
+  error?: string | null;
+  provider?: string;
 }
 
 const CLOUD_CONFIG_KEY = 'fuelpro_cloud_config';
@@ -324,7 +334,7 @@ export const UpstashCache = {
 
   async getSession<T = Record<string, any>>(userId: string): Promise<T | null> {
     const key = `session:${userId}`;
-    return this.get<T>(key);
+    return (this as typeof UpstashCache).get<T>(key);
   },
 
   async invalidateSession(userId: string): Promise<boolean> {
@@ -338,7 +348,7 @@ export const UpstashCache = {
   },
 
   async getCachedFuelPrices(): Promise<Record<string, number> | null> {
-    return this.get<Record<string, number>>('fuel_prices:v1');
+    return (this as typeof UpstashCache).get<Record<string, number>>('fuel_prices:v1');
   },
 
   // Cache station data
@@ -347,7 +357,7 @@ export const UpstashCache = {
   },
 
   async getCachedStations(): Promise<any[] | null> {
-    return this.get<any[]>('stations:v1');
+    return (this as typeof UpstashCache).get<any[]>('stations:v1');
   },
 };
 
@@ -1046,14 +1056,6 @@ export class FuelProCloudSync {
     const status = this.getStatus();
     this.listeners.forEach(cb => cb(status));
   }
-}
-
-interface SyncStatus {
-  enabled: boolean;
-  isOnline: boolean;
-  lastSync: number;
-  pendingChanges: number;
-  provider: string;
 }
 
 // Device ID helper
