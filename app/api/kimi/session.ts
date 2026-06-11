@@ -5,7 +5,7 @@ import type { SessionPayload } from "./types";
 const JWT_ALG = "HS256";
 
 export async function signSessionToken(
-  payload: SessionPayload,
+  payload: SessionPayload
 ): Promise<string> {
   const secret = new TextEncoder().encode(env.appSecret);
   return new jose.SignJWT(payload)
@@ -16,7 +16,7 @@ export async function signSessionToken(
 }
 
 export async function verifySessionToken(
-  token: string,
+  token: string
 ): Promise<SessionPayload | null> {
   if (!token) {
     console.warn("[session] No token provided for verification.");

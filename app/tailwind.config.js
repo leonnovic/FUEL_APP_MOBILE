@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
+  darkMode: "class",
   content: [
     "./index.html",
     "./src/react-app/**/*.{js,ts,jsx,tsx}",
@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Poppins', 'sans-serif'],
-        serif: ['Playfair Display', 'serif'],
+        sans: ["Poppins", "sans-serif"],
+        serif: ["Playfair Display", "serif"],
       },
     },
   },

@@ -1,6 +1,6 @@
 /**
  * Data Isolation Service - Architecture-level multi-tenant isolation
- * 
+ *
  * Features:
  * - Row-level security enforcement
  * - Data scope filtering
@@ -10,10 +10,10 @@
  */
 
 import { getDb } from "@db/connection";
-import { 
-  tenants, 
-  teams, 
-  tenantSettings, 
+import {
+  tenants,
+  teams,
+  tenantSettings,
   dataPartitions,
   dataAccessPolicies,
   teamMembers,
@@ -48,7 +48,9 @@ export interface QueryFilter {
 /**
  * Get tenant context from user session
  */
-export async function getTenantContext(teamId: number): Promise<TenantContext | null> {
+export async function getTenantContext(
+  teamId: number
+): Promise<TenantContext | null> {
   const team = await db.query.teams.findFirst({
     where: (t, { eq }) => eq(t.id, teamId),
   });
@@ -68,7 +70,11 @@ export async function getTenantContext(teamId: number): Promise<TenantContext | 
  * Enforce data isolation on queries
  * Adds tenant_id/station_id filters automatically
  */
-export function enforceIsolation(query: any, context: TenantContext, options: IsolationOptions = {}) {
+export function enforceIsolation(
+  query: any,
+  context: TenantContext,
+  options: IsolationOptions = {}
+) {
   if (options.requireTenant !== false) {
     query = query.where(eq(query._.table.isolationKey, context.isolationKey));
   }
@@ -92,7 +98,10 @@ export async function validateTenantOwnership(
 /**
  * Get user's accessible stations based on team membership and permissions
  */
-export async function getAccessibleStations(userId: number, teamId: number): Promise<number[]> {
+export async function getAccessibleStations(
+  userId: number,
+  teamId: number
+): Promise<number[]> {
   const memberships = await db
     .select()
     .from(teamMembers)
@@ -120,7 +129,7 @@ export async function getAccessibleStations(userId: number, teamId: number): Pro
 
   // Filter by user's role permissions
   // This is a simplified version - in production, you'd check the role's permissions
-  
+
   return scopes.map(s => s.id);
 }
 
@@ -132,37 +141,45 @@ export function createScopedQuery(table: any, context: TenantContext) {
     // Find all records for this tenant
     findAll: async (filters?: Partial<QueryFilter>) => {
       let query: any = db.select().from(table);
-      
+
       // Add tenant filter
       if (table.isolationKey) {
-        query = query.where(eq((table as any).isolationKey, context.isolationKey));
+        query = query.where(
+          eq((table as any).isolationKey, context.isolationKey)
+        );
       }
-      
+
       // Add station filter if provided
       if (filters?.stationId && table.stationId) {
         query = query.where(eq((table as any).stationId, filters.stationId));
       }
-      
+
       return query;
     },
 
     // Find single record with ownership check
     findOne: async (id: number) => {
-      const record = await (db.query as any)[table]?.findFirst?.({
-        where: (t: any, { and, eq }: any) => 
-          and(
-            eq(t.id, id),
-            context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
-          ),
-      }) || null;
-      
+      const record =
+        (await (db.query as any)[table]?.findFirst?.({
+          where: (t: any, { and, eq }: any) =>
+            and(
+              eq(t.id, id),
+              context.isolationKey
+                ? eq(t.isolationKey, context.isolationKey)
+                : undefined
+            ),
+        })) || null;
+
       if (!record) return null;
-      
+
       // Verify tenant ownership
-      if (context.isolationKey && record.isolationKey !== context.isolationKey) {
+      if (
+        context.isolationKey &&
+        record.isolationKey !== context.isolationKey
+      ) {
         throw new Error("Access denied: Resource belongs to different tenant");
       }
-      
+
       return record;
     },
 
@@ -181,7 +198,9 @@ export function createScopedQuery(table: any, context: TenantContext) {
         where: (t: any, { and, eq }: any) =>
           and(
             eq(t.id, id),
-            context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
+            context.isolationKey
+              ? eq(t.isolationKey, context.isolationKey)
+              : undefined
           ),
       });
 
@@ -189,8 +208,13 @@ export function createScopedQuery(table: any, context: TenantContext) {
         throw new Error("Resource not found");
       }
 
-      if (context.isolationKey && existing.isolationKey !== context.isolationKey) {
-        throw new Error("Access denied: Cannot modify resources from different tenant");
+      if (
+        context.isolationKey &&
+        existing.isolationKey !== context.isolationKey
+      ) {
+        throw new Error(
+          "Access denied: Cannot modify resources from different tenant"
+        );
       }
 
       return db
@@ -206,7 +230,9 @@ export function createScopedQuery(table: any, context: TenantContext) {
         where: (t: any, { and, eq }: any) =>
           and(
             eq(t.id, id),
-            context.isolationKey ? eq(t.isolationKey, context.isolationKey) : undefined
+            context.isolationKey
+              ? eq(t.isolationKey, context.isolationKey)
+              : undefined
           ),
       });
 
@@ -214,8 +240,13 @@ export function createScopedQuery(table: any, context: TenantContext) {
         throw new Error("Resource not found");
       }
 
-      if (context.isolationKey && existing.isolationKey !== context.isolationKey) {
-        throw new Error("Access denied: Cannot delete resources from different tenant");
+      if (
+        context.isolationKey &&
+        existing.isolationKey !== context.isolationKey
+      ) {
+        throw new Error(
+          "Access denied: Cannot delete resources from different tenant"
+        );
       }
 
       return db.delete(table).where(eq((table as any).id, id));
@@ -230,7 +261,7 @@ export function createIsolationMiddleware() {
   return async ({ ctx, next }: { ctx: any; next: () => Promise<any> }) => {
     // Get team context from user session
     const teamId = ctx.teamId || ctx.user?.currentTeamId;
-    
+
     if (teamId) {
       const tenantContext = await getTenantContext(teamId);
       if (tenantContext) {
@@ -276,10 +307,11 @@ export async function getDataAccessPolicy(
     );
 
   // Filter to applicable policies
-  const applicablePolicies = policies.filter(p => 
-    (p.appliesTo === "all") ||
-    (p.appliesTo === "user" && p.targetId === userId) ||
-    (p.appliesTo === "team" && p.targetId === teamId)
+  const applicablePolicies = policies.filter(
+    p =>
+      p.appliesTo === "all" ||
+      (p.appliesTo === "user" && p.targetId === userId) ||
+      (p.appliesTo === "team" && p.targetId === teamId)
   );
 
   // Return highest priority policy
@@ -289,7 +321,10 @@ export async function getDataAccessPolicy(
 /**
  * Apply data masking based on access policy
  */
-export function applyDataMasking(data: any, policy: DataAccessPolicy | null): any {
+export function applyDataMasking(
+  data: any,
+  policy: DataAccessPolicy | null
+): any {
   if (!policy) return data;
 
   let result = { ...data };
@@ -324,14 +359,14 @@ export function applyDataMasking(data: any, policy: DataAccessPolicy | null): an
 /**
  * Get tenant settings
  */
-export async function getTenantSetting(teamId: number, category: string, key: string) {
+export async function getTenantSetting(
+  teamId: number,
+  category: string,
+  key: string
+) {
   const setting = await db.query.tenantSettings.findFirst({
     where: (ts, { and, eq }) =>
-      and(
-        eq(ts.tenantId, teamId),
-        eq(ts.category, category),
-        eq(ts.key, key)
-      ),
+      and(eq(ts.tenantId, teamId), eq(ts.category, category), eq(ts.key, key)),
   });
 
   return setting?.value || null;
@@ -340,7 +375,10 @@ export async function getTenantSetting(teamId: number, category: string, key: st
 /**
  * Check if feature is enabled for tenant
  */
-export async function isFeatureEnabled(teamId: number, feature: string): Promise<boolean> {
+export async function isFeatureEnabled(
+  teamId: number,
+  feature: string
+): Promise<boolean> {
   const featuresJson = await getTenantSetting(teamId, "features", "enabled");
   if (!featuresJson) return true; // Default to enabled
 

@@ -23,11 +23,16 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  status: mysqlEnum("userStatus", ["active", "suspended", "banned", "pending"]).default("active").notNull(),
+  status: mysqlEnum("userStatus", ["active", "suspended", "banned", "pending"])
+    .default("active")
+    .notNull(),
   countryCode: varchar("countryCode", { length: 2 }),
   phone: varchar("phone", { length: 50 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
   lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
 });
 
@@ -49,12 +54,19 @@ export const stations = mysqlTable("stations", {
   countryCode: varchar("countryCode", { length: 2 }),
   phone: varchar("phone", { length: 50 }),
   managerName: varchar("managerName", { length: 255 }),
-  status: mysqlEnum("status", ["active", "inactive", "maintenance"]).default("active").notNull(),
-  taxRate: decimal("taxRate", { precision: 5, scale: 2 }).default("0").notNull(),
+  status: mysqlEnum("status", ["active", "inactive", "maintenance"])
+    .default("active")
+    .notNull(),
+  taxRate: decimal("taxRate", { precision: 5, scale: 2 })
+    .default("0")
+    .notNull(),
   receiptFooter: text("receiptFooter"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type Station = typeof stations.$inferSelect;
@@ -63,7 +75,9 @@ export const stationUsers = mysqlTable("station_users", {
   id: serial("id").primaryKey(),
   stationId: bigint("stationId", { mode: "number", unsigned: true }).notNull(),
   userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
-  role: mysqlEnum("stationRole", ["owner", "manager", "cashier", "viewer"]).default("viewer").notNull(),
+  role: mysqlEnum("stationRole", ["owner", "manager", "cashier", "viewer"])
+    .default("viewer")
+    .notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -75,15 +89,34 @@ export const stationUsers = mysqlTable("station_users", {
 export const inventory = mysqlTable("inventory", {
   id: serial("id").primaryKey(),
   stationId: bigint("stationId", { mode: "number", unsigned: true }).notNull(),
-  fuelType: mysqlEnum("fuelType", ["petrol", "diesel", "premium", "kerosene", "lpg"]).notNull(),
-  currentStock: decimal("currentStock", { precision: 12, scale: 2 }).default("0").notNull(),
-  capacity: decimal("capacity", { precision: 12, scale: 2 }).default("0").notNull(),
-  pricePerLiter: decimal("pricePerLiter", { precision: 10, scale: 2 }).default("0").notNull(),
-  costPerLiter: decimal("costPerLiter", { precision: 10, scale: 2 }).default("0").notNull(),
+  fuelType: mysqlEnum("fuelType", [
+    "petrol",
+    "diesel",
+    "premium",
+    "kerosene",
+    "lpg",
+  ]).notNull(),
+  currentStock: decimal("currentStock", { precision: 12, scale: 2 })
+    .default("0")
+    .notNull(),
+  capacity: decimal("capacity", { precision: 12, scale: 2 })
+    .default("0")
+    .notNull(),
+  pricePerLiter: decimal("pricePerLiter", { precision: 10, scale: 2 })
+    .default("0")
+    .notNull(),
+  costPerLiter: decimal("costPerLiter", { precision: 10, scale: 2 })
+    .default("0")
+    .notNull(),
   supplierName: varchar("supplierName", { length: 255 }),
   lastRestockedAt: timestamp("lastRestockedAt"),
-  alertThreshold: decimal("alertThreshold", { precision: 12, scale: 2 }).default("500").notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  alertThreshold: decimal("alertThreshold", { precision: 12, scale: 2 })
+    .default("500")
+    .notNull(),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -91,11 +124,25 @@ export const sales = mysqlTable("sales", {
   id: serial("id").primaryKey(),
   stationId: bigint("stationId", { mode: "number", unsigned: true }).notNull(),
   userId: bigint("userId", { mode: "number", unsigned: true }),
-  fuelType: mysqlEnum("fuelType", ["petrol", "diesel", "premium", "kerosene", "lpg"]).notNull(),
-  quantityLiters: decimal("quantityLiters", { precision: 12, scale: 2 }).notNull(),
-  pricePerLiter: decimal("pricePerLiter", { precision: 10, scale: 2 }).notNull(),
+  fuelType: mysqlEnum("fuelType", [
+    "petrol",
+    "diesel",
+    "premium",
+    "kerosene",
+    "lpg",
+  ]).notNull(),
+  quantityLiters: decimal("quantityLiters", {
+    precision: 12,
+    scale: 2,
+  }).notNull(),
+  pricePerLiter: decimal("pricePerLiter", {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
-  taxAmount: decimal("taxAmount", { precision: 12, scale: 2 }).default("0").notNull(),
+  taxAmount: decimal("taxAmount", { precision: 12, scale: 2 })
+    .default("0")
+    .notNull(),
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
   paymentMethod: varchar("paymentMethod", { length: 100 }).notNull(),
   pumpNumber: varchar("pumpNumber", { length: 20 }),
@@ -138,15 +185,18 @@ export const mobileMoneyConfigs = mysqlTable("mobile_money_configs", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const additionalPaymentMethods = mysqlTable("additional_payment_methods", {
-  id: serial("id").primaryKey(),
-  stationId: bigint("stationId", { mode: "number", unsigned: true }),
-  userId: bigint("userId", { mode: "number", unsigned: true }),
-  name: varchar("name", { length: 255 }).notNull(),
-  config: text("config"),
-  isActive: boolean("isActive").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const additionalPaymentMethods = mysqlTable(
+  "additional_payment_methods",
+  {
+    id: serial("id").primaryKey(),
+    stationId: bigint("stationId", { mode: "number", unsigned: true }),
+    userId: bigint("userId", { mode: "number", unsigned: true }),
+    name: varchar("name", { length: 255 }).notNull(),
+    config: text("config"),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  }
+);
 
 // ═══════════════════════════════════════════════════════════
 // AUDIT & FOUNDER SESSIONS
@@ -158,21 +208,28 @@ export const auditLogs = mysqlTable("audit_logs", {
   stationId: bigint("stationId", { mode: "number", unsigned: true }),
   event: varchar("event", { length: 255 }).notNull(),
   detail: text("detail"),
-  severity: mysqlEnum("severity", ["info", "success", "warning", "danger"]).default("info").notNull(),
+  severity: mysqlEnum("severity", ["info", "success", "warning", "danger"])
+    .default("info")
+    .notNull(),
   ipAddress: varchar("ipAddress", { length: 45 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export const founderSessions = mysqlTable("founder_sessions", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }).notNull().unique(),
+  userId: bigint("userId", { mode: "number", unsigned: true })
+    .notNull()
+    .unique(),
   lastLoginAt: timestamp("lastLoginAt").defaultNow().notNull(),
   twoFactorEnabled: boolean("twoFactorEnabled").default(false).notNull(),
   twoFactorSecret: varchar("twoFactorSecret", { length: 255 }),
   contactEmail: varchar("contactEmail", { length: 320 }),
   contactPhone: varchar("contactPhone", { length: 50 }),
   passwordHash: varchar("passwordHash", { length: 500 }),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -185,12 +242,17 @@ export const featureFlags = mysqlTable("feature_flags", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   enabled: boolean("enabled").default(false).notNull(),
-  scope: mysqlEnum("scope", ["global", "station", "user"]).default("global").notNull(),
+  scope: mysqlEnum("scope", ["global", "station", "user"])
+    .default("global")
+    .notNull(),
   stationId: bigint("stationId", { mode: "number", unsigned: true }),
   userId: bigint("userId", { mode: "number", unsigned: true }),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type FeatureFlag = typeof featureFlags.$inferSelect;
@@ -206,7 +268,14 @@ export const pricingPlans = mysqlTable("pricing_plans", {
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   currency: varchar("currency", { length: 10 }).default("USD").notNull(),
-  billingPeriod: mysqlEnum("billingPeriod", ["monthly", "quarterly", "yearly", "lifetime"]).default("monthly").notNull(),
+  billingPeriod: mysqlEnum("billingPeriod", [
+    "monthly",
+    "quarterly",
+    "yearly",
+    "lifetime",
+  ])
+    .default("monthly")
+    .notNull(),
   maxStations: int("maxStations").default(1).notNull(),
   maxUsers: int("maxUsers").default(5).notNull(),
   features: text("features"), // JSON array of feature strings
@@ -214,7 +283,10 @@ export const pricingPlans = mysqlTable("pricing_plans", {
   isPublic: boolean("isPublic").default(true).notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type PricingPlan = typeof pricingPlans.$inferSelect;
@@ -223,15 +295,28 @@ export const subscriptions = mysqlTable("subscriptions", {
   id: serial("id").primaryKey(),
   userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
   planId: bigint("planId", { mode: "number", unsigned: true }).notNull(),
-  status: mysqlEnum("subStatus", ["active", "trialing", "past_due", "canceled", "expired"]).default("active").notNull(),
+  status: mysqlEnum("subStatus", [
+    "active",
+    "trialing",
+    "past_due",
+    "canceled",
+    "expired",
+  ])
+    .default("active")
+    .notNull(),
   trialEndsAt: timestamp("trialEndsAt"),
   currentPeriodStart: timestamp("currentPeriodStart").defaultNow().notNull(),
   currentPeriodEnd: timestamp("currentPeriodEnd").notNull(),
   cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false).notNull(),
   paymentMethod: varchar("paymentMethod", { length: 100 }),
-  amountPaid: decimal("amountPaid", { precision: 10, scale: 2 }).default("0").notNull(),
+  amountPaid: decimal("amountPaid", { precision: 10, scale: 2 })
+    .default("0")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type Subscription = typeof subscriptions.$inferSelect;
@@ -244,11 +329,18 @@ export const coupons = mysqlTable("coupons", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 100 }).notNull().unique(),
   description: text("description"),
-  discountType: mysqlEnum("discountType", ["percentage", "fixed_amount"]).default("percentage").notNull(),
-  discountValue: decimal("discountValue", { precision: 10, scale: 2 }).notNull(),
+  discountType: mysqlEnum("discountType", ["percentage", "fixed_amount"])
+    .default("percentage")
+    .notNull(),
+  discountValue: decimal("discountValue", {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
   maxUses: int("maxUses").default(0).notNull(), // 0 = unlimited
   timesUsed: int("timesUsed").default(0).notNull(),
-  minOrderAmount: decimal("minOrderAmount", { precision: 10, scale: 2 }).default("0").notNull(),
+  minOrderAmount: decimal("minOrderAmount", { precision: 10, scale: 2 })
+    .default("0")
+    .notNull(),
   validFrom: timestamp("validFrom").defaultNow().notNull(),
   validUntil: timestamp("validUntil"),
   isActive: boolean("isActive").default(true).notNull(),
@@ -266,12 +358,17 @@ export const systemConfig = mysqlTable("system_config", {
   id: serial("id").primaryKey(),
   configKey: varchar("configKey", { length: 200 }).notNull().unique(),
   configValue: text("configValue"),
-  configGroup: varchar("configGroup", { length: 100 }).default("general").notNull(),
+  configGroup: varchar("configGroup", { length: 100 })
+    .default("general")
+    .notNull(),
   description: text("description"),
   isPublic: boolean("isPublic").default(false).notNull(),
   updatedBy: bigint("updatedBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type SystemConfig = typeof systemConfig.$inferSelect;
@@ -325,7 +422,10 @@ export const emailTemplates = mysqlTable("email_templates", {
   isActive: boolean("isActive").default(true).notNull(),
   updatedBy: bigint("updatedBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
@@ -353,9 +453,18 @@ export const userActivityLog = mysqlTable("user_activity_log", {
 export const backups = mysqlTable("backups", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  type: mysqlEnum("backupType", ["full", "schema", "data", "settings"]).default("full").notNull(),
+  type: mysqlEnum("backupType", ["full", "schema", "data", "settings"])
+    .default("full")
+    .notNull(),
   size: varchar("size", { length: 50 }),
-  status: mysqlEnum("backupStatus", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("backupStatus", [
+    "pending",
+    "running",
+    "completed",
+    "failed",
+  ])
+    .default("pending")
+    .notNull(),
   downloadUrl: text("downloadUrl"),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -369,10 +478,24 @@ export type Backup = typeof backups.$inferSelect;
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const auditLogEntries = mysqlTable("audit_log_entries", {
-  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  id: bigint("id", { mode: "number", unsigned: true })
+    .primaryKey()
+    .autoincrement(),
   eventId: varchar("eventId", { length: 64 }).notNull().unique(),
-  eventType: mysqlEnum("eventType", ["authentication", "authorization", "data_access", "data_modification", "configuration", "system"]).notNull(),
-  actorType: mysqlEnum("actorType", ["user", "system", "api_key", "service"]).notNull(),
+  eventType: mysqlEnum("eventType", [
+    "authentication",
+    "authorization",
+    "data_access",
+    "data_modification",
+    "configuration",
+    "system",
+  ]).notNull(),
+  actorType: mysqlEnum("actorType", [
+    "user",
+    "system",
+    "api_key",
+    "service",
+  ]).notNull(),
   actorId: varchar("actorId", { length: 255 }),
   actorName: varchar("actorName", { length: 255 }),
   actorEmail: varchar("actorEmail", { length: 320 }),
@@ -381,7 +504,14 @@ export const auditLogEntries = mysqlTable("audit_log_entries", {
   resourceId: varchar("resourceId", { length: 255 }),
   resourceName: varchar("resourceName", { length: 255 }),
   action: varchar("action", { length: 100 }).notNull(),
-  actionResult: mysqlEnum("actionResult", ["success", "failure", "denied", "partial"]).default("success").notNull(),
+  actionResult: mysqlEnum("actionResult", [
+    "success",
+    "failure",
+    "denied",
+    "partial",
+  ])
+    .default("success")
+    .notNull(),
   ipAddress: varchar("ipAddress", { length: 45 }),
   userAgent: text("userAgent"),
   requestMethod: varchar("requestMethod", { length: 10 }),
@@ -398,10 +528,21 @@ export const auditLogEntries = mysqlTable("audit_log_entries", {
   city: varchar("city", { length: 100 }),
   latitude: varchar("latitude", { length: 20 }),
   longitude: varchar("longitude", { length: 20 }),
-  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"]).default("low").notNull(),
+  riskLevel: mysqlEnum("riskLevel", ["low", "medium", "high", "critical"])
+    .default("low")
+    .notNull(),
   riskFactors: text("riskFactors"),
-  isComplianceRelevant: boolean("isComplianceRelevant").default(false).notNull(),
-  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory", "permanent"]).default("standard").notNull(),
+  isComplianceRelevant: boolean("isComplianceRelevant")
+    .default(false)
+    .notNull(),
+  retentionCategory: mysqlEnum("retentionCategory", [
+    "standard",
+    "extended",
+    "regulatory",
+    "permanent",
+  ])
+    .default("standard")
+    .notNull(),
   previousHash: varchar("previousHash", { length: 64 }),
   entryHash: varchar("entryHash", { length: 64 }).notNull(),
   signature: text("signature"),
@@ -414,13 +555,42 @@ export const auditLogEntries = mysqlTable("audit_log_entries", {
 export type AuditLogEntry = typeof auditLogEntries.$inferSelect;
 
 export const authEvents = mysqlTable("auth_events", {
-  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  id: bigint("id", { mode: "number", unsigned: true })
+    .primaryKey()
+    .autoincrement(),
   eventId: varchar("eventId", { length: 64 }).notNull().unique(),
   userId: bigint("userId", { mode: "number", unsigned: true }),
   unionId: varchar("unionId", { length: 255 }),
   email: varchar("email", { length: 320 }),
-  authMethod: mysqlEnum("authMethod", ["password", "magic_link", "oauth", "mfa_totp", "mfa_sms", "mfa_email", "api_key", "session"]).notNull(),
-  eventType: mysqlEnum("authEventType", ["login_success", "login_failure", "logout", "mfa_enabled", "mfa_disabled", "mfa_challenge", "mfa_failure", "password_changed", "password_reset_requested", "password_reset_completed", "session_created", "session_expired", "session_revoked", "api_key_created", "api_key_revoked", "account_locked", "account_unlocked"]).notNull(),
+  authMethod: mysqlEnum("authMethod", [
+    "password",
+    "magic_link",
+    "oauth",
+    "mfa_totp",
+    "mfa_sms",
+    "mfa_email",
+    "api_key",
+    "session",
+  ]).notNull(),
+  eventType: mysqlEnum("authEventType", [
+    "login_success",
+    "login_failure",
+    "logout",
+    "mfa_enabled",
+    "mfa_disabled",
+    "mfa_challenge",
+    "mfa_failure",
+    "password_changed",
+    "password_reset_requested",
+    "password_reset_completed",
+    "session_created",
+    "session_expired",
+    "session_revoked",
+    "api_key_created",
+    "api_key_revoked",
+    "account_locked",
+    "account_unlocked",
+  ]).notNull(),
   ipAddress: varchar("ipAddress", { length: 45 }),
   userAgent: text("userAgent"),
   success: boolean("success").default(true).notNull(),
@@ -431,7 +601,13 @@ export const authEvents = mysqlTable("auth_events", {
   riskSignals: text("riskSignals"),
   blockedByMFA: boolean("blockedByMFA").default(false).notNull(),
   teamId: bigint("teamId", { mode: "number", unsigned: true }),
-  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory"]).default("standard").notNull(),
+  retentionCategory: mysqlEnum("retentionCategory", [
+    "standard",
+    "extended",
+    "regulatory",
+  ])
+    .default("standard")
+    .notNull(),
   entryHash: varchar("entryHash", { length: 64 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -439,7 +615,9 @@ export const authEvents = mysqlTable("auth_events", {
 export type AuthEvent = typeof authEvents.$inferSelect;
 
 export const dataAccessLog = mysqlTable("data_access_log", {
-  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  id: bigint("id", { mode: "number", unsigned: true })
+    .primaryKey()
+    .autoincrement(),
   eventId: varchar("eventId", { length: 64 }).notNull().unique(),
   userId: bigint("userId", { mode: "number", unsigned: true }),
   userName: varchar("userName", { length: 255 }),
@@ -447,7 +625,13 @@ export const dataAccessLog = mysqlTable("data_access_log", {
   resourceType: varchar("resourceType", { length: 100 }).notNull(),
   resourceId: varchar("resourceId", { length: 255 }),
   action: varchar("action", { length: 50 }).notNull(),
-  accessType: mysqlEnum("accessType", ["view", "export", "print", "share", "download"]).notNull(),
+  accessType: mysqlEnum("accessType", [
+    "view",
+    "export",
+    "print",
+    "share",
+    "download",
+  ]).notNull(),
   filters: text("filters"),
   fieldsAccessed: text("fieldsAccessed"),
   recordsAccessed: int("recordsAccessed").default(0).notNull(),
@@ -459,7 +643,13 @@ export const dataAccessLog = mysqlTable("data_access_log", {
   stationId: bigint("stationId", { mode: "number", unsigned: true }),
   isPII: boolean("isPII").default(false).notNull(),
   isSensitive: boolean("isSensitive").default(false).notNull(),
-  retentionCategory: mysqlEnum("retentionCategory", ["standard", "extended", "regulatory"]).default("standard").notNull(),
+  retentionCategory: mysqlEnum("retentionCategory", [
+    "standard",
+    "extended",
+    "regulatory",
+  ])
+    .default("standard")
+    .notNull(),
   entryHash: varchar("entryHash", { length: 64 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -475,8 +665,25 @@ export const permissions = mysqlTable("permissions", {
   code: varchar("code", { length: 100 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  resourceCategory: mysqlEnum("resourceCategory", ["dashboard", "sales", "inventory", "payments", "reports", "users", "stations", "settings", "audit"]).notNull(),
-  actionType: mysqlEnum("actionType", ["create", "read", "update", "delete", "export", "manage"]).notNull(),
+  resourceCategory: mysqlEnum("resourceCategory", [
+    "dashboard",
+    "sales",
+    "inventory",
+    "payments",
+    "reports",
+    "users",
+    "stations",
+    "settings",
+    "audit",
+  ]).notNull(),
+  actionType: mysqlEnum("actionType", [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "export",
+    "manage",
+  ]).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -489,7 +696,9 @@ export const roles = mysqlTable("roles", {
   code: varchar("code", { length: 50 }).notNull().unique(),
   description: text("description"),
   level: int("level").default(0).notNull(),
-  type: mysqlEnum("roleType", ["system", "custom", "founder"]).default("custom").notNull(),
+  type: mysqlEnum("roleType", ["system", "custom", "founder"])
+    .default("custom")
+    .notNull(),
   isTeamScoped: boolean("isTeamScoped").default(false).notNull(),
   isDataTypeScoped: boolean("isDataTypeScoped").default(false).notNull(),
   isActionScoped: boolean("isActionScoped").default(false).notNull(),
@@ -501,7 +710,10 @@ export const roles = mysqlTable("roles", {
   isDefault: boolean("isDefault").default(false).notNull(),
   createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type Role = typeof roles.$inferSelect;
@@ -516,10 +728,15 @@ export const teams = mysqlTable("teams", {
   maxMembers: int("maxMembers").default(10).notNull(),
   maxStations: int("maxStations").default(5).notNull(),
   features: text("features"),
-  status: mysqlEnum("teamStatus", ["active", "suspended", "archived"]).default("active").notNull(),
+  status: mysqlEnum("teamStatus", ["active", "suspended", "archived"])
+    .default("active")
+    .notNull(),
   isolationKey: varchar("isolationKey", { length: 64 }).notNull().unique(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type Team = typeof teams.$inferSelect;
@@ -531,13 +748,23 @@ export const teamMembers = mysqlTable("team_members", {
   roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
   customPermissions: text("customPermissions"),
   deniedPermissions: text("deniedPermissions"),
-  status: mysqlEnum("memberStatus", ["active", "invited", "suspended", "removed"]).default("active").notNull(),
+  status: mysqlEnum("memberStatus", [
+    "active",
+    "invited",
+    "suspended",
+    "removed",
+  ])
+    .default("active")
+    .notNull(),
   invitedAt: timestamp("invitedAt"),
   joinedAt: timestamp("joinedAt"),
   invitedBy: bigint("invitedBy", { mode: "number", unsigned: true }),
   metadata: text("metadata"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type TeamMember = typeof teamMembers.$inferSelect;
@@ -552,7 +779,10 @@ export const dataScopes = mysqlTable("data_scopes", {
   description: text("description"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type DataScope = typeof dataScopes.$inferSelect;
@@ -568,7 +798,10 @@ export const actionScopes = mysqlTable("action_scopes", {
   description: text("description"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type ActionScope = typeof actionScopes.$inferSelect;
@@ -580,7 +813,14 @@ export const teamInvitations = mysqlTable("team_invitations", {
   roleId: bigint("roleId", { mode: "number", unsigned: true }).notNull(),
   invitedBy: bigint("invitedBy", { mode: "number", unsigned: true }).notNull(),
   token: varchar("token", { length: 255 }).notNull().unique(),
-  status: mysqlEnum("invitationStatus", ["pending", "accepted", "declined", "expired"]).default("pending").notNull(),
+  status: mysqlEnum("invitationStatus", [
+    "pending",
+    "accepted",
+    "declined",
+    "expired",
+  ])
+    .default("pending")
+    .notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   acceptedAt: timestamp("acceptedAt"),
   declinedAt: timestamp("declinedAt"),
@@ -594,7 +834,9 @@ export type TeamInvitation = typeof teamInvitations.$inferSelect;
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const tenants = mysqlTable("tenants", {
-  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  id: bigint("id", { mode: "number", unsigned: true })
+    .primaryKey()
+    .autoincrement(),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
   displayName: varchar("displayName", { length: 255 }),
@@ -603,23 +845,60 @@ export const tenants = mysqlTable("tenants", {
   businessType: varchar("businessType", { length: 100 }),
   registrationNumber: varchar("registrationNumber", { length: 100 }),
   taxId: varchar("taxId", { length: 100 }),
-  isolationStrategy: mysqlEnum("isolationStrategy", ["row_level", "schema", "database"]).default("row_level").notNull(),
+  isolationStrategy: mysqlEnum("isolationStrategy", [
+    "row_level",
+    "schema",
+    "database",
+  ])
+    .default("row_level")
+    .notNull(),
   isolationKey: varchar("isolationKey", { length: 64 }).notNull().unique(),
-  dataResidency: mysqlEnum("dataResidency", ["us", "eu", "uk", "ap", "au", "ca", "in", "jp", "sg", "custom"]).default("us").notNull(),
+  dataResidency: mysqlEnum("dataResidency", [
+    "us",
+    "eu",
+    "uk",
+    "ap",
+    "au",
+    "ca",
+    "in",
+    "jp",
+    "sg",
+    "custom",
+  ])
+    .default("us")
+    .notNull(),
   dataRegion: varchar("dataRegion", { length: 100 }),
   dataCenterId: varchar("dataCenterId", { length: 100 }),
   maxUsers: int("maxUsers").default(10).notNull(),
   maxStations: int("maxStations").default(5).notNull(),
   maxStorageGB: int("maxStorageGB").default(50).notNull(),
-  status: mysqlEnum("tenantStatus", ["active", "suspended", "terminated", "trial", "pending"]).default("active").notNull(),
-  complianceTier: mysqlEnum("complianceTier", ["basic", "standard", "premium", "enterprise"]).default("standard").notNull(),
+  status: mysqlEnum("tenantStatus", [
+    "active",
+    "suspended",
+    "terminated",
+    "trial",
+    "pending",
+  ])
+    .default("active")
+    .notNull(),
+  complianceTier: mysqlEnum("complianceTier", [
+    "basic",
+    "standard",
+    "premium",
+    "enterprise",
+  ])
+    .default("standard")
+    .notNull(),
   features: text("features"),
   planId: bigint("planId", { mode: "number", unsigned: true }),
   billingEmail: varchar("billingEmail", { length: 320 }),
   billingAddress: text("billingAddress"),
   trialEndsAt: timestamp("trialEndsAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
   suspendedAt: timestamp("suspendedAt"),
 });
 
@@ -643,7 +922,13 @@ export const dataPartitions = mysqlTable("data_partitions", {
   tenantId: bigint("tenantId", { mode: "number", unsigned: true }).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(),
-  type: mysqlEnum("partitionType", ["station", "region", "department", "project", "custom"]).notNull(),
+  type: mysqlEnum("partitionType", [
+    "station",
+    "region",
+    "department",
+    "project",
+    "custom",
+  ]).notNull(),
   parentId: bigint("parentId", { mode: "number", unsigned: true }),
   level: int("level").default(0).notNull(),
   isolationKey: varchar("isolationKey", { length: 64 }).notNull(),
@@ -651,26 +936,46 @@ export const dataPartitions = mysqlTable("data_partitions", {
   metadata: text("metadata"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type DataPartition = typeof dataPartitions.$inferSelect;
 
 export const crossTenantLinks = mysqlTable("cross_tenant_links", {
   id: serial("id").primaryKey(),
-  sourceTenantId: bigint("sourceTenantId", { mode: "number", unsigned: true }).notNull(),
+  sourceTenantId: bigint("sourceTenantId", {
+    mode: "number",
+    unsigned: true,
+  }).notNull(),
   sourceType: varchar("sourceType", { length: 50 }).notNull(),
   sourceId: bigint("sourceId", { mode: "number", unsigned: true }).notNull(),
-  targetTenantId: bigint("targetTenantId", { mode: "number", unsigned: true }).notNull(),
+  targetTenantId: bigint("targetTenantId", {
+    mode: "number",
+    unsigned: true,
+  }).notNull(),
   targetType: varchar("targetType", { length: 50 }).notNull(),
   targetId: bigint("targetId", { mode: "number", unsigned: true }).notNull(),
-  linkType: mysqlEnum("linkType", ["parent_child", "partnership", "franchise", "vendor", "customer"]).notNull(),
+  linkType: mysqlEnum("linkType", [
+    "parent_child",
+    "partnership",
+    "franchise",
+    "vendor",
+    "customer",
+  ]).notNull(),
   permissions: text("permissions"),
-  status: mysqlEnum("linkStatus", ["active", "suspended", "terminated"]).default("active").notNull(),
+  status: mysqlEnum("linkStatus", ["active", "suspended", "terminated"])
+    .default("active")
+    .notNull(),
   approvedBy: bigint("approvedBy", { mode: "number", unsigned: true }),
   approvedAt: timestamp("approvedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type CrossTenantLink = typeof crossTenantLinks.$inferSelect;
@@ -681,9 +986,23 @@ export const tenantEncryptionKeys = mysqlTable("tenant_encryption_keys", {
   keyId: varchar("keyId", { length: 100 }).notNull().unique(),
   keyVersion: int("keyVersion").notNull(),
   encryptedKey: text("encryptedKey").notNull(),
-  algorithm: varchar("algorithm", { length: 50 }).default("AES-256-GCM").notNull(),
-  keyPurpose: mysqlEnum("keyPurpose", ["data_at_rest", "data_in_transit", "backups", "audit_logs"]).notNull(),
-  status: mysqlEnum("keyStatus", ["active", "rotating", "retired", "compromised"]).default("active").notNull(),
+  algorithm: varchar("algorithm", { length: 50 })
+    .default("AES-256-GCM")
+    .notNull(),
+  keyPurpose: mysqlEnum("keyPurpose", [
+    "data_at_rest",
+    "data_in_transit",
+    "backups",
+    "audit_logs",
+  ]).notNull(),
+  status: mysqlEnum("keyStatus", [
+    "active",
+    "rotating",
+    "retired",
+    "compromised",
+  ])
+    .default("active")
+    .notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   rotatedAt: timestamp("rotatedAt"),
   expiresAt: timestamp("expiresAt"),
@@ -704,7 +1023,10 @@ export const tenantSettings = mysqlTable("tenant_settings", {
   isRequired: boolean("isRequired").default(false).notNull(),
   updatedBy: bigint("updatedBy", { mode: "number", unsigned: true }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type TenantSetting = typeof tenantSettings.$inferSelect;
@@ -727,7 +1049,10 @@ export const dataAccessPolicies = mysqlTable("data_access_policies", {
   priority: int("priority").default(0).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  updatedAt: timestamp("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export type DataAccessPolicy = typeof dataAccessPolicies.$inferSelect;

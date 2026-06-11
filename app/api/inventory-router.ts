@@ -13,13 +13,18 @@ export const inventoryRouter = createRouter({
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, input.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, input.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
-      return db.select().from(inventory).where(eq(inventory.stationId, input.stationId));
+      return db
+        .select()
+        .from(inventory)
+        .where(eq(inventory.stationId, input.stationId));
     }),
 
   // ─── Combined inventory across all stations ───
@@ -28,37 +33,46 @@ export const inventoryRouter = createRouter({
     const memberships = await db
       .select()
       .from(stationUsers)
-      .where(and(
-        eq(stationUsers.userId, ctx.user.id),
-        eq(stationUsers.isActive, true)
-      ));
+      .where(
+        and(
+          eq(stationUsers.userId, ctx.user.id),
+          eq(stationUsers.isActive, true)
+        )
+      );
     if (memberships.length === 0) return [];
     const stationIds = memberships.map(m => m.stationId);
-    return db.select().from(inventory).where(inArray(inventory.stationId, stationIds));
+    return db
+      .select()
+      .from(inventory)
+      .where(inArray(inventory.stationId, stationIds));
   }),
 
   // ─── Create inventory item ───
   create: authedQuery
-    .input(z.object({
-      stationId: z.number(),
-      fuelType: z.enum(["petrol", "diesel", "premium", "kerosene", "lpg"]),
-      currentStock: z.string().default("0"),
-      capacity: z.string().default("0"),
-      pricePerLiter: z.string().default("0"),
-      costPerLiter: z.string().default("0"),
-      supplierName: z.string().optional(),
-      alertThreshold: z.string().default("500"),
-    }))
+    .input(
+      z.object({
+        stationId: z.number(),
+        fuelType: z.enum(["petrol", "diesel", "premium", "kerosene", "lpg"]),
+        currentStock: z.string().default("0"),
+        capacity: z.string().default("0"),
+        pricePerLiter: z.string().default("0"),
+        costPerLiter: z.string().default("0"),
+        supplierName: z.string().optional(),
+        alertThreshold: z.string().default("500"),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, input.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, input.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       const [result] = await db.insert(inventory).values(input).$returningId();
       return { id: result.id, ...input };
@@ -66,29 +80,36 @@ export const inventoryRouter = createRouter({
 
   // ─── Update inventory ───
   update: authedQuery
-    .input(z.object({
-      id: z.number(),
-      currentStock: z.string().optional(),
-      capacity: z.string().optional(),
-      pricePerLiter: z.string().optional(),
-      costPerLiter: z.string().optional(),
-      supplierName: z.string().optional(),
-      alertThreshold: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        id: z.number(),
+        currentStock: z.string().optional(),
+        capacity: z.string().optional(),
+        pricePerLiter: z.string().optional(),
+        costPerLiter: z.string().optional(),
+        supplierName: z.string().optional(),
+        alertThreshold: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const { id, ...data } = input;
       // Verify access via stationId from existing record
-      const [item] = await db.select().from(inventory).where(eq(inventory.id, id));
+      const [item] = await db
+        .select()
+        .from(inventory)
+        .where(eq(inventory.id, id));
       if (!item) throw new Error("Not found");
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, item.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, item.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       await db.update(inventory).set(data).where(eq(inventory.id, id));
       return { success: true };
@@ -99,16 +120,21 @@ export const inventoryRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      const [item] = await db.select().from(inventory).where(eq(inventory.id, input.id));
+      const [item] = await db
+        .select()
+        .from(inventory)
+        .where(eq(inventory.id, input.id));
       if (!item) throw new Error("Not found");
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, item.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, item.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       await db.delete(inventory).where(eq(inventory.id, input.id));
       return { success: true };

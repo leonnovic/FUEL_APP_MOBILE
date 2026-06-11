@@ -7,38 +7,45 @@ import { sales, stationUsers } from "@db/schema";
 export const saleRouter = createRouter({
   // ─── Create sale ───
   create: authedQuery
-    .input(z.object({
-      stationId: z.number(),
-      fuelType: z.enum(["petrol", "diesel", "premium", "kerosene", "lpg"]),
-      quantityLiters: z.string(),
-      pricePerLiter: z.string(),
-      subtotal: z.string(),
-      taxAmount: z.string().optional(),
-      total: z.string(),
-      paymentMethod: z.string(),
-      pumpNumber: z.string().optional(),
-      receiptNumber: z.string().optional(),
-      notes: z.string().optional(),
-      latitude: z.string().optional(),
-      longitude: z.string().optional(),
-    }))
+    .input(
+      z.object({
+        stationId: z.number(),
+        fuelType: z.enum(["petrol", "diesel", "premium", "kerosene", "lpg"]),
+        quantityLiters: z.string(),
+        pricePerLiter: z.string(),
+        subtotal: z.string(),
+        taxAmount: z.string().optional(),
+        total: z.string(),
+        paymentMethod: z.string(),
+        pumpNumber: z.string().optional(),
+        receiptNumber: z.string().optional(),
+        notes: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       // Verify user has access to this station
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, input.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, input.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied to this station");
-      const [result] = await db.insert(sales).values({
-        ...input,
-        userId: ctx.user.id,
-        taxAmount: input.taxAmount || "0",
-      }).$returningId();
+      const [result] = await db
+        .insert(sales)
+        .values({
+          ...input,
+          userId: ctx.user.id,
+          taxAmount: input.taxAmount || "0",
+        })
+        .$returningId();
       return { id: result.id, ...input };
     }),
 
@@ -50,11 +57,13 @@ export const saleRouter = createRouter({
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, input.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, input.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       return db
         .select()
@@ -69,10 +78,12 @@ export const saleRouter = createRouter({
     const memberships = await db
       .select()
       .from(stationUsers)
-      .where(and(
-        eq(stationUsers.userId, ctx.user.id),
-        eq(stationUsers.isActive, true)
-      ));
+      .where(
+        and(
+          eq(stationUsers.userId, ctx.user.id),
+          eq(stationUsers.isActive, true)
+        )
+      );
     if (memberships.length === 0) return [];
     const stationIds = memberships.map(m => m.stationId);
     return db
@@ -90,11 +101,13 @@ export const saleRouter = createRouter({
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, input.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, input.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       const dayStart = new Date(input.date);
       const dayEnd = new Date(input.date);
@@ -102,11 +115,13 @@ export const saleRouter = createRouter({
       return db
         .select()
         .from(sales)
-        .where(and(
-          eq(sales.stationId, input.stationId),
-          gte(sales.createdAt, dayStart),
-          lte(sales.createdAt, dayEnd)
-        ))
+        .where(
+          and(
+            eq(sales.stationId, input.stationId),
+            gte(sales.createdAt, dayStart),
+            lte(sales.createdAt, dayEnd)
+          )
+        )
         .orderBy(desc(sales.createdAt));
     }),
 
@@ -118,11 +133,19 @@ export const saleRouter = createRouter({
       const memberships = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
-      if (memberships.length === 0) return { totalRevenue: "0", totalSales: 0, avgSale: "0", byFuelType: [] };
+        .where(
+          and(
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
+      if (memberships.length === 0)
+        return {
+          totalRevenue: "0",
+          totalSales: 0,
+          avgSale: "0",
+          byFuelType: [],
+        };
       const stationIds = memberships.map(m => m.stationId);
       const targetIds = input.stationId ? [input.stationId] : stationIds;
 
@@ -159,16 +182,21 @@ export const saleRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = getDb();
-      const [sale] = await db.select().from(sales).where(eq(sales.id, input.id));
+      const [sale] = await db
+        .select()
+        .from(sales)
+        .where(eq(sales.id, input.id));
       if (!sale) throw new Error("Sale not found");
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(and(
-          eq(stationUsers.stationId, sale.stationId),
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        ));
+        .where(
+          and(
+            eq(stationUsers.stationId, sale.stationId),
+            eq(stationUsers.userId, ctx.user.id),
+            eq(stationUsers.isActive, true)
+          )
+        );
       if (!membership) throw new Error("Access denied");
       return sale;
     }),

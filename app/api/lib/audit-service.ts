@@ -1,6 +1,6 @@
 /**
  * SOC-2 Compliant Audit Logging Service
- * 
+ *
  * Features:
  * - Immutable logging (no updates/deletes)
  * - Tamper-evident hash chains
@@ -11,7 +11,12 @@
  */
 
 import { getDb } from "@db/connection";
-import { auditLogEntries, authEvents, dataAccessLog, integrityLog } from "@db/audit-schema";
+import {
+  auditLogEntries,
+  authEvents,
+  dataAccessLog,
+  integrityLog,
+} from "@db/audit-schema";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
@@ -36,7 +41,13 @@ export interface AuditContext {
 }
 
 export interface LogEventOptions {
-  eventType: "authentication" | "authorization" | "data_access" | "data_modification" | "configuration" | "system";
+  eventType:
+    | "authentication"
+    | "authorization"
+    | "data_access"
+    | "data_modification"
+    | "configuration"
+    | "system";
   action: string;
   actionResult?: "success" | "failure" | "denied" | "partial";
   resourceType?: string;
@@ -63,7 +74,15 @@ export interface LogEventOptions {
 }
 
 export interface AuthEventOptions {
-  authMethod: "password" | "magic_link" | "oauth" | "mfa_totp" | "mfa_sms" | "mfa_email" | "api_key" | "session";
+  authMethod:
+    | "password"
+    | "magic_link"
+    | "oauth"
+    | "mfa_totp"
+    | "mfa_sms"
+    | "mfa_email"
+    | "api_key"
+    | "session";
   eventType: string;
   success: boolean;
   failureReason?: string;
@@ -107,7 +126,10 @@ class AuditService {
       this.lastHash = lastEntry[0].lastEntryHash;
     } else {
       // Initialize with genesis hash
-      this.lastHash = crypto.createHash("sha256").update("genesis").digest("hex");
+      this.lastHash = crypto
+        .createHash("sha256")
+        .update("genesis")
+        .digest("hex");
     }
 
     this.hashChainInitialized = true;
@@ -143,7 +165,7 @@ class AuditService {
     const entry = {
       eventId,
       eventType: options.eventType,
-      actorType: ctx.userId ? "user" : "system" as const,
+      actorType: ctx.userId ? "user" : ("system" as const),
       actorId: ctx.userId?.toString() || ctx.unionId,
       actorName: ctx.userName,
       actorEmail: ctx.userEmail,
@@ -157,12 +179,18 @@ class AuditService {
       userAgent: ctx.userAgent,
       requestMethod: options.requestMethod,
       requestPath: options.requestPath,
-      requestQuery: options.requestQuery ? JSON.stringify(options.requestQuery) : null,
+      requestQuery: options.requestQuery
+        ? JSON.stringify(options.requestQuery)
+        : null,
       responseStatus: options.responseStatus,
       responseTime: options.responseTime,
-      previousValue: options.previousValue ? JSON.stringify(options.previousValue) : null,
+      previousValue: options.previousValue
+        ? JSON.stringify(options.previousValue)
+        : null,
       newValue: options.newValue ? JSON.stringify(options.newValue) : null,
-      changedFields: options.changedFields ? JSON.stringify(options.changedFields) : null,
+      changedFields: options.changedFields
+        ? JSON.stringify(options.changedFields)
+        : null,
       teamId: ctx.teamId,
       stationId: ctx.stationId,
       country: ctx.country,
@@ -170,7 +198,9 @@ class AuditService {
       latitude: ctx.latitude,
       longitude: ctx.longitude,
       riskLevel: options.riskLevel || "low",
-      riskFactors: options.riskFactors ? JSON.stringify(options.riskFactors) : null,
+      riskFactors: options.riskFactors
+        ? JSON.stringify(options.riskFactors)
+        : null,
       isComplianceRelevant: options.isComplianceRelevant || false,
       retentionCategory: options.retentionCategory || "standard",
       previousHash: this.lastHash,
@@ -197,7 +227,10 @@ class AuditService {
   /**
    * Log authentication event
    */
-  async logAuthEvent(ctx: AuditContext, options: AuthEventOptions): Promise<void> {
+  async logAuthEvent(
+    ctx: AuditContext,
+    options: AuthEventOptions
+  ): Promise<void> {
     await this.initializeHashChain();
 
     const eventId = nanoid();
@@ -206,33 +239,41 @@ class AuditService {
       .update(JSON.stringify({ eventId, ...options }))
       .digest("hex");
 
-    await db.insert(authEvents).values({
-      eventId,
-      userId: ctx.userId,
-      unionId: ctx.unionId,
-      email: ctx.userEmail,
-      authMethod: options.authMethod,
-      eventType: options.eventType as any,
-      ipAddress: ctx.ipAddress,
-      userAgent: ctx.userAgent,
-      success: options.success,
-      failureReason: options.failureReason,
-      sessionId: options.sessionId,
-      expiresAt: options.expiresAt,
-      riskScore: options.riskScore,
-      riskSignals: options.riskSignals ? JSON.stringify(options.riskSignals) : null,
-      blockedByMFA: options.blockedByMFA || false,
-      teamId: ctx.teamId,
-      retentionCategory: "regulatory",
-      entryHash,
-      createdAt: new Date(),
-    }).catch(console.error);
+    await db
+      .insert(authEvents)
+      .values({
+        eventId,
+        userId: ctx.userId,
+        unionId: ctx.unionId,
+        email: ctx.userEmail,
+        authMethod: options.authMethod,
+        eventType: options.eventType as any,
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        success: options.success,
+        failureReason: options.failureReason,
+        sessionId: options.sessionId,
+        expiresAt: options.expiresAt,
+        riskScore: options.riskScore,
+        riskSignals: options.riskSignals
+          ? JSON.stringify(options.riskSignals)
+          : null,
+        blockedByMFA: options.blockedByMFA || false,
+        teamId: ctx.teamId,
+        retentionCategory: "regulatory",
+        entryHash,
+        createdAt: new Date(),
+      })
+      .catch(console.error);
   }
 
   /**
    * Log data access
    */
-  async logDataAccess(ctx: AuditContext, options: DataAccessOptions): Promise<void> {
+  async logDataAccess(
+    ctx: AuditContext,
+    options: DataAccessOptions
+  ): Promise<void> {
     await this.initializeHashChain();
 
     const eventId = nanoid();
@@ -241,30 +282,35 @@ class AuditService {
       .update(JSON.stringify({ eventId, ...options }))
       .digest("hex");
 
-    await db.insert(dataAccessLog).values({
-      eventId,
-      userId: ctx.userId,
-      userName: ctx.userName,
-      userEmail: ctx.userEmail,
-      resourceType: options.resourceType,
-      resourceId: options.resourceId,
-      action: options.action,
-      accessType: options.accessType,
-      filters: options.filters ? JSON.stringify(options.filters) : null,
-      fieldsAccessed: options.fieldsAccessed ? JSON.stringify(options.fieldsAccessed) : null,
-      recordsAccessed: options.recordsAccessed || 0,
-      responseSize: options.responseSize,
-      ipAddress: ctx.ipAddress,
-      userAgent: ctx.userAgent,
-      sessionId: ctx.sessionId,
-      teamId: ctx.teamId,
-      stationId: ctx.stationId,
-      isPII: options.isPII || false,
-      isSensitive: options.isSensitive || false,
-      retentionCategory: "standard",
-      entryHash,
-      createdAt: new Date(),
-    }).catch(console.error);
+    await db
+      .insert(dataAccessLog)
+      .values({
+        eventId,
+        userId: ctx.userId,
+        userName: ctx.userName,
+        userEmail: ctx.userEmail,
+        resourceType: options.resourceType,
+        resourceId: options.resourceId,
+        action: options.action,
+        accessType: options.accessType,
+        filters: options.filters ? JSON.stringify(options.filters) : null,
+        fieldsAccessed: options.fieldsAccessed
+          ? JSON.stringify(options.fieldsAccessed)
+          : null,
+        recordsAccessed: options.recordsAccessed || 0,
+        responseSize: options.responseSize,
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        sessionId: ctx.sessionId,
+        teamId: ctx.teamId,
+        stationId: ctx.stationId,
+        isPII: options.isPII || false,
+        isSensitive: options.isSensitive || false,
+        retentionCategory: "standard",
+        entryHash,
+        createdAt: new Date(),
+      })
+      .catch(console.error);
   }
 
   /**
@@ -292,7 +338,9 @@ class AuditService {
     // Note: In practice, you'd use a query builder with proper conditions
     // This is simplified for illustration
 
-    const results = await query.limit(filters.limit || 100).offset(filters.offset || 0);
+    const results = await query
+      .limit(filters.limit || 100)
+      .offset(filters.offset || 0);
 
     return results;
   }
@@ -309,7 +357,10 @@ class AuditService {
   /**
    * Verify hash chain integrity
    */
-  async verifyIntegrity(startDate: Date, endDate: Date): Promise<{
+  async verifyIntegrity(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
     isValid: boolean;
     entriesVerified: number;
     errors: string[];
@@ -333,12 +384,16 @@ class AuditService {
       // Verify entry hash
       const computedHash = this.computeEntryHash(entry);
       if (computedHash !== entry.entryHash) {
-        errors.push(`Hash mismatch at entry ${entry.id}: expected ${entry.entryHash}, got ${computedHash}`);
+        errors.push(
+          `Hash mismatch at entry ${entry.id}: expected ${entry.entryHash}, got ${computedHash}`
+        );
       }
 
       // Verify chain
       if (previousHash && entry.previousHash !== previousHash) {
-        errors.push(`Chain broken at entry ${entry.id}: expected previous hash ${previousHash}, got ${entry.previousHash}`);
+        errors.push(
+          `Chain broken at entry ${entry.id}: expected previous hash ${previousHash}, got ${entry.previousHash}`
+        );
       }
 
       previousHash = entry.entryHash;
@@ -379,7 +434,10 @@ class AuditService {
     const lastEntry = entries[entries.length - 1];
 
     // Verify entries
-    const { isValid, errors } = await this.verifyIntegrity(startOfDay, endOfDay);
+    const { isValid, errors } = await this.verifyIntegrity(
+      startOfDay,
+      endOfDay
+    );
 
     await db.insert(integrityLog).values({
       logType: "daily_summary",
@@ -403,9 +461,10 @@ class AuditService {
     user?: { id: number; name?: string; email?: string; unionId?: string }
   ): AuditContext {
     const forwardedFor = req.headers.get("x-forwarded-for");
-    const ipAddress = forwardedFor?.split(",")[0]?.trim() || 
-                      req.headers.get("x-real-ip") || 
-                      "unknown";
+    const ipAddress =
+      forwardedFor?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
 
     return {
       userId: user?.id,
@@ -489,7 +548,8 @@ export function createAuditMiddleware() {
           responseStatus: (error as any)?.code || 500,
           responseTime: Date.now() - startTime,
           actionResult: "failure",
-          riskLevel: (error as TRPCError)?.code === "FORBIDDEN" ? "medium" : "low",
+          riskLevel:
+            (error as TRPCError)?.code === "FORBIDDEN" ? "medium" : "low",
         }
       );
 

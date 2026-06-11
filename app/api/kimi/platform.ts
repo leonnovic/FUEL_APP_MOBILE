@@ -4,7 +4,7 @@ import type { UserProfile } from "./types";
 async function kimiRequest<T>(
   path: string,
   token: string,
-  init?: RequestInit,
+  init?: RequestInit
 ): Promise<T | null> {
   const resp = await fetch(`${env.kimiOpenUrl}${path}`, {
     ...init,
@@ -16,9 +16,7 @@ async function kimiRequest<T>(
   });
   if (!resp.ok) {
     const text = await resp.text();
-    console.warn(
-      `[kimi] Request to ${path} failed (${resp.status}): ${text}`,
-    );
+    console.warn(`[kimi] Request to ${path} failed (${resp.status}): ${text}`);
     return null;
   }
   return resp.json() as Promise<T>;

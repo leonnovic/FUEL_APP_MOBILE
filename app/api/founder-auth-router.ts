@@ -5,7 +5,12 @@
 
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
-import { founderOnlyQuery, founderAdminQuery, generateFounderToken, validateFounderToken } from "./founder-context";
+import {
+  founderOnlyQuery,
+  founderAdminQuery,
+  generateFounderToken,
+  validateFounderToken,
+} from "./founder-context";
 import { founderSessions, users } from "@db/schema";
 import { getDb } from "@db/connection";
 import { desc, eq } from "drizzle-orm";
@@ -23,13 +28,18 @@ function getStoredCreds(): { username: string; password: string } {
 export const founderAuthRouter = createRouter({
   // ─── Login ───
   login: publicQuery
-    .input(z.object({
-      username: z.string().min(1),
-      password: z.string().min(1),
-    }))
+    .input(
+      z.object({
+        username: z.string().min(1),
+        password: z.string().min(1),
+      })
+    )
     .mutation(async ({ input }) => {
       const creds = getStoredCreds();
-      if (input.username !== creds.username || input.password !== creds.password) {
+      if (
+        input.username !== creds.username ||
+        input.password !== creds.password
+      ) {
         return { success: false, error: "Invalid credentials", token: null };
       }
 
@@ -39,12 +49,19 @@ export const founderAuthRouter = createRouter({
       try {
         const db = getDb();
         // Find or create founder user
-        const existingUser = await db.select().from(users).where(eq(users.email, "founder@system.local")).limit(1);
+        const existingUser = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, "founder@system.local"))
+          .limit(1);
         let userId: number;
-        
+
         if (existingUser[0]) {
           userId = existingUser[0].id;
-          await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, userId));
+          await db
+            .update(users)
+            .set({ lastSignInAt: new Date() })
+            .where(eq(users.id, userId));
         } else {
           const [{ insertId }] = await db.insert(users).values({
             unionId: "founder-" + nanoid(16),
@@ -55,7 +72,7 @@ export const founderAuthRouter = createRouter({
           } as any);
           userId = insertId as number;
         }
-        
+
         await db.insert(founderSessions).values({
           userId,
           lastLoginAt: new Date(),
@@ -83,27 +100,35 @@ export const founderAuthRouter = createRouter({
     }),
 
   // ─── Logout ───
-  logout: founderOnlyQuery
-    .mutation(async ({ ctx }) => {
-      // Log the logout action
-      try {
-        const db = getDb();
-        const existingUser = await db.select().from(users).where(eq(users.email, "founder@system.local")).limit(1);
-        if (existingUser[0]) {
-          await db.update(founderSessions).set({ lastLoginAt: new Date() }).where(eq(founderSessions.userId, existingUser[0].id));
-        }
-      } catch {
-        // Non-critical
+  logout: founderOnlyQuery.mutation(async ({ ctx }) => {
+    // Log the logout action
+    try {
+      const db = getDb();
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, "founder@system.local"))
+        .limit(1);
+      if (existingUser[0]) {
+        await db
+          .update(founderSessions)
+          .set({ lastLoginAt: new Date() })
+          .where(eq(founderSessions.userId, existingUser[0].id));
       }
-      return { success: true };
-    }),
+    } catch {
+      // Non-critical
+    }
+    return { success: true };
+  }),
 
   // ─── Change Password ───
   changePassword: founderOnlyQuery
-    .input(z.object({
-      currentPassword: z.string().min(1),
-      newPassword: z.string().min(6),
-    }))
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(6),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const creds = getStoredCreds();
       if (input.currentPassword !== creds.password) {
@@ -113,13 +138,16 @@ export const founderAuthRouter = createRouter({
     }),
 
   // ─── Get Session History ───
-  sessions: founderAdminQuery
-    .query(async () => {
-      try {
-        const db = getDb();
-        return db.select().from(founderSessions).orderBy(desc(founderSessions.lastLoginAt)).limit(100);
-      } catch {
-        return [];
-      }
-    }),
+  sessions: founderAdminQuery.query(async () => {
+    try {
+      const db = getDb();
+      return db
+        .select()
+        .from(founderSessions)
+        .orderBy(desc(founderSessions.lastLoginAt))
+        .limit(100);
+    } catch {
+      return [];
+    }
+  }),
 });

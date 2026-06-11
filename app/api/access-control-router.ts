@@ -4,15 +4,19 @@
 
 import { z } from "zod";
 import { initTRPC, TRPCError } from "@trpc/server";
-import { accessControl, PERMISSIONS, DEFAULT_ROLES } from "./lib/access-control";
+import {
+  accessControl,
+  PERMISSIONS,
+  DEFAULT_ROLES,
+} from "./lib/access-control";
 import { auditService } from "./lib/audit-service";
 import { getDb } from "@db/connection";
-import { 
-  permissions, 
-  roles, 
-  teams, 
-  teamMembers, 
-  dataScopes, 
+import {
+  permissions,
+  roles,
+  teams,
+  teamMembers,
+  dataScopes,
   actionScopes,
   teamInvitations,
   auditLogEntries,
@@ -112,7 +116,11 @@ export const accessControlRouter = t.router({
   getRole: t.procedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
-      const role = await db.select().from(roles).where(eq(roles.id, input.id)).limit(1);
+      const role = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.id, input.id))
+        .limit(1);
       return role[0] || null;
     }),
 
@@ -122,7 +130,11 @@ export const accessControlRouter = t.router({
     .input(
       z.object({
         name: z.string().min(1).max(100),
-        code: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/),
+        code: z
+          .string()
+          .min(1)
+          .max(50)
+          .regex(/^[a-z0-9_]+$/),
         description: z.string().optional(),
         level: z.number().min(0).max(100),
         permissions: z.array(z.string()),
@@ -176,15 +188,23 @@ export const accessControlRouter = t.router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updates } = input;
-      
+
       // Get previous value for audit
-      const previous = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+      const previous = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.id, id))
+        .limit(1);
 
       if (updates.permissions) {
-        (updates as unknown as { permissions?: string }).permissions = JSON.stringify(updates.permissions);
+        (updates as unknown as { permissions?: string }).permissions =
+          JSON.stringify(updates.permissions);
       }
 
-      await db.update(roles).set(updates as any).where(eq(roles.id, id));
+      await db
+        .update(roles)
+        .set(updates as any)
+        .where(eq(roles.id, id));
 
       await auditService.logEvent(
         { userId: ctx.user!.id, teamId: ctx.teamId },
@@ -255,8 +275,12 @@ export const accessControlRouter = t.router({
 
       // Get role details for each member
       const enriched = await Promise.all(
-        members.map(async (member) => {
-          const roleResult = await db.select().from(roles).where(eq(roles.id, member.roleId)).limit(1);
+        members.map(async member => {
+          const roleResult = await db
+            .select()
+            .from(roles)
+            .where(eq(roles.id, member.roleId))
+            .limit(1);
           return { ...member, role: roleResult[0] || null };
         })
       );
@@ -327,7 +351,11 @@ export const accessControlRouter = t.router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const previous = await db.select().from(teamMembers).where(eq(teamMembers.id, input.memberId)).limit(1);
+      const previous = await db
+        .select()
+        .from(teamMembers)
+        .where(eq(teamMembers.id, input.memberId))
+        .limit(1);
 
       await db
         .update(teamMembers)
@@ -427,12 +455,19 @@ export const accessControlRouter = t.router({
   acceptInvitation: t.procedure
     .input(z.object({ token: z.string() }))
     .mutation(async ({ input }) => {
-      const invitation = await db.select().from(teamInvitations)
-        .where(and(eq(teamInvitations.token, input.token), eq(teamInvitations.status, "pending")))
+      const invitation = await db
+        .select()
+        .from(teamInvitations)
+        .where(
+          and(
+            eq(teamInvitations.token, input.token),
+            eq(teamInvitations.status, "pending")
+          )
+        )
         .limit(1);
 
       const inv = invitation[0];
-      
+
       if (!inv) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -483,7 +518,11 @@ export const accessControlRouter = t.router({
       const userId = input.userId || ctx.user?.id;
       if (!userId || !ctx.teamId) return [];
 
-      return accessControl.getDataScopes(userId, ctx.teamId, input.resourceType);
+      return accessControl.getDataScopes(
+        userId,
+        ctx.teamId,
+        input.resourceType
+      );
     }),
 
   // Create data scope

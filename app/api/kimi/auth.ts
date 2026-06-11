@@ -13,7 +13,7 @@ import type { TokenResponse } from "./types";
 
 async function exchangeAuthCode(
   code: string,
-  redirectUri: string,
+  redirectUri: string
 ): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -38,11 +38,11 @@ async function exchangeAuthCode(
 }
 
 const jwks = jose.createRemoteJWKSet(
-  new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`),
+  new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`)
 );
 
 async function verifyAccessToken(
-  accessToken: string,
+  accessToken: string
 ): Promise<{ userId: string; clientId: string }> {
   const { payload } = await jose.jwtVerify(accessToken, jwks);
   const userId = payload.user_id as string;
@@ -82,10 +82,7 @@ export function createOAuthCallbackHandler() {
       if (error === "access_denied") {
         return c.redirect("/", 302);
       }
-      return c.json(
-        { error, error_description: errorDescription },
-        400,
-      );
+      return c.json({ error, error_description: errorDescription }, 400);
     }
 
     if (!code || !state) {

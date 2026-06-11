@@ -10,15 +10,9 @@
   ],
   "compilerOptions": {
     "paths": {
-      "@contracts/*": [
-        "./contracts/*"
-      ],
-      "@db/*": [
-        "./db/*"
-      ],
-      "@/*": [
-        "./*"
-      ]
+      "@contracts/*": ["./contracts/*"],
+      "@db/*": ["./db/*"],
+      "@/*": ["./*"]
     }
   }
 }

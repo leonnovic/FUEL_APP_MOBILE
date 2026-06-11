@@ -4,7 +4,7 @@ import { getSessionCookieOptions } from "./lib/cookies";
 import { createRouter, authedQuery } from "./middleware";
 
 export const authRouter = createRouter({
-  me: authedQuery.query((opts) => opts.ctx.user),
+  me: authedQuery.query(opts => opts.ctx.user),
   logout: authedQuery.mutation(async ({ ctx }) => {
     const opts = getSessionCookieOptions(ctx.req.headers);
     ctx.resHeaders.append(
@@ -15,7 +15,7 @@ export const authRouter = createRouter({
         sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
         secure: opts.secure,
         maxAge: 0,
-      }),
+      })
     );
     return { success: true };
   }),

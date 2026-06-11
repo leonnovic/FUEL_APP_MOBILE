@@ -5,17 +5,20 @@
 ### Installation Options
 
 #### Option 1: PWA (Recommended - All Devices)
+
 - **Android Chrome**: Visit `https://fuelpro.mocha.app` > Menu > "Add to Home Screen"
 - **iOS Safari**: Visit `https://fuelpro.mocha.app` > Share > "Add to Home Screen"
 - **Windows Chrome**: Visit `https://fuelpro.mocha.app` > Menu > "Install FuelPro"
 - Works offline after first visit
 
 #### Option 2: Android APK
+
 1. Download `FuelPro-v1.0.0.apk` to your Android phone
 2. Enable "Unknown Sources" in Settings > Security
 3. Open the APK file to install
 
 #### Option 3: Windows Standalone
+
 1. Download `FuelPro-Windows.zip` and extract
 2. Double-click `FuelPro.bat` to launch
 
@@ -142,35 +145,42 @@ FUEL_APP_MOBILE/
 ## 🔧 Development Setup
 
 ### Prerequisites
+
 - Node.js 18+
 - npm 9+
 - MySQL 8+ (for backend)
 
 ### Install Dependencies
+
 ```bash
 cd app
 npm install
 ```
 
 ### Development Mode
+
 ```bash
 cd app
 npm run dev
 ```
+
 Opens at `http://localhost:5000`
 
 ### Build for Production
+
 ```bash
 cd app
 npm run build
 ```
 
 ### Run TypeScript Check
+
 ```bash
 npm run check
 ```
 
 ### Database Migrations
+
 ```bash
 npm run db:generate  # Generate migration
 npm run db:migrate   # Apply migrations
@@ -182,16 +192,19 @@ npm run db:push      # Push schema to DB
 ## 🚢 Deployment
 
 ### Vercel (Recommended)
+
 1. Connect your GitHub repo to Vercel
 2. Set environment variables in Vercel dashboard
 3. Deploy automatically on push
 
 ### Docker
+
 ```bash
 docker-compose up --build
 ```
 
 ### Manual
+
 1. Build: `npm run build`
 2. Copy `app/dist` to server
 3. Configure nginx
@@ -201,13 +214,15 @@ docker-compose up --build
 
 ## 🔐 Environment Variables
 
-### Frontend (prefixed with VITE_)
+### Frontend (prefixed with VITE\_)
+
 ```env
 VITE_KIMI_AUTH_URL=https://auth.kimi.com
 VITE_APP_ID=your_app_id
 ```
 
 ### Backend
+
 ```env
 APP_ID=your_app_id
 APP_SECRET=your_app_secret
@@ -230,17 +245,17 @@ npm run test:watch  # Watch mode
 
 ## 📊 Features Overview
 
-| Feature | Description |
-|---------|-------------|
-| Dashboard | Real-time station overview |
-| Sales Tracking | Track all fuel sales |
-| Inventory | Manage fuel stock levels |
-| Credit Management | Handle credit accounts |
-| Payroll | Staff salary management |
-| Document Center | Upload/store documents |
-| Compliance | Regulatory compliance |
-| Audit Trail | Track all changes |
-| AI Chatbot | Get help with the system |
+| Feature           | Description                |
+| ----------------- | -------------------------- |
+| Dashboard         | Real-time station overview |
+| Sales Tracking    | Track all fuel sales       |
+| Inventory         | Manage fuel stock levels   |
+| Credit Management | Handle credit accounts     |
+| Payroll           | Staff salary management    |
+| Document Center   | Upload/store documents     |
+| Compliance        | Regulatory compliance      |
+| Audit Trail       | Track all changes          |
+| AI Chatbot        | Get help with the system   |
 
 ---
 
@@ -266,6 +281,7 @@ npm run test:watch  # Watch mode
 ## 🐛 Troubleshooting
 
 ### Build Errors
+
 ```bash
 # Clear node_modules and reinstall
 rm -rf node_modules package-lock.json
@@ -273,11 +289,13 @@ npm install
 ```
 
 ### TypeScript Errors
+
 ```bash
 npm run check
 ```
 
 ### API Connection Issues
+
 1. Check if backend is running
 2. Verify DATABASE_URL
 3. Check CORS settings
@@ -287,6 +305,7 @@ npm run check
 ## 📞 Support
 
 For issues and feature requests, please contact:
+
 - Email: support@fuelpro.app
 - GitHub Issues: [Link to repo]
 

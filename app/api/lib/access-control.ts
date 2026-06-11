@@ -1,6 +1,6 @@
 /**
  * Access Control Service - Permission checking and enforcement
- * 
+ *
  * Features:
  * - Role-based permission checking
  * - Team-scoped access control
@@ -30,62 +30,62 @@ const db = getDb();
 export const PERMISSIONS = {
   // Dashboard
   DASHBOARD_VIEW: "dashboard:view",
-  
+
   // Sales
   SALES_CREATE: "sales:create",
   SALES_READ: "sales:read",
   SALES_UPDATE: "sales:update",
   SALES_DELETE: "sales:delete",
   SALES_EXPORT: "sales:export",
-  
+
   // Inventory
   INVENTORY_CREATE: "inventory:create",
   INVENTORY_READ: "inventory:read",
   INVENTORY_UPDATE: "inventory:update",
   INVENTORY_DELETE: "inventory:delete",
   INVENTORY_EXPORT: "inventory:export",
-  
+
   // Payments
   PAYMENTS_CREATE: "payments:create",
   PAYMENTS_READ: "payments:read",
   PAYMENTS_UPDATE: "payments:update",
   PAYMENTS_DELETE: "payments:delete",
   PAYMENTS_EXPORT: "payments:export",
-  
+
   // Stations
   STATIONS_CREATE: "stations:create",
   STATIONS_READ: "stations:read",
   STATIONS_UPDATE: "stations:update",
   STATIONS_DELETE: "stations:delete",
   STATIONS_MANAGE: "stations:manage",
-  
+
   // Users
   USERS_CREATE: "users:create",
   USERS_READ: "users:read",
   USERS_UPDATE: "users:update",
   USERS_DELETE: "users:delete",
   USERS_INVITE: "users:invite",
-  
+
   // Reports
   REPORTS_VIEW: "reports:view",
   REPORTS_CREATE: "reports:create",
   REPORTS_EXPORT: "reports:export",
-  
+
   // Settings
   SETTINGS_VIEW: "settings:view",
   SETTINGS_UPDATE: "settings:update",
   SETTINGS_MANAGE: "settings:manage",
-  
+
   // Audit
   AUDIT_VIEW: "audit:view",
   AUDIT_EXPORT: "audit:export",
-  
+
   // Roles & Permissions
   ROLES_CREATE: "roles:create",
   ROLES_READ: "roles:read",
   ROLES_UPDATE: "roles:update",
   ROLES_DELETE: "roles:delete",
-  
+
   // Teams
   TEAMS_CREATE: "teams:create",
   TEAMS_READ: "teams:read",
@@ -99,17 +99,53 @@ export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 // Resource categories for UI grouping
 export const RESOURCE_CATEGORIES = {
   dashboard: ["dashboard:view"],
-  sales: ["sales:create", "sales:read", "sales:update", "sales:delete", "sales:export"],
-  inventory: ["inventory:create", "inventory:read", "inventory:update", "inventory:delete", "inventory:export"],
-  payments: ["payments:create", "payments:read", "payments:update", "payments:delete", "payments:export"],
-  stations: ["stations:create", "stations:read", "stations:update", "stations:delete", "stations:manage"],
-  users: ["users:create", "users:read", "users:update", "users:delete", "users:invite"],
+  sales: [
+    "sales:create",
+    "sales:read",
+    "sales:update",
+    "sales:delete",
+    "sales:export",
+  ],
+  inventory: [
+    "inventory:create",
+    "inventory:read",
+    "inventory:update",
+    "inventory:delete",
+    "inventory:export",
+  ],
+  payments: [
+    "payments:create",
+    "payments:read",
+    "payments:update",
+    "payments:delete",
+    "payments:export",
+  ],
+  stations: [
+    "stations:create",
+    "stations:read",
+    "stations:update",
+    "stations:delete",
+    "stations:manage",
+  ],
+  users: [
+    "users:create",
+    "users:read",
+    "users:update",
+    "users:delete",
+    "users:invite",
+  ],
   reports: ["reports:view", "reports:create", "reports:export"],
   settings: ["settings:view", "settings:update", "settings:manage"],
   audit: ["audit:view", "audit:export"],
   // Note: roles and teams permissions use "settings" as their resource category
   roles: ["roles:create", "roles:read", "roles:update", "roles:delete"],
-  teams: ["teams:create", "teams:read", "teams:update", "teams:delete", "teams:manage"],
+  teams: [
+    "teams:create",
+    "teams:read",
+    "teams:update",
+    "teams:delete",
+    "teams:manage",
+  ],
 };
 
 // Default roles to seed
@@ -136,13 +172,26 @@ export const DEFAULT_ROLES = [
     canViewAuditLogs: true,
     permissions: [
       PERMISSIONS.DASHBOARD_VIEW,
-      PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_READ, PERMISSIONS.SALES_UPDATE, PERMISSIONS.SALES_EXPORT,
-      PERMISSIONS.INVENTORY_CREATE, PERMISSIONS.INVENTORY_READ, PERMISSIONS.INVENTORY_UPDATE, PERMISSIONS.INVENTORY_EXPORT,
-      PERMISSIONS.PAYMENTS_CREATE, PERMISSIONS.PAYMENTS_READ, PERMISSIONS.PAYMENTS_UPDATE,
-      PERMISSIONS.STATIONS_READ, PERMISSIONS.STATIONS_UPDATE,
-      PERMISSIONS.USERS_READ, PERMISSIONS.USERS_INVITE,
-      PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_CREATE, PERMISSIONS.REPORTS_EXPORT,
-      PERMISSIONS.SETTINGS_VIEW, PERMISSIONS.SETTINGS_UPDATE,
+      PERMISSIONS.SALES_CREATE,
+      PERMISSIONS.SALES_READ,
+      PERMISSIONS.SALES_UPDATE,
+      PERMISSIONS.SALES_EXPORT,
+      PERMISSIONS.INVENTORY_CREATE,
+      PERMISSIONS.INVENTORY_READ,
+      PERMISSIONS.INVENTORY_UPDATE,
+      PERMISSIONS.INVENTORY_EXPORT,
+      PERMISSIONS.PAYMENTS_CREATE,
+      PERMISSIONS.PAYMENTS_READ,
+      PERMISSIONS.PAYMENTS_UPDATE,
+      PERMISSIONS.STATIONS_READ,
+      PERMISSIONS.STATIONS_UPDATE,
+      PERMISSIONS.USERS_READ,
+      PERMISSIONS.USERS_INVITE,
+      PERMISSIONS.REPORTS_VIEW,
+      PERMISSIONS.REPORTS_CREATE,
+      PERMISSIONS.REPORTS_EXPORT,
+      PERMISSIONS.SETTINGS_VIEW,
+      PERMISSIONS.SETTINGS_UPDATE,
       PERMISSIONS.AUDIT_VIEW,
     ],
   },
@@ -157,9 +206,11 @@ export const DEFAULT_ROLES = [
     canViewAuditLogs: false,
     permissions: [
       PERMISSIONS.DASHBOARD_VIEW,
-      PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_READ,
+      PERMISSIONS.SALES_CREATE,
+      PERMISSIONS.SALES_READ,
       PERMISSIONS.INVENTORY_READ,
-      PERMISSIONS.PAYMENTS_CREATE, PERMISSIONS.PAYMENTS_READ,
+      PERMISSIONS.PAYMENTS_CREATE,
+      PERMISSIONS.PAYMENTS_READ,
     ],
   },
   {
@@ -286,7 +337,7 @@ export class AccessControlService {
 
     const userPermissions = await this.getUserPermissions(userId, teamId);
 
-    return requiredPermissions.every((p) => userPermissions.includes(p));
+    return requiredPermissions.every(p => userPermissions.includes(p));
   }
 
   /**
@@ -305,7 +356,7 @@ export class AccessControlService {
 
     const userPermissions = await this.getUserPermissions(userId, teamId);
 
-    return requiredPermissions.some((p) => userPermissions.includes(p));
+    return requiredPermissions.some(p => userPermissions.includes(p));
   }
 
   /**
@@ -332,7 +383,7 @@ export class AccessControlService {
       return [];
     }
 
-    const roleIds = memberships.map((m) => m.roleId);
+    const roleIds = memberships.map(m => m.roleId);
 
     // Get scopes for user's roles
     const scopes = await db
@@ -386,7 +437,7 @@ export class AccessControlService {
       return null;
     }
 
-    const roleIds = memberships.map((m) => m.roleId);
+    const roleIds = memberships.map(m => m.roleId);
 
     // Check for user-specific limitations first (higher priority)
     const userLimit = await db
@@ -431,17 +482,14 @@ export class AccessControlService {
       .select({ teamId: teamMembers.teamId })
       .from(teamMembers)
       .where(
-        and(
-          eq(teamMembers.userId, userId),
-          eq(teamMembers.status, "active")
-        )
+        and(eq(teamMembers.userId, userId), eq(teamMembers.status, "active"))
       );
 
     if (!memberships.length) {
       return [];
     }
 
-    const teamIds = memberships.map((m) => m.teamId);
+    const teamIds = memberships.map(m => m.teamId);
 
     return db.select().from(teams).where(inArray(teams.id, teamIds));
   }
@@ -449,10 +497,7 @@ export class AccessControlService {
   /**
    * Get user's role in a team
    */
-  async getUserTeamRole(
-    userId: number,
-    teamId: number
-  ): Promise<Role | null> {
+  async getUserTeamRole(userId: number, teamId: number): Promise<Role | null> {
     const membership = await db
       .select()
       .from(teamMembers)
@@ -510,20 +555,26 @@ export class AccessControlService {
       }
       const actionType = perm.split(":")[1] || "manage";
 
-      await db.insert(permissions).values({
-        code: perm,
-        name: perm.replace(":", " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-        resourceCategory: category as any,
-        actionType: actionType as any,
-      }).catch(() => {}); // Ignore duplicate errors
+      await db
+        .insert(permissions)
+        .values({
+          code: perm,
+          name: perm.replace(":", " ").replace(/\b\w/g, l => l.toUpperCase()),
+          resourceCategory: category as any,
+          actionType: actionType as any,
+        })
+        .catch(() => {}); // Ignore duplicate errors
     }
 
     // Seed roles
     for (const role of DEFAULT_ROLES) {
-      await db.insert(roles).values({
-        ...role,
-        permissions: JSON.stringify(role.permissions),
-      }).catch(() => {}); // Ignore duplicate errors
+      await db
+        .insert(roles)
+        .values({
+          ...role,
+          permissions: JSON.stringify(role.permissions),
+        })
+        .catch(() => {}); // Ignore duplicate errors
     }
   }
 }
