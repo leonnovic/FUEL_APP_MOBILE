@@ -768,6 +768,7 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
   if (action.type === "LOAD_FROM_STORAGE" && action.payload) {
     const hasExistingData =
       state.companyData.name ||
+      state.companyData.logo || // CRITICAL: Preserve logo even without company name
       state.deliveryData.rows.length > 0 ||
       state.invoiceItems.length > 0 ||
       state.pmsPumps.length > 0 ||
@@ -776,6 +777,7 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
 
     const hasNewData =
       action.payload.companyData?.name ||
+      action.payload.companyData?.logo || // Check if logo is being loaded
       (action.payload.deliveryData?.rows &&
         action.payload.deliveryData.rows.length > 0) ||
       (action.payload.invoiceItems && action.payload.invoiceItems.length > 0) ||
@@ -789,7 +791,7 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       return {
         ...state,
         ...action.payload,
-        companyData: state.companyData,
+        companyData: state.companyData, // Always preserve companyData (includes logo)
         deliveryData: state.deliveryData,
         invoiceItems: state.invoiceItems,
         pmsPumps: state.pmsPumps,
@@ -798,6 +800,14 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         stations: state.stations,
         currentStationId: state.currentStationId,
         stationData: state.stationData,
+      };
+    }
+
+    // Special case: preserve logo when loading from storage if it exists in state
+    if (state.companyData.logo && !action.payload.companyData?.logo) {
+      action.payload.companyData = {
+        ...action.payload.companyData,
+        logo: state.companyData.logo
       };
     }
   }
