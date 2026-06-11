@@ -1252,7 +1252,7 @@ export default function PointOfSale() {
               <div className="footer mt-4 text-center text-xs border-t border-dashed border-gray-400 pt-3">
                 <p className="font-semibold">Thank you for your business!</p>
                 <p className="text-[10px]">Goods once sold are not returnable</p>
-                <p className="text-[10px] mt-2 opacity-60">www.fuelpro.mocha.app</p>
+                <p className="text-[10px] mt-2 opacity-60">{window.location.hostname}</p>
               </div>
             </div>
           </div>
