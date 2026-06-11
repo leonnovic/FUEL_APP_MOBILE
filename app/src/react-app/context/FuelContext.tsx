@@ -764,50 +764,30 @@ const initialState: FuelState = {
 };
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-  // Prevent accidental state resets by validating LOAD_FROM_STORAGE payload
+  // Always preserve logo during LOAD_FROM_STORAGE - this is critical for user experience
   if (action.type === "LOAD_FROM_STORAGE" && action.payload) {
-    const hasExistingData =
-      state.companyData.name ||
-      state.companyData.logo || // CRITICAL: Preserve logo even without company name
-      state.deliveryData.rows.length > 0 ||
-      state.invoiceItems.length > 0 ||
-      state.pmsPumps.length > 0 ||
-      state.agoPumps.length > 0 ||
-      (state.stations && state.stations.length > 0);
-
-    const hasNewData =
-      action.payload.companyData?.name ||
-      action.payload.companyData?.logo || // Check if logo is being loaded
-      (action.payload.deliveryData?.rows &&
-        action.payload.deliveryData.rows.length > 0) ||
-      (action.payload.invoiceItems && action.payload.invoiceItems.length > 0) ||
-      (action.payload.pmsPumps && action.payload.pmsPumps.length > 0) ||
-      (action.payload.agoPumps && action.payload.agoPumps.length > 0) ||
-      (action.payload.stations && action.payload.stations.length > 0);
-
-    // If we have existing data but the payload appears to be empty/default, don't overwrite
-    if (hasExistingData && !hasNewData) {
-      console.log("Prevented data reset - keeping existing data");
-      return {
-        ...state,
+    // Check if the incoming payload has companyData with a logo
+    const incomingLogo = action.payload.companyData?.logo;
+    
+    // If we have an existing logo in state but the payload doesn't have one, preserve it
+    if (state.companyData.logo && !incomingLogo) {
+      action.payload = {
         ...action.payload,
-        companyData: state.companyData, // Always preserve companyData (includes logo)
-        deliveryData: state.deliveryData,
-        invoiceItems: state.invoiceItems,
-        pmsPumps: state.pmsPumps,
-        agoPumps: state.agoPumps,
-        expenses: state.expenses,
-        stations: state.stations,
-        currentStationId: state.currentStationId,
-        stationData: state.stationData,
+        companyData: {
+          ...action.payload.companyData,
+          logo: state.companyData.logo
+        }
       };
     }
-
-    // Special case: preserve logo when loading from storage if it exists in state
-    if (state.companyData.logo && !action.payload.companyData?.logo) {
-      action.payload.companyData = {
-        ...action.payload.companyData,
-        logo: state.companyData.logo
+    
+    // If both have logos, prefer the existing one (user might have updated it)
+    if (state.companyData.logo && incomingLogo && state.companyData.logo !== incomingLogo) {
+      action.payload = {
+        ...action.payload,
+        companyData: {
+          ...action.payload.companyData,
+          logo: state.companyData.logo
+        }
       };
     }
   }
