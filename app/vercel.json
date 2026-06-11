@@ -1,8 +1,12 @@
 {
-  "buildCommand": "echo 'Static build' && exit 0",
+  "version": 2,
+  "buildCommand": "echo 'Static deployment'",
   "outputDirectory": "dist",
-  "installCommand": "echo 'No install needed' && exit 0",
-  "framework": "vite",
+  "installCommand": "echo 'Static deployment - no install needed'",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -12,9 +16,5 @@
         { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
-  ],
-  "redirects": [
-    { "source": "/founder", "destination": "/#/founder", "permanent": false },
-    { "source": "/admin", "destination": "/#/admin", "permanent": false }
   ]
 }
