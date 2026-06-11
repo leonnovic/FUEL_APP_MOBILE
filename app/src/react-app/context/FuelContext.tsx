@@ -1079,11 +1079,17 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // Save as single compressed JSON string
       localStorage.setItem(userKey, JSON.stringify(compactData));
 
-      // Clean up ALL old individual keys matching the user prefix — dynamic, not hardcoded
+      // CRITICAL: Always save companyData to individual key for logo persistence
+      // This ensures logo survives even if compact storage has issues
+      if (state.companyData) {
+        localStorage.setItem(`${userKey}companyData`, JSON.stringify(state.companyData));
+      }
+
+      // Clean up old individual keys EXCEPT companyData (keep for logo backup)
       const oldUserKey = user?.id ? `user_${user.id}_` : "guest_";
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(oldUserKey)) {
+        if (key && key.startsWith(oldUserKey) && !key.endsWith("companyData")) {
           localStorage.removeItem(key);
         }
       }
@@ -1256,13 +1262,21 @@ export function FuelProvider({ children }: { children: ReactNode }) {
 
   const loadFromStorage = () => {
     try {
+      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
+      
       // Try loading from compact storage first
-      const compactKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
-      const compactData = localStorage.getItem(compactKey);
+      const compactData = localStorage.getItem(userKey);
 
       if (compactData) {
         // Load from compact JSON blob
         const parsed = JSON.parse(compactData);
+        
+        // CRITICAL: Always check individual companyData key for logo (more reliable)
+        const individualCompanyData = localStorage.getItem(`${userKey}companyData`);
+        if (individualCompanyData) {
+          parsed.companyData = JSON.parse(individualCompanyData);
+        }
+        
         const loadedData: Partial<FuelState> = {
           ...initialState, // Start with defaults
           ...parsed, // Overlay saved values
@@ -1270,85 +1284,85 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "LOAD_FROM_STORAGE", payload: loadedData });
       } else {
         // Fallback to old individual keys for backward compatibility
-        const userKey = user?.id ? `user_${user.id}_` : "guest_";
+        const oldUserKey = user?.id ? `user_${user.id}_` : "guest_";
 
         const savedTheme =
-          (localStorage.getItem(`${userKey}theme`) as "light" | "dark") ||
+          (localStorage.getItem(`${oldUserKey}theme`) as "light" | "dark") ||
           "dark";
         const savedThemeSettings = localStorage.getItem(
-          `${userKey}themeSettings`
+          `${oldUserKey}themeSettings`
         );
         const savedUserPreferences = localStorage.getItem(
-          `${userKey}userPreferences`
+          `${oldUserKey}userPreferences`
         );
-        const savedCompany = localStorage.getItem(`${userKey}companyData`);
-        const savedSignatures = localStorage.getItem(`${userKey}signatures`);
+        const savedCompany = localStorage.getItem(`${oldUserKey}companyData`);
+        const savedSignatures = localStorage.getItem(`${oldUserKey}signatures`);
         const savedInvoiceCounter = localStorage.getItem(
-          `${userKey}invoiceCounter`
+          `${oldUserKey}invoiceCounter`
         );
-        const savedClients = localStorage.getItem(`${userKey}clients`);
-        const savedInvoices = localStorage.getItem(`${userKey}invoices`);
-        const savedDebtHistory = localStorage.getItem(`${userKey}debtHistory`);
+        const savedClients = localStorage.getItem(`${oldUserKey}clients`);
+        const savedInvoices = localStorage.getItem(`${oldUserKey}invoices`);
+        const savedDebtHistory = localStorage.getItem(`${oldUserKey}debtHistory`);
         const savedSalesHistory = localStorage.getItem(
-          `${userKey}salesHistory`
+          `${oldUserKey}salesHistory`
         );
         const savedDelivery = localStorage.getItem(
-          `${userKey}fuelDeliveryData`
+          `${oldUserKey}fuelDeliveryData`
         );
         const savedInvoiceItems = localStorage.getItem(
-          `${userKey}invoiceItems`
+          `${oldUserKey}invoiceItems`
         );
         const savedInvoiceSettings = localStorage.getItem(
-          `${userKey}invoiceSettings`
+          `${oldUserKey}invoiceSettings`
         );
-        const savedTillPayment = localStorage.getItem(`${userKey}tillPayment`);
-        const savedPmsPumps = localStorage.getItem(`${userKey}fuelPumps_pms`);
-        const savedAgoPumps = localStorage.getItem(`${userKey}fuelPumps_ago`);
-        const savedExpenses = localStorage.getItem(`${userKey}fuelExpenses`);
-        const savedSalesDate = localStorage.getItem(`${userKey}salesDate`);
-        const savedShift = localStorage.getItem(`${userKey}shift`);
+        const savedTillPayment = localStorage.getItem(`${oldUserKey}tillPayment`);
+        const savedPmsPumps = localStorage.getItem(`${oldUserKey}fuelPumps_pms`);
+        const savedAgoPumps = localStorage.getItem(`${oldUserKey}fuelPumps_ago`);
+        const savedExpenses = localStorage.getItem(`${oldUserKey}fuelExpenses`);
+        const savedSalesDate = localStorage.getItem(`${oldUserKey}salesDate`);
+        const savedShift = localStorage.getItem(`${oldUserKey}shift`);
         const savedPmsTankOpening = localStorage.getItem(
-          `${userKey}pmsTankOpening`
+          `${oldUserKey}pmsTankOpening`
         );
         const savedPmsTankClosing = localStorage.getItem(
-          `${userKey}pmsTankClosing`
+          `${oldUserKey}pmsTankClosing`
         );
         const savedAgoTankOpening = localStorage.getItem(
-          `${userKey}agoTankOpening`
+          `${oldUserKey}agoTankOpening`
         );
         const savedAgoTankClosing = localStorage.getItem(
-          `${userKey}agoTankClosing`
+          `${oldUserKey}agoTankClosing`
         );
-        const savedPmsPrice = localStorage.getItem(`${userKey}pmsPrice`);
-        const savedAgoPrice = localStorage.getItem(`${userKey}agoPrice`);
-        const savedPetrolPrice = localStorage.getItem(`${userKey}petrolPrice`);
-        const savedDieselPrice = localStorage.getItem(`${userKey}dieselPrice`);
-        const savedDeliveredTo = localStorage.getItem(`${userKey}deliveredTo`);
-        const savedTotalOrder = localStorage.getItem(`${userKey}totalOrder`);
+        const savedPmsPrice = localStorage.getItem(`${oldUserKey}pmsPrice`);
+        const savedAgoPrice = localStorage.getItem(`${oldUserKey}agoPrice`);
+        const savedPetrolPrice = localStorage.getItem(`${oldUserKey}petrolPrice`);
+        const savedDieselPrice = localStorage.getItem(`${oldUserKey}dieselPrice`);
+        const savedDeliveredTo = localStorage.getItem(`${oldUserKey}deliveredTo`);
+        const savedTotalOrder = localStorage.getItem(`${oldUserKey}totalOrder`);
         const savedDeliveryYear = localStorage.getItem(
-          `${userKey}deliveryYear`
+          `${oldUserKey}deliveryYear`
         );
         const savedOffloadingRecords = localStorage.getItem(
-          `${userKey}offloadingRecords`
+          `${oldUserKey}offloadingRecords`
         );
         const savedTabVisibility = localStorage.getItem(
-          `${userKey}tabVisibility`
+          `${oldUserKey}tabVisibility`
         );
         const savedTabConfigurations = localStorage.getItem(
-          `${userKey}tabConfigurations`
+          `${oldUserKey}tabConfigurations`
         );
-        const savedEmployees = localStorage.getItem(`${userKey}employees`);
+        const savedEmployees = localStorage.getItem(`${oldUserKey}employees`);
         const savedPayrollRecords = localStorage.getItem(
-          `${userKey}payrollRecords`
+          `${oldUserKey}payrollRecords`
         );
         const savedMpesaTransactions = localStorage.getItem(
-          `${userKey}mpesaTransactions`
+          `${oldUserKey}mpesaTransactions`
         );
         const savedReportSettings = localStorage.getItem(
-          `${userKey}reportSettings`
+          `${oldUserKey}reportSettings`
         );
-        const savedChatHistory = localStorage.getItem(`${userKey}chatHistory`);
-        const savedDataBackups = localStorage.getItem(`${userKey}dataBackups`);
+        const savedChatHistory = localStorage.getItem(`${oldUserKey}chatHistory`);
+        const savedDataBackups = localStorage.getItem(`${oldUserKey}dataBackups`);
 
         const loadedData: Partial<FuelState> = {
           theme: savedTheme,
