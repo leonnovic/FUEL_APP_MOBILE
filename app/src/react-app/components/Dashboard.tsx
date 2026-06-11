@@ -64,19 +64,28 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
-  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow } =
+  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation } =
     useAutoSync(location.currentCountry.id);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Use regional fuel prices based on station location
+  // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
   const regionalPrice = getPriceForCity(fuelPrice, stationCity);
-  const displayPmsPrice = regionalPrice.isRegional
-    ? regionalPrice.petrol
-    : (fuelPrice?.petrolPrice ?? state.pmsPrice);
-  const displayAgoPrice = regionalPrice.isRegional
-    ? regionalPrice.diesel
-    : (fuelPrice?.dieselPrice ?? state.agoPrice);
+  // Prefer location-based price from GPS, then fall back to regional, then national, then default
+  const displayPmsPrice = locationPrice?.petrolPrice 
+    ?? (regionalPrice.isRegional ? regionalPrice.petrol : null)
+    ?? fuelPrice?.petrolPrice 
+    ?? state.pmsPrice;
+  const displayAgoPrice = locationPrice?.dieselPrice
+    ?? (regionalPrice.isRegional ? regionalPrice.diesel : null)
+    ?? fuelPrice?.dieselPrice
+    ?? state.agoPrice;
+  const displayKerosenePrice = locationPrice?.kerosenePrice 
+    ?? fuelPrice?.kerosenePrice 
+    ?? state.kerosenePrice;
+  // Show the detected city for location-based pricing
+  const priceCityName = locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
+  const isLocationBased = !!locationPrice;
   const currencySymbol = location.currencySymbol;
   const [animatedValues, setAnimatedValues] = useState({
     revenue: 0,
@@ -621,12 +630,19 @@ export default function Dashboard() {
                 location.currentCountry.fuelRegulations.priceSettingBody}
             </span>
           </div>
-          {/* Regional price city badge */}
-          <div className="mb-2">
+          {/* Location-based price indicator */}
+          <div className="mb-2 flex items-center gap-2">
+            {currentLocation && (
+              <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                📍 {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+              </span>
+            )}
             <span
-              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${regionalPrice.isRegional ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
             >
-              {regionalPrice.isRegional
+              {isLocationBased
+                ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? '+' : ''}${locationPrice.transportSurcharge.toFixed(2)})`
+                : regionalPrice.isRegional
                 ? `EPRA ${regionalPrice.cityName} Price`
                 : `${stationCity} - National Average`}
             </span>

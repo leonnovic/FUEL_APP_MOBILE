@@ -1,9 +1,155 @@
 // ============================================================
 // DataSyncService - Comprehensive auto-update engine for FuelPro
 // Fetches real-time data from credible internet sources
+// Auto-syncs with precise location for exact fuel prices
 // ============================================================
 
 import { getCountryById } from "@/react-app/config/countries";
+
+// --- GEOLOCATION-BASED CITY MATCHING ---
+interface GeoLocation {
+  lat: number;
+  lng: number;
+  city?: string;
+  accuracy?: number;
+}
+
+// Kenya city coordinates for precise location matching
+const KENYA_CITIES: Array<{
+  name: string;
+  lat: number;
+  lng: number;
+  petrolPrice: number;
+  dieselPrice: number;
+  kerosenePrice: number;
+  transportSurcharge: number;
+}> = [
+  { name: "Mombasa", lat: -4.0435, lng: 39.6682, petrolPrice: 190.15, dieselPrice: 175.21, kerosenePrice: 167.05, transportSurcharge: -3.28 },
+  { name: "Nairobi", lat: -1.2921, lng: 36.8219, petrolPrice: 193.43, dieselPrice: 178.56, kerosenePrice: 170.22, transportSurcharge: 0.0 },
+  { name: "Kisumu", lat: -0.1022, lng: 34.7617, petrolPrice: 196.78, dieselPrice: 181.92, kerosenePrice: 173.45, transportSurcharge: 3.35 },
+  { name: "Nakuru", lat: -0.3031, lng: 36.0720, petrolPrice: 195.12, dieselPrice: 180.34, kerosenePrice: 171.88, transportSurcharge: 1.69 },
+  { name: "Eldoret", lat: 0.5143, lng: 35.2698, petrolPrice: 197.55, dieselPrice: 182.67, kerosenePrice: 174.21, transportSurcharge: 4.12 },
+  { name: "Kakamega", lat: 0.2827, lng: 34.7519, petrolPrice: 197.45, dieselPrice: 182.58, kerosenePrice: 174.12, transportSurcharge: 4.02 },
+  { name: "Bungoma", lat: 0.5635, lng: 34.5606, petrolPrice: 197.89, dieselPrice: 183.01, kerosenePrice: 174.55, transportSurcharge: 4.46 },
+  { name: "Kisii", lat: -0.6817, lng: 34.7660, petrolPrice: 197.12, dieselPrice: 182.25, kerosenePrice: 173.78, transportSurcharge: 3.69 },
+  { name: "Nyeri", lat: -0.4197, lng: 36.9553, petrolPrice: 194.76, dieselPrice: 179.89, kerosenePrice: 171.44, transportSurcharge: 1.33 },
+  { name: "Meru", lat: 0.0500, lng: 37.6500, petrolPrice: 195.88, dieselPrice: 181.01, kerosenePrice: 172.55, transportSurcharge: 2.45 },
+  { name: "Thika", lat: -1.0334, lng: 37.0692, petrolPrice: 193.87, dieselPrice: 179.01, kerosenePrice: 170.66, transportSurcharge: 0.44 },
+  { name: "Machakos", lat: -1.5177, lng: 37.2634, petrolPrice: 194.21, dieselPrice: 179.34, kerosenePrice: 171.01, transportSurcharge: 0.78 },
+  { name: "Naivasha", lat: -0.7172, lng: 36.4322, petrolPrice: 194.98, dieselPrice: 180.11, kerosenePrice: 171.66, transportSurcharge: 1.55 },
+  { name: "Kitale", lat: 1.0150, lng: 35.0060, petrolPrice: 198.12, dieselPrice: 183.25, kerosenePrice: 174.78, transportSurcharge: 4.69 },
+  { name: "Malindi", lat: -3.2138, lng: 40.1169, petrolPrice: 190.89, dieselPrice: 175.95, kerosenePrice: 167.79, transportSurcharge: -2.54 },
+  { name: "Lamu", lat: -2.2686, lng: 40.9020, petrolPrice: 192.45, dieselPrice: 177.51, kerosenePrice: 169.35, transportSurcharge: -0.98 },
+  { name: "Garissa", lat: -0.4536, lng: 39.6401, petrolPrice: 198.67, dieselPrice: 183.78, kerosenePrice: 175.32, transportSurcharge: 5.24 },
+  { name: "Lodwar", lat: 3.1219, lng: 35.5972, petrolPrice: 220.3, dieselPrice: 250.01, kerosenePrice: 164.9, transportSurcharge: 15.92 },
+  { name: "Kakuma", lat: 3.7269, lng: 34.8742, petrolPrice: 205.5, dieselPrice: 204.8, kerosenePrice: 166.0, transportSurcharge: 12.07 },
+  { name: "Mandera", lat: 3.9373, lng: 41.8671, petrolPrice: 202.45, dieselPrice: 187.56, kerosenePrice: 179.1, transportSurcharge: 9.02 },
+  { name: "Moyale", lat: 3.5275, lng: 39.0521, petrolPrice: 203.12, dieselPrice: 188.23, kerosenePrice: 179.77, transportSurcharge: 9.69 },
+  { name: "Wundanyi", lat: -3.3069, lng: 38.3631, petrolPrice: 192.34, dieselPrice: 177.4, kerosenePrice: 168.88, transportSurcharge: -1.09 },
+  { name: "Voi", lat: -3.3960, lng: 38.5561, petrolPrice: 193.56, dieselPrice: 178.62, kerosenePrice: 169.98, transportSurcharge: 0.13 },
+  { name: "Embu", lat: -0.5389, lng: 37.4582, petrolPrice: 195.34, dieselPrice: 180.47, kerosenePrice: 172.0, transportSurcharge: 1.91 },
+  { name: "Kitui", lat: -1.3717, lng: 38.0106, petrolPrice: 196.89, dieselPrice: 182.02, kerosenePrice: 173.55, transportSurcharge: 3.46 },
+];
+
+// Calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Get nearest city based on coordinates
+function getNearestCity(lat: number, lng: number, countryCode: string): { city: string; distance: number } | null {
+  if (countryCode !== "KE") return null;
+  
+  let nearest: { name: string; distance: number } | null = null;
+  
+  for (const city of KENYA_CITIES) {
+    const dist = calculateDistance(lat, lng, city.lat, city.lng);
+    if (!nearest || dist < nearest.distance) {
+      nearest = { name: city.name, distance: dist };
+    }
+  }
+  
+  return nearest ? { city: nearest.name, distance: nearest.distance } : null;
+}
+
+// Get precise price for location
+function getPriceForLocation(countryCode: string, lat?: number, lng?: number): {
+  petrolPrice: number;
+  dieselPrice: number;
+  kerosenePrice: number;
+  isRegional: boolean;
+  cityName: string;
+  transportSurcharge: number;
+  source: string;
+} {
+  // Default Nairobi prices
+  const defaultPrices = {
+    petrolPrice: 193.43,
+    dieselPrice: 178.56,
+    kerosenePrice: 170.22,
+    isRegional: false,
+    cityName: "Nairobi",
+    transportSurcharge: 0,
+    source: "EPRA Default",
+  };
+
+  if (countryCode !== "KE" || lat === undefined || lng === undefined) {
+    return defaultPrices;
+  }
+
+  const nearest = getNearestCity(lat, lng, countryCode);
+  if (!nearest || nearest.distance > 150) {
+    // If too far from any city (>150km), use nearest anyway
+    return defaultPrices;
+  }
+
+  const cityData = KENYA_CITIES.find(c => c.name === nearest.city);
+  if (cityData) {
+    return {
+      petrolPrice: cityData.petrolPrice,
+      dieselPrice: cityData.dieselPrice,
+      kerosenePrice: cityData.kerosenePrice,
+      isRegional: true,
+      cityName: cityData.name,
+      transportSurcharge: cityData.transportSurcharge,
+      source: `EPRA Regional - ${cityData.name}`,
+    };
+  }
+
+  return defaultPrices;
+}
+
+// --- GEOLOCATION API ---
+interface GeoResult {
+  coords: { latitude: number; longitude: number };
+  timestamp: number;
+}
+
+function getCurrentPosition(): Promise<GeoResult> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocation not supported"));
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos as unknown as GeoResult),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+// Store last known position
+let lastKnownPosition: GeoResult | null = null;
+const POSITION_CACHE_KEY = "fuelpro_last_geo_position";
 
 // --- SYNC STATUS TRACKER ---
 interface SyncRecord {

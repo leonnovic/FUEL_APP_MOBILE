@@ -1,42 +1,16 @@
 import { relations } from "drizzle-orm";
 import {
-  users,
-  stations,
-  stationUsers,
-  inventory,
-  sales,
-  bankAccounts,
-  mobileMoneyConfigs,
-  additionalPaymentMethods,
-  auditLogs,
-  founderSessions,
-  featureFlags,
-  pricingPlans,
-  subscriptions,
-  coupons,
-  apiKeys,
-  webhooks,
-  emailTemplates,
+  users, stations, stationUsers, inventory, sales,
+  bankAccounts, mobileMoneyConfigs, additionalPaymentMethods,
+  auditLogs, founderSessions, featureFlags, pricingPlans,
+  subscriptions, coupons, apiKeys, webhooks, emailTemplates,
   // New access control tables
-  permissions,
-  roles,
-  teams,
-  teamMembers,
-  dataScopes,
-  actionScopes,
-  teamInvitations,
+  permissions, roles, teams, teamMembers, dataScopes, actionScopes, teamInvitations,
   // New audit tables
-  auditLogEntries,
-  authEvents,
-  dataAccessLog,
+  auditLogEntries, authEvents, dataAccessLog,
   // New data isolation tables
-  tenants,
-  tenantDomains,
-  dataPartitions,
-  crossTenantLinks,
-  tenantEncryptionKeys,
-  tenantSettings,
-  dataAccessPolicies,
+  tenants, tenantDomains, dataPartitions, crossTenantLinks,
+  tenantEncryptionKeys, tenantSettings, dataAccessPolicies,
 } from "./schema";
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -58,27 +32,18 @@ export const stationsRelations = relations(stations, ({ many }) => ({
 }));
 
 export const stationUsersRelations = relations(stationUsers, ({ one }) => ({
-  station: one(stations, {
-    fields: [stationUsers.stationId],
-    references: [stations.id],
-  }),
+  station: one(stations, { fields: [stationUsers.stationId], references: [stations.id] }),
   user: one(users, { fields: [stationUsers.userId], references: [users.id] }),
 }));
 
 export const salesRelations = relations(sales, ({ one }) => ({
-  station: one(stations, {
-    fields: [sales.stationId],
-    references: [stations.id],
-  }),
+  station: one(stations, { fields: [sales.stationId], references: [stations.id] }),
   user: one(users, { fields: [sales.userId], references: [users.id] }),
 }));
 
 export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   user: one(users, { fields: [subscriptions.userId], references: [users.id] }),
-  plan: one(pricingPlans, {
-    fields: [subscriptions.planId],
-    references: [pricingPlans.id],
-  }),
+  plan: one(pricingPlans, { fields: [subscriptions.planId], references: [pricingPlans.id] }),
 }));
 
 // Access Control Relations
@@ -111,18 +76,8 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   accessPolicies: many(dataAccessPolicies),
 }));
 
-export const dataPartitionsRelations = relations(
-  dataPartitions,
-  ({ one, many }) => ({
-    tenant: one(tenants, {
-      fields: [dataPartitions.tenantId],
-      references: [tenants.id],
-    }),
-    parent: one(dataPartitions, {
-      fields: [dataPartitions.parentId],
-      references: [dataPartitions.id],
-      relationName: "parentChild",
-    }),
-    children: many(dataPartitions),
-  })
-);
+export const dataPartitionsRelations = relations(dataPartitions, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [dataPartitions.tenantId], references: [tenants.id] }),
+  parent: one(dataPartitions, { fields: [dataPartitions.parentId], references: [dataPartitions.id], relationName: "parentChild" }),
+  children: many(dataPartitions),
+}));

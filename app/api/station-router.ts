@@ -7,30 +7,25 @@ import { stations, stationUsers, sales, inventory } from "@db/schema";
 export const stationRouter = createRouter({
   // ─── CRUD: Create station ───
   create: authedQuery
-    .input(
-      z.object({
-        name: z.string().min(1).max(255),
-        code: z.string().min(1).max(50),
-        location: z.string().optional(),
-        latitude: z.string().optional(),
-        longitude: z.string().optional(),
-        country: z.string().optional(),
-        countryCode: z.string().length(2).optional(),
-        phone: z.string().optional(),
-        managerName: z.string().optional(),
-        taxRate: z.string().default("0"),
-        receiptFooter: z.string().optional(),
-      })
-    )
+    .input(z.object({
+      name: z.string().min(1).max(255),
+      code: z.string().min(1).max(50),
+      location: z.string().optional(),
+      latitude: z.string().optional(),
+      longitude: z.string().optional(),
+      country: z.string().optional(),
+      countryCode: z.string().length(2).optional(),
+      phone: z.string().optional(),
+      managerName: z.string().optional(),
+      taxRate: z.string().default("0"),
+      receiptFooter: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      const [station] = await db
-        .insert(stations)
-        .values({
-          ...input,
-          createdBy: ctx.user.id,
-        })
-        .$returningId();
+      const [station] = await db.insert(stations).values({
+        ...input,
+        createdBy: ctx.user.id,
+      }).$returningId();
       // Auto-assign creator as owner
       await db.insert(stationUsers).values({
         stationId: station.id,
@@ -46,12 +41,10 @@ export const stationRouter = createRouter({
     const memberships = await db
       .select()
       .from(stationUsers)
-      .where(
-        and(
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        )
-      );
+      .where(and(
+        eq(stationUsers.userId, ctx.user.id),
+        eq(stationUsers.isActive, true)
+      ));
     if (memberships.length === 0) return [];
     const stationIds = memberships.map(m => m.stationId);
     const results = await db
@@ -72,13 +65,11 @@ export const stationRouter = createRouter({
       const [membership] = await db
         .select()
         .from(stationUsers)
-        .where(
-          and(
-            eq(stationUsers.stationId, input.id),
-            eq(stationUsers.userId, ctx.user.id),
-            eq(stationUsers.isActive, true)
-          )
-        );
+        .where(and(
+          eq(stationUsers.stationId, input.id),
+          eq(stationUsers.userId, ctx.user.id),
+          eq(stationUsers.isActive, true)
+        ));
       if (!membership) throw new Error("Access denied");
       const [station] = await db
         .select()
@@ -89,23 +80,21 @@ export const stationRouter = createRouter({
 
   // ─── CRUD: Update station ───
   update: authedQuery
-    .input(
-      z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        code: z.string().optional(),
-        location: z.string().optional(),
-        latitude: z.string().optional(),
-        longitude: z.string().optional(),
-        country: z.string().optional(),
-        countryCode: z.string().optional(),
-        phone: z.string().optional(),
-        managerName: z.string().optional(),
-        status: z.enum(["active", "inactive", "maintenance"]).optional(),
-        taxRate: z.string().optional(),
-        receiptFooter: z.string().optional(),
-      })
-    )
+    .input(z.object({
+      id: z.number(),
+      name: z.string().optional(),
+      code: z.string().optional(),
+      location: z.string().optional(),
+      latitude: z.string().optional(),
+      longitude: z.string().optional(),
+      country: z.string().optional(),
+      countryCode: z.string().optional(),
+      phone: z.string().optional(),
+      managerName: z.string().optional(),
+      status: z.enum(["active", "inactive", "maintenance"]).optional(),
+      taxRate: z.string().optional(),
+      receiptFooter: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const { id, ...data } = input;
@@ -118,8 +107,7 @@ export const stationRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db
-        .update(stations)
+      await db.update(stations)
         .set({ status: "inactive" })
         .where(eq(stations.id, input.id));
       return { success: true };
@@ -127,15 +115,11 @@ export const stationRouter = createRouter({
 
   // ─── Manage station access: add user ───
   addUser: authedQuery
-    .input(
-      z.object({
-        stationId: z.number(),
-        userId: z.number(),
-        role: z
-          .enum(["owner", "manager", "cashier", "viewer"])
-          .default("viewer"),
-      })
-    )
+    .input(z.object({
+      stationId: z.number(),
+      userId: z.number(),
+      role: z.enum(["owner", "manager", "cashier", "viewer"]).default("viewer"),
+    }))
     .mutation(async ({ input }) => {
       const db = getDb();
       await db.insert(stationUsers).values(input);
@@ -147,15 +131,12 @@ export const stationRouter = createRouter({
     .input(z.object({ stationId: z.number(), userId: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db
-        .update(stationUsers)
+      await db.update(stationUsers)
         .set({ isActive: false })
-        .where(
-          and(
-            eq(stationUsers.stationId, input.stationId),
-            eq(stationUsers.userId, input.userId)
-          )
-        );
+        .where(and(
+          eq(stationUsers.stationId, input.stationId),
+          eq(stationUsers.userId, input.userId)
+        ));
       return { success: true };
     }),
 
@@ -167,12 +148,10 @@ export const stationRouter = createRouter({
     const memberships = await db
       .select()
       .from(stationUsers)
-      .where(
-        and(
-          eq(stationUsers.userId, ctx.user.id),
-          eq(stationUsers.isActive, true)
-        )
-      );
+      .where(and(
+        eq(stationUsers.userId, ctx.user.id),
+        eq(stationUsers.isActive, true)
+      ));
     if (memberships.length === 0) {
       return { stations: [], totalRevenue: "0", totalSales: 0, inventory: [] };
     }

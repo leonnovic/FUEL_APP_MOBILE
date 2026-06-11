@@ -20,9 +20,7 @@ interface FounderSession {
 }
 
 /** Validate a founder token against localStorage-backed session store */
-export function validateFounderToken(
-  token: string
-): { username: string } | null {
+export function validateFounderToken(token: string): { username: string } | null {
   try {
     // Token format: base64(username:timestamp:signature)
     const decoded = Buffer.from(token, "base64").toString("utf-8");
@@ -56,7 +54,7 @@ const t = initTRPC.context<FounderTrpcContext>().create({
 });
 
 /** Middleware: requires valid founder token OR regular auth */
-const requireFounderAuth = t.middleware(async opts => {
+const requireFounderAuth = t.middleware(async (opts) => {
   const { ctx, next } = opts;
 
   // Check if founder token is in headers
@@ -64,12 +62,7 @@ const requireFounderAuth = t.middleware(async opts => {
   if (founderToken) {
     const founder = validateFounderToken(founderToken);
     if (founder) {
-      return next({
-        ctx: {
-          ...ctx,
-          founder: { username: founder.username, token: founderToken },
-        },
-      });
+      return next({ ctx: { ...ctx, founder: { username: founder.username, token: founderToken } } });
     }
   }
 
@@ -85,7 +78,7 @@ const requireFounderAuth = t.middleware(async opts => {
 });
 
 /** Middleware: requires founder token specifically (stricter) */
-const requireFounderOnly = t.middleware(async opts => {
+const requireFounderOnly = t.middleware(async (opts) => {
   const { ctx, next } = opts;
 
   const founderToken = ctx.req.headers.get("x-founder-token");
@@ -104,16 +97,11 @@ const requireFounderOnly = t.middleware(async opts => {
     });
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      founder: { username: founder.username, token: founderToken },
-    },
-  });
+  return next({ ctx: { ...ctx, founder: { username: founder.username, token: founderToken } } });
 });
 
 /** Middleware: requires founder token + admin privileges */
-const requireFounderAdmin = t.middleware(async opts => {
+const requireFounderAdmin = t.middleware(async (opts) => {
   const { ctx, next } = opts;
 
   const founderToken = ctx.req.headers.get("x-founder-token");
@@ -136,12 +124,7 @@ const requireFounderAdmin = t.middleware(async opts => {
     });
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      founder: { username: founder.username, token: founderToken },
-    },
-  });
+  return next({ ctx: { ...ctx, founder: { username: founder.username, token: founderToken } } });
 });
 
 // ─── Export Procedures ───

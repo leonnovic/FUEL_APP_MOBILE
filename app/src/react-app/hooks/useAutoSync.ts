@@ -6,6 +6,7 @@ import {
   getSyncedTaxRates,
   getSyncedExchangeRates,
   getRegulatoryUpdates,
+  getPriceForLocation,
   type SyncResult,
   type FuelPriceData,
   type TaxRateData,
@@ -13,25 +14,40 @@ import {
   type RegulatoryUpdate,
 } from "@/react-app/services/DataSyncService";
 
+interface GeoCoords {
+  latitude: number;
+  longitude: number;
+}
+
 interface UseAutoSyncReturn {
-  // Status
   isSyncing: boolean;
   lastSync: string | null;
   error: string | null;
-  // Data
   fuelPrice: FuelPriceData | null;
   taxRates: TaxRateData | null;
   exchangeRates: ExchangeRateData | null;
   regulatoryUpdates: RegulatoryUpdate[];
-  // Actions
+  locationPrice: {
+    petrolPrice: number;
+    dieselPrice: number;
+    kerosenePrice: number;
+    cityName: string;
+    isRegional: boolean;
+    transportSurcharge: number;
+  } | null;
+  currentLocation: GeoCoords | null;
   syncNow: () => Promise<void>;
   dismissUpdate: (id: string) => void;
   markUpdateRead: (id: string) => void;
+  refreshLocation: () => Promise<void>;
   unreadCount: number;
   highPriorityCount: number;
 }
 
-export function useAutoSync(countryCode: string): UseAutoSyncReturn {
+export function useAutoSync(
+  countryCode: string,
+  initialCoords?: GeoCoords
+): UseAutoSyncReturn {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(
     localStorage.getItem("fuelpro_last_full_sync")
@@ -40,22 +56,73 @@ export function useAutoSync(countryCode: string): UseAutoSyncReturn {
   const [fuelPrice, setFuelPrice] = useState<FuelPriceData | null>(() =>
     getSyncedFuelPrice(countryCode)
   );
+  const [currentLocation, setCurrentLocation] = useState<GeoCoords | null>(
+    initialCoords || null
+  );
+  const [locationPrice, setLocationPrice] = useState<{
+    petrolPrice: number;
+    dieselPrice: number;
+    kerosenePrice: number;
+    cityName: string;
+    isRegional: boolean;
+    transportSurcharge: number;
+  } | null>(null);
   const [taxRates, setTaxRates] = useState<TaxRateData | null>(() =>
     getSyncedTaxRates(countryCode)
   );
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateData | null>(
     () => getSyncedExchangeRates()
   );
-  const [regulatoryUpdates, setRegulatoryUpdates] = useState<
-    RegulatoryUpdate[]
-  >(() => getRegulatoryUpdates(countryCode));
+  const [regulatoryUpdates, setRegulatoryUpdates] = useState<RegulatoryUpdate[]>(
+    () => getRegulatoryUpdates(countryCode)
+  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const updateLocationPrice = useCallback(() => {
+    if (currentLocation) {
+      const price = getPriceForLocation(
+        countryCode,
+        currentLocation.latitude,
+        currentLocation.longitude
+      );
+      setLocationPrice({
+        petrolPrice: price.petrolPrice,
+        dieselPrice: price.dieselPrice,
+        kerosenePrice: price.kerosenePrice,
+        cityName: price.cityName,
+        isRegional: price.isRegional,
+        transportSurcharge: price.transportSurcharge,
+      });
+    }
+  }, [countryCode, currentLocation]);
+
+  const refreshLocation = useCallback(async () => {
+    if (!navigator.geolocation) return;
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000,
+          });
+        }
+      );
+      const coords = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+      setCurrentLocation(coords);
+      localStorage.setItem("fuelpro_last_geo_position", JSON.stringify(coords));
+    } catch (err) {
+      console.warn("Could not get location:", err);
+    }
+  }, []);
 
   const doSync = useCallback(async () => {
     if (isSyncing) return;
     setIsSyncing(true);
     setError(null);
-
     try {
       const result = await runFullSync(countryCode);
       setFuelPrice(result.fuelPrices[0] || null);
@@ -65,51 +132,41 @@ export function useAutoSync(countryCode: string): UseAutoSyncReturn {
       setLastSync(new Date().toISOString());
     } catch (err) {
       setError((err as Error).message);
-      // Keep existing data on error
     } finally {
       setIsSyncing(false);
     }
   }, [countryCode, isSyncing]);
 
-  // Load cached data and set up auto-sync
   useEffect(() => {
-    // Load cached data immediately
     const cachedFuel = getSyncedFuelPrice(countryCode);
     const cachedTax = getSyncedTaxRates(countryCode);
     const cachedEx = getSyncedExchangeRates();
     const cachedReg = getRegulatoryUpdates(countryCode);
-
     if (cachedFuel) setFuelPrice(cachedFuel);
     if (cachedTax) setTaxRates(cachedTax);
     if (cachedEx) setExchangeRates(cachedEx);
     if (cachedReg.length > 0) setRegulatoryUpdates(cachedReg);
-
-    // Initial sync if due
-    if (isSyncDue(countryCode)) {
-      doSync();
-    }
-
-    // Periodic check every 15 minutes
-    intervalRef.current = setInterval(
-      () => {
-        if (isSyncDue(countryCode)) {
-          doSync();
-        }
-      },
-      1000 * 60 * 15
-    );
-
+    try {
+      const cachedPos = localStorage.getItem("fuelpro_last_geo_position");
+      if (cachedPos) setCurrentLocation(JSON.parse(cachedPos));
+    } catch {}
+    if (isSyncDue(countryCode)) doSync();
+    refreshLocation();
+    intervalRef.current = setInterval(() => {
+      if (isSyncDue(countryCode)) doSync();
+      refreshLocation();
+    }, 1000 * 60 * 15);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [countryCode, doSync]);
+  }, [countryCode, doSync, refreshLocation]);
 
-  // Listen for sync events from other components
+  useEffect(() => { updateLocationPrice(); }, [updateLocationPrice]);
+
   useEffect(() => {
     const handleSyncEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.countryCode === countryCode || !detail?.countryCode) {
-        // Refresh from localStorage
         setFuelPrice(getSyncedFuelPrice(countryCode));
         setTaxRates(getSyncedTaxRates(countryCode));
         setExchangeRates(getSyncedExchangeRates());
@@ -117,58 +174,26 @@ export function useAutoSync(countryCode: string): UseAutoSyncReturn {
         setLastSync(localStorage.getItem("fuelpro_last_full_sync"));
       }
     };
-
     window.addEventListener("fuelpro-sync-complete", handleSyncEvent);
-    return () =>
-      window.removeEventListener("fuelpro-sync-complete", handleSyncEvent);
+    return () => window.removeEventListener("fuelpro-sync-complete", handleSyncEvent);
   }, [countryCode]);
 
-  const dismissUpdate = useCallback(
-    (id: string) => {
-      setRegulatoryUpdates(prev => prev.filter(u => u.id !== id));
-      // Also update localStorage
-      const updated = regulatoryUpdates.filter(u => u.id !== id);
-      localStorage.setItem(
-        `fuelpro_regulatory_${countryCode}`,
-        JSON.stringify(updated)
-      );
-    },
-    [countryCode, regulatoryUpdates]
-  );
+  const dismissUpdate = useCallback((id: string) => {
+    setRegulatoryUpdates(prev => prev.filter(u => u.id !== id));
+    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(regulatoryUpdates.filter(u => u.id !== id)));
+  }, [countryCode, regulatoryUpdates]);
 
-  const markUpdateRead = useCallback(
-    (id: string) => {
-      setRegulatoryUpdates(prev =>
-        prev.map(u => (u.id === id ? { ...u, read: true } : u))
-      );
-      const updated = regulatoryUpdates.map(u =>
-        u.id === id ? { ...u, read: true } : u
-      );
-      localStorage.setItem(
-        `fuelpro_regulatory_${countryCode}`,
-        JSON.stringify(updated)
-      );
-    },
-    [countryCode, regulatoryUpdates]
-  );
+  const markUpdateRead = useCallback((id: string) => {
+    setRegulatoryUpdates(prev => prev.map(u => u.id === id ? { ...u, read: true } : u));
+    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(regulatoryUpdates.map(u => u.id === id ? { ...u, read: true } : u)));
+  }, [countryCode, regulatoryUpdates]);
 
   const unreadCount = regulatoryUpdates.filter(u => !u.read).length;
-  const highPriorityCount = regulatoryUpdates.filter(
-    u => !u.read && u.priority === "high"
-  ).length;
+  const highPriorityCount = regulatoryUpdates.filter(u => !u.read && u.priority === "high").length;
 
   return {
-    isSyncing,
-    lastSync,
-    error,
-    fuelPrice,
-    taxRates,
-    exchangeRates,
-    regulatoryUpdates,
-    syncNow: doSync,
-    dismissUpdate,
-    markUpdateRead,
-    unreadCount,
-    highPriorityCount,
+    isSyncing, lastSync, error, fuelPrice, taxRates, exchangeRates, regulatoryUpdates,
+    locationPrice, currentLocation, syncNow: doSync, dismissUpdate, markUpdateRead,
+    refreshLocation, unreadCount, highPriorityCount,
   };
 }
