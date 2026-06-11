@@ -80,7 +80,7 @@ function getNearestCity(lat: number, lng: number, countryCode: string): { city: 
 }
 
 // Get precise price for location
-function getPriceForLocation(countryCode: string, lat?: number, lng?: number): {
+export function getPriceForLocation(countryCode: string, lat?: number, lng?: number): {
   petrolPrice: number;
   dieselPrice: number;
   kerosenePrice: number;
