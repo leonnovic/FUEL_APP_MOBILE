@@ -5,6 +5,10 @@
   "installCommand": "cd app && npm install",
   "framework": null,
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/server.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
