@@ -900,7 +900,20 @@ function DevConsoleSection() {
   const run = () => {
     if (!command.trim()) return;
     let result = '';
-    try { result = String(eval(command)); } catch (e: any) { result = `Error: ${e.message}`; }
+    try {
+      // Safe eval sandbox - only expose allowed globals
+      const allowedGlobals = [
+        localStorage, sessionStorage,
+        { stringify: JSON.stringify, parse: JSON.parse },
+        Math, Date, Array, Object, String, Number, Boolean,
+        parseInt, parseFloat, isNaN, isFinite,
+        { log: console.log, warn: console.warn, error: console.error },
+      ];
+      // Using Function constructor creates a new scope without access to outer scope
+      const safeFunction = new Function('localStorage', 'sessionStorage', 'JSON', 'Math', 'Date', 'Array', 'Object', 'String', 'Number', 'Boolean', 'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'console', `return (function(){${command}})()`);
+      const output = safeFunction(...allowedGlobals);
+      result = typeof output === 'object' ? JSON.stringify(output, null, 2) : String(output);
+    } catch (e: any) { result = `Error: ${e.message}`; }
     const entry = { cmd: command, result, ts: new Date().toLocaleTimeString() };
     const updated = [entry, ...history].slice(0, 50);
     setHistory(updated); setItem('fuelpro_devconsole_history', updated); setCommand('');
