@@ -24,10 +24,10 @@ type WSOptions = {
 };
 
 const WS_STATES = {
-  CONNECTING: 'connecting',
-  CONNECTED: 'connected',
-  DISCONNECTED: 'disconnected',
-  RECONNECTING: 'reconnecting'
+  CONNECTING: "connecting",
+  CONNECTED: "connected",
+  DISCONNECTED: "disconnected",
+  RECONNECTING: "reconnecting",
 };
 
 class FuelProWSClient {
@@ -43,30 +43,30 @@ class FuelProWSClient {
     this.options = {
       reconnectInterval: 3000,
       maxReconnectAttempts: 10,
-      ...options
+      ...options,
     };
   }
 
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
-    
+
     const url = this.options.url || this.getWebSocketUrl();
     console.log(`[WS] Connecting to ${url}`);
     this.state = WS_STATES.CONNECTING;
-    
+
     try {
       this.ws = new WebSocket(url);
       this.setupEventHandlers();
     } catch (e) {
-      console.error('[WS] Connection failed:', e);
+      console.error("[WS] Connection failed:", e);
       this.scheduleReconnect();
     }
   }
 
   private getWebSocketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = this.options.url?.includes('://') 
-      ? new URL(this.options.url).host 
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = this.options.url?.includes("://")
+      ? new URL(this.options.url).host
       : window.location.host;
     return `${protocol}//${host}/ws`;
   }
@@ -75,76 +75,79 @@ class FuelProWSClient {
     if (!this.ws) return;
 
     this.ws.onopen = () => {
-      console.log('[WS] Connected');
+      console.log("[WS] Connected");
       this.state = WS_STATES.CONNECTED;
       this.reconnectAttempts = 0;
-      
+
       // Authenticate
       this.send({
-        type: 'auth',
+        type: "auth",
         payload: {
           stationId: this.options.stationId,
           userId: this.options.userId,
-          token: this.options.token
-        }
+          token: this.options.token,
+        },
       });
-      
+
       // Flush queued messages
       this.flushQueue();
-      
+
       this.options.onConnect?.();
     };
 
-    this.ws.onclose = (event) => {
+    this.ws.onclose = event => {
       console.log(`[WS] Disconnected (${event.code})`);
       this.state = WS_STATES.DISCONNECTED;
       this.options.onDisconnect?.();
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = (error) => {
-      console.error('[WS] Error:', error);
+    this.ws.onerror = error => {
+      console.error("[WS] Error:", error);
       this.options.onError?.(error);
     };
 
-    this.ws.onmessage = (event) => {
+    this.ws.onmessage = event => {
       try {
         const message = JSON.parse(event.data);
         this.handleMessage(message);
       } catch (e) {
-        console.error('[WS] Parse error:', e);
+        console.error("[WS] Parse error:", e);
       }
     };
   }
 
   private handleMessage(message: WSMessage) {
     const { type, payload } = message;
-    
+
     switch (type) {
-      case 'sync':
+      case "sync":
         this.options.onSync?.(payload);
-        this.emit('sync', payload);
+        this.emit("sync", payload);
         break;
-      case 'broadcast':
+      case "broadcast":
         this.options.onBroadcast?.(payload);
-        this.emit('broadcast', payload);
+        this.emit("broadcast", payload);
         break;
-      case 'pull':
+      case "pull":
         this.handlePullRequest(payload);
         break;
-      case 'success':
-      case 'error':
+      case "success":
+      case "error":
         this.emit(type, payload);
         break;
     }
   }
 
-  private handlePullRequest(payload: { requesterId: string; collections: string[] }) {
+  private handlePullRequest(payload: {
+    requesterId: string;
+    collections: string[];
+  }) {
     // Get local data and send back
     const data = this.getLocalData(payload.collections);
     this.send({
-      type: 'push',
-      payload: { data, requesterId: payload.requesterId }
+      type: "push",
+      payload: { data, requesterId: payload.requesterId },
     });
   }
 
@@ -155,23 +158,28 @@ class FuelProWSClient {
         const key = `fuelpro_${col}_v3`;
         const stored = localStorage.getItem(key);
         data[col] = stored ? JSON.parse(stored) : [];
-      } catch { data[col] = []; }
+      } catch {
+        data[col] = [];
+      }
     });
     return data;
   }
 
   private scheduleReconnect() {
     if (this.reconnectAttempts >= this.options.maxReconnectAttempts!) {
-      console.log('[WS] Max reconnect attempts reached');
+      console.log("[WS] Max reconnect attempts reached");
       return;
     }
-    
+
     this.state = WS_STATES.RECONNECTING;
     this.reconnectAttempts++;
-    
-    const delay = this.options.reconnectInterval! * Math.min(this.reconnectAttempts, 5);
-    console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    
+
+    const delay =
+      this.options.reconnectInterval! * Math.min(this.reconnectAttempts, 5);
+    console.log(
+      `[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`
+    );
+
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
@@ -190,24 +198,28 @@ class FuelProWSClient {
     }
   }
 
-  push(collection: string, record: any, operation: 'create' | 'update' | 'delete') {
+  push(
+    collection: string,
+    record: any,
+    operation: "create" | "update" | "delete"
+  ) {
     this.send({
-      type: 'push',
-      payload: { collection, record, operation }
+      type: "push",
+      payload: { collection, record, operation },
     });
   }
 
   broadcast(event: string, data: any) {
     this.send({
-      type: 'broadcast',
-      payload: { event, data }
+      type: "broadcast",
+      payload: { event, data },
     });
   }
 
   sync(collections: string[]) {
     this.send({
-      type: 'sync',
-      payload: { collections }
+      type: "sync",
+      payload: { collections },
     });
   }
 
@@ -251,12 +263,12 @@ export function useWebSocket(options: WSOptions) {
       ...options,
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
-      onSync: (data) => setLastSync(data)
+      onSync: data => setLastSync(data),
     });
-    
+
     clientRef.current = client;
     client.connect();
-    
+
     return () => client.disconnect();
   }, [options.stationId]);
 
@@ -264,16 +276,18 @@ export function useWebSocket(options: WSOptions) {
     connected,
     lastSync,
     client: clientRef.current,
-    push: (collection: string, record: any, op: 'create' | 'update' | 'delete') => 
-      clientRef.current?.push(collection, record, op),
-    broadcast: (event: string, data: any) => 
+    push: (
+      collection: string,
+      record: any,
+      op: "create" | "update" | "delete"
+    ) => clientRef.current?.push(collection, record, op),
+    broadcast: (event: string, data: any) =>
       clientRef.current?.broadcast(event, data),
-    sync: (collections: string[]) => 
-      clientRef.current?.sync(collections)
+    sync: (collections: string[]) => clientRef.current?.sync(collections),
   };
 }
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 
 export { FuelProWSClient };
 export default FuelProWSClient;

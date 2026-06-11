@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Search, ChevronDown, Globe, MapPin } from 'lucide-react';
-import { ALL_COUNTRIES } from '@/react-app/lib/world-country-utils';
-import { resolveCountryFromBrowser } from '@/react-app/lib/geo-utils';
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Search, ChevronDown, Globe, MapPin } from "lucide-react";
+import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
+import { resolveCountryFromBrowser } from "@/react-app/lib/geo-utils";
 
 export interface SearchableCountryDropdownProps {
   value: string;
@@ -23,16 +23,16 @@ export interface SearchableCountryDropdownProps {
 export default function SearchableCountryDropdown({
   value,
   onChange,
-  label = 'Select Country / Region',
-  placeholder = 'Search countries...',
-  className = '',
+  label = "Select Country / Region",
+  placeholder = "Search countries...",
+  className = "",
   id,
   showFlag = true,
   filterCountries,
   showAutoDetect = true,
 }: SearchableCountryDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -49,44 +49,58 @@ export default function SearchableCountryDropdown({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return countries;
-    return countries.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q) ||
-      c.currency.toLowerCase().includes(q)
+    return countries.filter(
+      c =>
+        c.name.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q) ||
+        c.currency.toLowerCase().includes(q)
     );
   }, [search, countries]);
 
-  const selected = useMemo(() =>
-    countries.find(c => c.code === value) || null,
-  [value, countries]);
+  const selected = useMemo(
+    () => countries.find(c => c.code === value) || null,
+    [value, countries]
+  );
 
   // Auto-detect from browser timezone / localStorage
   const handleAutoDetect = useCallback(() => {
     try {
-      const saved = localStorage.getItem('fuelpro_location_country');
+      const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
         const parsed = JSON.parse(saved);
         const cc = parsed.currentCountry || parsed.country;
-        if (cc) { onChange(cc.toUpperCase()); setIsOpen(false); setSearch(''); return; }
+        if (cc) {
+          onChange(cc.toUpperCase());
+          setIsOpen(false);
+          setSearch("");
+          return;
+        }
       }
-    } catch { /* */ }
+    } catch {
+      /* */
+    }
     // Use shared geo utility (250+ timezone mappings)
     const cc = resolveCountryFromBrowser();
-    if (cc && cc !== 'US') { onChange(cc); }
+    if (cc && cc !== "US") {
+      onChange(cc);
+    }
     setIsOpen(false);
-    setSearch('');
+    setSearch("");
   }, [onChange]);
 
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
-        setSearch('');
+        setSearch("");
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   // Focus search on open
@@ -98,34 +112,41 @@ export default function SearchableCountryDropdown({
   }, [isOpen]);
 
   // Keyboard navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!isOpen) return;
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setHighlightedIndex(i => Math.min(i + 1, filtered.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setHighlightedIndex(i => Math.max(i - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (filtered[highlightedIndex]) {
-          onChange(filtered[highlightedIndex].code);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!isOpen) return;
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setHighlightedIndex(i => Math.min(i + 1, filtered.length - 1));
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setHighlightedIndex(i => Math.max(i - 1, 0));
+          break;
+        case "Enter":
+          e.preventDefault();
+          if (filtered[highlightedIndex]) {
+            onChange(filtered[highlightedIndex].code);
+            setIsOpen(false);
+            setSearch("");
+          }
+          break;
+        case "Escape":
           setIsOpen(false);
-          setSearch('');
-        }
-        break;
-      case 'Escape':
-        setIsOpen(false);
-        setSearch('');
-        break;
-    }
-  }, [isOpen, filtered, highlightedIndex, onChange]);
+          setSearch("");
+          break;
+      }
+    },
+    [isOpen, filtered, highlightedIndex, onChange]
+  );
 
   return (
-    <div className={`relative ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
+    <div
+      className={`relative ${className}`}
+      ref={containerRef}
+      onKeyDown={handleKeyDown}
+    >
       {label && (
         <label className="text-xs text-gray-400 mb-1.5 block flex items-center gap-1">
           <Globe size={11} /> {label}
@@ -147,7 +168,10 @@ export default function SearchableCountryDropdown({
             {selected ? `${selected.code} - ${selected.name}` : placeholder}
           </span>
         </div>
-        <ChevronDown size={14} className={`text-gray-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          size={14}
+          className={`text-gray-500 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
       </button>
 
       {/* Dropdown */}
@@ -160,7 +184,10 @@ export default function SearchableCountryDropdown({
               ref={searchRef}
               type="text"
               value={search}
-              onChange={e => { setSearch(e.target.value); setHighlightedIndex(0); }}
+              onChange={e => {
+                setSearch(e.target.value);
+                setHighlightedIndex(0);
+              }}
               placeholder={placeholder}
               className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 focus:outline-none"
             />
@@ -184,25 +211,37 @@ export default function SearchableCountryDropdown({
           {/* List */}
           <div className="max-h-56 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-center text-xs text-gray-600">No countries match &quot;{search}&quot;</div>
+              <div className="px-3 py-4 text-center text-xs text-gray-600">
+                No countries match &quot;{search}&quot;
+              </div>
             ) : (
               filtered.map((c, i) => (
                 <button
                   key={c.code}
                   type="button"
-                  onClick={() => { onChange(c.code); setIsOpen(false); setSearch(''); }}
+                  onClick={() => {
+                    onChange(c.code);
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
                   className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left ${
                     c.code === value
-                      ? 'bg-amber-500/10 text-amber-300'
+                      ? "bg-amber-500/10 text-amber-300"
                       : i === highlightedIndex
-                        ? 'bg-white/[0.06] text-white'
-                        : 'text-gray-300 hover:bg-white/[0.04]'
+                        ? "bg-white/[0.06] text-white"
+                        : "text-gray-300 hover:bg-white/[0.04]"
                   }`}
                 >
-                  {showFlag && <span className="text-base shrink-0">{c.flag}</span>}
+                  {showFlag && (
+                    <span className="text-base shrink-0">{c.flag}</span>
+                  )}
                   <span className="truncate flex-1">{c.name}</span>
-                  <span className="text-[10px] text-gray-600 shrink-0 ml-1">{c.code}</span>
-                  <span className="text-[10px] text-gray-700 shrink-0">{c.currency}</span>
+                  <span className="text-[10px] text-gray-600 shrink-0 ml-1">
+                    {c.code}
+                  </span>
+                  <span className="text-[10px] text-gray-700 shrink-0">
+                    {c.currency}
+                  </span>
                 </button>
               ))
             )}
@@ -217,8 +256,11 @@ export default function SearchableCountryDropdown({
 export function InlineCountrySelector({
   value,
   onChange,
-  className = '',
-}: Omit<SearchableCountryDropdownProps, 'label' | 'placeholder' | 'showFlag' | 'showAutoDetect'>) {
+  className = "",
+}: Omit<
+  SearchableCountryDropdownProps,
+  "label" | "placeholder" | "showFlag" | "showAutoDetect"
+>) {
   return (
     <SearchableCountryDropdown
       value={value}

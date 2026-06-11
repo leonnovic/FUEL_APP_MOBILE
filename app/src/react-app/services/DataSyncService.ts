@@ -3,7 +3,7 @@
 // Fetches real-time data from credible internet sources
 // ============================================================
 
-import { getCountryById } from '@/react-app/config/countries';
+import { getCountryById } from "@/react-app/config/countries";
 
 // --- SYNC STATUS TRACKER ---
 interface SyncRecord {
@@ -11,12 +11,12 @@ interface SyncRecord {
   lastSync: string; // ISO date
   nextSync: string; // ISO date
   source: string;
-  status: 'pending' | 'syncing' | 'success' | 'error';
+  status: "pending" | "syncing" | "success" | "error";
   data?: any;
   error?: string;
 }
 
-const SYNC_STORAGE_KEY = 'fuelpro_sync_records';
+const SYNC_STORAGE_KEY = "fuelpro_sync_records";
 const SYNC_INTERVAL_MS = 1000 * 60 * 60 * 6; // 6 hours default
 const FUEL_PRICE_SYNC_INTERVAL = 1000 * 60 * 60 * 12; // 12 hours for fuel
 const NEWS_SYNC_INTERVAL = 1000 * 60 * 30; // 30 minutes for news
@@ -26,7 +26,9 @@ function loadSyncRecords(): Record<string, SyncRecord> {
   try {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 
 function saveSyncRecord(record: SyncRecord) {
@@ -49,18 +51,25 @@ function markSyncing(key: string, source: string) {
     lastSync: new Date().toISOString(),
     nextSync: new Date(Date.now() + SYNC_INTERVAL_MS).toISOString(),
     source,
-    status: 'syncing'
+    status: "syncing",
   });
 }
 
-function markSuccess(key: string, source: string, data?: any, interval?: number) {
+function markSuccess(
+  key: string,
+  source: string,
+  data?: any,
+  interval?: number
+) {
   saveSyncRecord({
     key,
     lastSync: new Date().toISOString(),
-    nextSync: new Date(Date.now() + (interval || SYNC_INTERVAL_MS)).toISOString(),
+    nextSync: new Date(
+      Date.now() + (interval || SYNC_INTERVAL_MS)
+    ).toISOString(),
     source,
-    status: 'success',
-    data
+    status: "success",
+    data,
   });
 }
 
@@ -70,8 +79,8 @@ function markError(key: string, source: string, error: string) {
     lastSync: new Date().toISOString(),
     nextSync: new Date(Date.now() + 1000 * 60 * 15).toISOString(), // Retry in 15 min
     source,
-    status: 'error',
-    error
+    status: "error",
+    error,
   });
 }
 
@@ -117,16 +126,32 @@ export interface FuelPriceData {
 
 /** Get fuel price for a specific city from FuelPriceData.
  *  Returns the regional price if available, falls back to national average. */
-export function getPriceForCity(data: FuelPriceData | null, city: string): { petrol: number; diesel: number; kerosene: number; isRegional: boolean; cityName: string } {
+export function getPriceForCity(
+  data: FuelPriceData | null,
+  city: string
+): {
+  petrol: number;
+  diesel: number;
+  kerosene: number;
+  isRegional: boolean;
+  cityName: string;
+} {
   if (!data) {
-    return { petrol: 0, diesel: 0, kerosene: 0, isRegional: false, cityName: city };
+    return {
+      petrol: 0,
+      diesel: 0,
+      kerosene: 0,
+      isRegional: false,
+      cityName: city,
+    };
   }
   // Search regional prices case-insensitively
   if (data.regionalPrices && data.regionalPrices.length > 0) {
     const match = data.regionalPrices.find(
-      r => r.city.toLowerCase() === city.toLowerCase() ||
-           city.toLowerCase().includes(r.city.toLowerCase()) ||
-           r.city.toLowerCase().includes(city.toLowerCase())
+      r =>
+        r.city.toLowerCase() === city.toLowerCase() ||
+        city.toLowerCase().includes(r.city.toLowerCase()) ||
+        r.city.toLowerCase().includes(city.toLowerCase())
     );
     if (match) {
       return {
@@ -162,7 +187,11 @@ export interface TaxRateData {
   nssfLabel: string;
   // Health Insurance
   healthInsuranceLabel: string;
-  healthInsuranceRates: { minSalary: number; maxSalary: number; amount: number }[];
+  healthInsuranceRates: {
+    minSalary: number;
+    maxSalary: number;
+    amount: number;
+  }[];
   // VAT
   vatRate: number;
   // Housing Levy
@@ -194,8 +223,8 @@ export interface RegulatoryUpdate {
   effectiveDate: string;
   source: string;
   sourceUrl: string;
-  category: 'fuel_price' | 'tax' | 'compliance' | 'license' | 'safety';
-  priority: 'high' | 'medium' | 'low';
+  category: "fuel_price" | "tax" | "compliance" | "license" | "safety";
+  priority: "high" | "medium" | "low";
   read: boolean;
 }
 
@@ -203,14 +232,19 @@ export interface RegulatoryUpdate {
 // WORLDWIDE CURRENCY SUPPORT
 // ============================================================
 
-import { getCountryByCode, ALL_COUNTRIES } from '@/react-app/lib/world-country-utils';
+import {
+  getCountryByCode,
+  ALL_COUNTRIES,
+} from "@/react-app/lib/world-country-utils";
 
 /** Get all world currency codes for exchange rate fetching */
 function getAllWorldCurrencies(): string[] {
   const currencies = new Set<string>();
   ALL_COUNTRIES.forEach(c => currencies.add(c.currency));
   // Ensure major currencies are always included
-  ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR'].forEach(c => currencies.add(c));
+  ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR"].forEach(c =>
+    currencies.add(c)
+  );
   return Array.from(currencies).sort();
 }
 
@@ -221,11 +255,11 @@ function buildWorldExchangeRates(apiData: any): Record<string, number> {
   for (const curr of allCurrencies) {
     if (apiData.rates[curr] !== undefined) {
       rates[curr] = apiData.rates[curr];
-    } else if (curr === 'EUR') {
+    } else if (curr === "EUR") {
       rates[curr] = apiData.rates.EUR || 0.92;
-    } else if (curr === 'GBP') {
+    } else if (curr === "GBP") {
       rates[curr] = apiData.rates.GBP || 0.79;
-    } else if (curr === 'JPY') {
+    } else if (curr === "JPY") {
       rates[curr] = apiData.rates.JPY || 150;
     } else {
       // Fallback: estimate based on USD rate if available
@@ -236,7 +270,9 @@ function buildWorldExchangeRates(apiData: any): Record<string, number> {
 }
 
 /** Generic fuel price fetcher for any country */
-async function fetchGenericFuelPrices(countryCode: string): Promise<FuelPriceData | null> {
+async function fetchGenericFuelPrices(
+  countryCode: string
+): Promise<FuelPriceData | null> {
   const key = `fuel_price_${countryCode}`;
   const country = getCountryByCode(countryCode);
   if (!country) return null;
@@ -250,12 +286,16 @@ async function fetchGenericFuelPrices(countryCode: string): Promise<FuelPriceDat
 
     // Try global fuel price API first
     try {
-      const response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.globalpetrolprices.com/${country.name.toLowerCase().replace(/\s+/g, '_')}/`)}`);
+      const response = await fetch(
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.globalpetrolprices.com/${country.name.toLowerCase().replace(/\s+/g, "_")}/`)}`
+      );
       if (response?.ok) {
         const html = await response.text();
-        const priceMatches = html.matchAll(/([\d,]+\.\d{2})\s*<span[^>]*>\s*([A-Z]{3})/g);
+        const priceMatches = html.matchAll(
+          /([\d,]+\.\d{2})\s*<span[^>]*>\s*([A-Z]{3})/g
+        );
         const prices = Array.from(priceMatches).map(m => ({
-          price: parseFloat(m[1].replace(/,/g, '')),
+          price: parseFloat(m[1].replace(/,/g, "")),
           currency: m[2],
         }));
         if (prices.length >= 2) {
@@ -269,7 +309,10 @@ async function fetchGenericFuelPrices(countryCode: string): Promise<FuelPriceDat
 
     // Use regional estimates if no data found
     if (petrolPrice === 0 || dieselPrice === 0) {
-      const estimates = getRegionalPriceEstimates(countryCode, country.currency);
+      const estimates = getRegionalPriceEstimates(
+        countryCode,
+        country.currency
+      );
       petrolPrice = estimates.petrol;
       dieselPrice = estimates.diesel;
       kerosenePrice = estimates.kerosene;
@@ -282,15 +325,23 @@ async function fetchGenericFuelPrices(countryCode: string): Promise<FuelPriceDat
       dieselPrice,
       kerosenePrice: kerosenePrice || 0,
       currency: country.currency,
-      effectiveDate: new Date().toISOString().split('T')[0],
+      effectiveDate: new Date().toISOString().split("T")[0],
       priceSettingBody: `${country.name} Energy Regulatory Authority`,
       sourceUrl: `https://www.globalpetrolprices.com/${country.name}`,
-      sourceName: 'Global Petrol Prices',
+      sourceName: "Global Petrol Prices",
       lastUpdated: new Date().toISOString(),
     };
 
-    markSuccess(key, `${country.name} Fuel Authority`, data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem(`fuelpro_fuel_prices_${countryCode}`, JSON.stringify(data));
+    markSuccess(
+      key,
+      `${country.name} Fuel Authority`,
+      data,
+      FUEL_PRICE_SYNC_INTERVAL
+    );
+    localStorage.setItem(
+      `fuelpro_fuel_prices_${countryCode}`,
+      JSON.stringify(data)
+    );
     return data;
   } catch (error) {
     markError(key, `${country.name} Fuel Authority`, (error as Error).message);
@@ -299,20 +350,26 @@ async function fetchGenericFuelPrices(countryCode: string): Promise<FuelPriceDat
 }
 
 /** Get regional price estimates based on economic region */
-function getRegionalPriceEstimates(countryCode: string, currency: string): { petrol: number; diesel: number; kerosene: number } {
+function getRegionalPriceEstimates(
+  countryCode: string,
+  currency: string
+): { petrol: number; diesel: number; kerosene: number } {
   // Regional price estimates in local currency (approximate)
-  const estimates: Record<string, { petrol: number; diesel: number; kerosene: number }> = {
+  const estimates: Record<
+    string,
+    { petrol: number; diesel: number; kerosene: number }
+  > = {
     // East Africa
     KE: { petrol: 193.43, diesel: 178.56, kerosene: 170.22 },
     UG: { petrol: 5450, diesel: 4980, kerosene: 4500 },
     TZ: { petrol: 3199, diesel: 2943, kerosene: 2840 },
     RW: { petrol: 1680, diesel: 1620, kerosene: 1450 },
     BI: { petrol: 4250, diesel: 4100, kerosene: 3800 },
-    ET: { petrol: 79.00, diesel: 76.00, kerosene: 65.00 },
+    ET: { petrol: 79.0, diesel: 76.0, kerosene: 65.0 },
     SO: { petrol: 35000, diesel: 32000, kerosene: 28000 },
     // West Africa
     NG: { petrol: 617, diesel: 992, kerosene: 650 },
-    GH: { petrol: 14.50, diesel: 15.20, kerosene: 12.80 },
+    GH: { petrol: 14.5, diesel: 15.2, kerosene: 12.8 },
     CI: { petrol: 935, diesel: 875, kerosene: 750 },
     SN: { petrol: 1035, diesel: 965, kerosene: 850 },
     ML: { petrol: 825, diesel: 780, kerosene: 650 },
@@ -320,20 +377,20 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
     BJ: { petrol: 650, diesel: 600, kerosene: 500 },
     TG: { petrol: 720, diesel: 680, kerosene: 580 },
     // Southern Africa
-    ZA: { petrol: 23.36, diesel: 20.52, kerosene: 18.50 },
-    ZM: { petrol: 35.50, diesel: 32.80, kerosene: 28.50 },
+    ZA: { petrol: 23.36, diesel: 20.52, kerosene: 18.5 },
+    ZM: { petrol: 35.5, diesel: 32.8, kerosene: 28.5 },
     ZW: { petrol: 8500, diesel: 8200, kerosene: 7500 },
     MW: { petrol: 1950, diesel: 1850, kerosene: 1600 },
-    MZ: { petrol: 85.50, diesel: 78.30, kerosene: 65.00 },
-    BW: { petrol: 17.80, diesel: 16.50, kerosene: 14.20 },
-    NA: { petrol: 22.50, diesel: 20.80, kerosene: 18.00 },
-    SZ: { petrol: 21.00, diesel: 19.50, kerosene: 17.00 },
-    LS: { petrol: 23.00, diesel: 21.20, kerosene: 19.00 },
+    MZ: { petrol: 85.5, diesel: 78.3, kerosene: 65.0 },
+    BW: { petrol: 17.8, diesel: 16.5, kerosene: 14.2 },
+    NA: { petrol: 22.5, diesel: 20.8, kerosene: 18.0 },
+    SZ: { petrol: 21.0, diesel: 19.5, kerosene: 17.0 },
+    LS: { petrol: 23.0, diesel: 21.2, kerosene: 19.0 },
     // North Africa
-    EG: { petrol: 12.50, diesel: 11.00, kerosene: 9.50 },
-    MA: { petrol: 15.20, diesel: 13.80, kerosene: 11.50 },
-    DZ: { petrol: 45.50, diesel: 38.20, kerosene: 32.00 },
-    TN: { petrol: 2.50, diesel: 2.20, kerosene: 1.80 },
+    EG: { petrol: 12.5, diesel: 11.0, kerosene: 9.5 },
+    MA: { petrol: 15.2, diesel: 13.8, kerosene: 11.5 },
+    DZ: { petrol: 45.5, diesel: 38.2, kerosene: 32.0 },
+    TN: { petrol: 2.5, diesel: 2.2, kerosene: 1.8 },
     LY: { petrol: 0.65, diesel: 0.55, kerosene: 0.45 },
     SD: { petrol: 520, diesel: 480, kerosene: 400 },
     // Central Africa
@@ -344,35 +401,35 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
     TD: { petrol: 685, diesel: 640, kerosene: 540 },
     CF: { petrol: 1150, diesel: 1080, kerosene: 950 },
     // Asia
-    IN: { petrol: 105.50, diesel: 94.20, kerosene: 72.50 },
-    CN: { petrol: 8.50, diesel: 7.80, kerosene: 6.50 },
-    JP: { petrol: 175.00, diesel: 155.00, kerosene: 135.00 },
+    IN: { petrol: 105.5, diesel: 94.2, kerosene: 72.5 },
+    CN: { petrol: 8.5, diesel: 7.8, kerosene: 6.5 },
+    JP: { petrol: 175.0, diesel: 155.0, kerosene: 135.0 },
     KR: { petrol: 1750, diesel: 1600, kerosene: 1400 },
     ID: { petrol: 12500, diesel: 11300, kerosene: 9500 },
-    TH: { petrol: 48.50, diesel: 35.20, kerosene: 30.00 },
+    TH: { petrol: 48.5, diesel: 35.2, kerosene: 30.0 },
     VN: { petrol: 24000, diesel: 21500, kerosene: 18000 },
-    MY: { petrol: 2.15, diesel: 2.05, kerosene: 1.80 },
-    PH: { petrol: 72.50, diesel: 65.00, kerosene: 55.00 },
-    SG: { petrol: 2.92, diesel: 2.45, kerosene: 2.10 },
+    MY: { petrol: 2.15, diesel: 2.05, kerosene: 1.8 },
+    PH: { petrol: 72.5, diesel: 65.0, kerosene: 55.0 },
+    SG: { petrol: 2.92, diesel: 2.45, kerosene: 2.1 },
     // Middle East
-    SA: { petrol: 2.33, diesel: 2.10, kerosene: 1.80 },
-    AE: { petrol: 3.09, diesel: 3.15, kerosene: 2.80 },
-    QA: { petrol: 2.05, diesel: 1.95, kerosene: 1.70 },
+    SA: { petrol: 2.33, diesel: 2.1, kerosene: 1.8 },
+    AE: { petrol: 3.09, diesel: 3.15, kerosene: 2.8 },
+    QA: { petrol: 2.05, diesel: 1.95, kerosene: 1.7 },
     KW: { petrol: 0.105, diesel: 0.095, kerosene: 0.085 },
-    OM: { petrol: 0.230, diesel: 0.255, kerosene: 0.210 },
-    BH: { petrol: 0.200, diesel: 0.210, kerosene: 0.180 },
+    OM: { petrol: 0.23, diesel: 0.255, kerosene: 0.21 },
+    BH: { petrol: 0.2, diesel: 0.21, kerosene: 0.18 },
     // Europe
-    DE: { petrol: 1.85, diesel: 1.65, kerosene: 1.40 },
+    DE: { petrol: 1.85, diesel: 1.65, kerosene: 1.4 },
     FR: { petrol: 1.92, diesel: 1.72, kerosene: 1.45 },
-    GB: { petrol: 1.52, diesel: 1.58, kerosene: 1.30 },
+    GB: { petrol: 1.52, diesel: 1.58, kerosene: 1.3 },
     IT: { petrol: 1.88, diesel: 1.68, kerosene: 1.42 },
     ES: { petrol: 1.72, diesel: 1.58, kerosene: 1.32 },
     NL: { petrol: 1.95, diesel: 1.72, kerosene: 1.48 },
     // Americas
-    US: { petrol: 3.45, diesel: 3.85, kerosene: 3.20 },
+    US: { petrol: 3.45, diesel: 3.85, kerosene: 3.2 },
     CA: { petrol: 1.55, diesel: 1.72, kerosene: 1.45 },
-    BR: { petrol: 5.85, diesel: 4.65, kerosene: 3.80 },
-    MX: { petrol: 24.50, diesel: 25.80, kerosene: 21.50 },
+    BR: { petrol: 5.85, diesel: 4.65, kerosene: 3.8 },
+    MX: { petrol: 24.5, diesel: 25.8, kerosene: 21.5 },
     AR: { petrol: 850, diesel: 720, kerosene: 600 },
     CL: { petrol: 1180, diesel: 950, kerosene: 800 },
     CO: { petrol: 13350, diesel: 11200, kerosene: 9500 },
@@ -381,8 +438,8 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
     NZ: { petrol: 2.85, diesel: 2.15, kerosene: 1.85 },
     // Caribbean
     JM: { petrol: 215, diesel: 205, kerosene: 180 },
-    TT: { petrol: 6.75, diesel: 5.50, kerosene: 4.80 },
-    BB: { petrol: 4.55, diesel: 4.25, kerosene: 3.80 },
+    TT: { petrol: 6.75, diesel: 5.5, kerosene: 4.8 },
+    BB: { petrol: 4.55, diesel: 4.25, kerosene: 3.8 },
   };
 
   // Return country-specific estimate or generate a reasonable default
@@ -390,7 +447,10 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
   if (estimate) return estimate;
 
   // For countries without specific estimates, use regional defaults
-  const regionDefaults: Record<string, { petrol: number; diesel: number; kerosene: number }> = {
+  const regionDefaults: Record<
+    string,
+    { petrol: number; diesel: number; kerosene: number }
+  > = {
     // Africa defaults
     XA: { petrol: 1200, diesel: 1100, kerosene: 950 },
     // Asia defaults
@@ -398,17 +458,211 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
     // Europe defaults
     XEU: { petrol: 1.75, diesel: 1.58, kerosene: 1.35 },
     // Americas defaults
-    XAM: { petrol: 3.50, diesel: 3.20, kerosene: 2.80 },
+    XAM: { petrol: 3.5, diesel: 3.2, kerosene: 2.8 },
     // Oceania defaults
-    XOC: { petrol: 2.20, diesel: 2.00, kerosene: 1.75 },
+    XOC: { petrol: 2.2, diesel: 2.0, kerosene: 1.75 },
   };
 
   // Determine region from country code patterns
-  const africanCodes = ['ZA','KE','NG','GH','ET','TZ','UG','RW','BI','SO','ZM','ZW','MW','MZ','BW','NA','SZ','LS','EG','MA','DZ','TN','LY','SD','CM','GA','CG','CD','TD','CF','SN','CI','ML','BF','BJ','TG','LR','SL','GN','GW','GM','MR','NE','DJ','ER','MG','MU','SC','KM','ST','CV','GW'];
-  const asianCodes = ['IN','CN','JP','KR','ID','TH','VN','MY','PH','SG','BD','PK','LK','NP','MM','KH','LA','BN','BT','MV','MN','KZ','UZ','TJ','KG','TM','AF','IR','IQ','IL','JO','LB','SY','YE','TR','SA','AE','QA','KW','OM','BH'];
-  const europeanCodes = ['DE','FR','GB','IT','ES','NL','BE','CH','AT','SE','NO','DK','FI','PL','CZ','HU','SK','SI','HR','RS','BG','RO','MD','UA','BY','LT','LV','EE','IE','PT','GR','CY','MT','IS','LI','LU','MC','AD','SM','VA','BA','ME','MK','AL','XK'];
-  const americanCodes = ['US','CA','BR','MX','AR','CL','CO','PE','VE','EC','UY','PY','BO','GY','SR','GF','CR','PA','GT','HN','SV','NI','BZ','CU','HT','DO','JM','TT','BB','GD','LC','VC','AG','KN','DM'];
-  const oceaniaCodes = ['AU','NZ','FJ','PG','SB','VU','NC','PF','WS','TO','KI','TV','NR','MH','FM','PW'];
+  const africanCodes = [
+    "ZA",
+    "KE",
+    "NG",
+    "GH",
+    "ET",
+    "TZ",
+    "UG",
+    "RW",
+    "BI",
+    "SO",
+    "ZM",
+    "ZW",
+    "MW",
+    "MZ",
+    "BW",
+    "NA",
+    "SZ",
+    "LS",
+    "EG",
+    "MA",
+    "DZ",
+    "TN",
+    "LY",
+    "SD",
+    "CM",
+    "GA",
+    "CG",
+    "CD",
+    "TD",
+    "CF",
+    "SN",
+    "CI",
+    "ML",
+    "BF",
+    "BJ",
+    "TG",
+    "LR",
+    "SL",
+    "GN",
+    "GW",
+    "GM",
+    "MR",
+    "NE",
+    "DJ",
+    "ER",
+    "MG",
+    "MU",
+    "SC",
+    "KM",
+    "ST",
+    "CV",
+    "GW",
+  ];
+  const asianCodes = [
+    "IN",
+    "CN",
+    "JP",
+    "KR",
+    "ID",
+    "TH",
+    "VN",
+    "MY",
+    "PH",
+    "SG",
+    "BD",
+    "PK",
+    "LK",
+    "NP",
+    "MM",
+    "KH",
+    "LA",
+    "BN",
+    "BT",
+    "MV",
+    "MN",
+    "KZ",
+    "UZ",
+    "TJ",
+    "KG",
+    "TM",
+    "AF",
+    "IR",
+    "IQ",
+    "IL",
+    "JO",
+    "LB",
+    "SY",
+    "YE",
+    "TR",
+    "SA",
+    "AE",
+    "QA",
+    "KW",
+    "OM",
+    "BH",
+  ];
+  const europeanCodes = [
+    "DE",
+    "FR",
+    "GB",
+    "IT",
+    "ES",
+    "NL",
+    "BE",
+    "CH",
+    "AT",
+    "SE",
+    "NO",
+    "DK",
+    "FI",
+    "PL",
+    "CZ",
+    "HU",
+    "SK",
+    "SI",
+    "HR",
+    "RS",
+    "BG",
+    "RO",
+    "MD",
+    "UA",
+    "BY",
+    "LT",
+    "LV",
+    "EE",
+    "IE",
+    "PT",
+    "GR",
+    "CY",
+    "MT",
+    "IS",
+    "LI",
+    "LU",
+    "MC",
+    "AD",
+    "SM",
+    "VA",
+    "BA",
+    "ME",
+    "MK",
+    "AL",
+    "XK",
+  ];
+  const americanCodes = [
+    "US",
+    "CA",
+    "BR",
+    "MX",
+    "AR",
+    "CL",
+    "CO",
+    "PE",
+    "VE",
+    "EC",
+    "UY",
+    "PY",
+    "BO",
+    "GY",
+    "SR",
+    "GF",
+    "CR",
+    "PA",
+    "GT",
+    "HN",
+    "SV",
+    "NI",
+    "BZ",
+    "CU",
+    "HT",
+    "DO",
+    "JM",
+    "TT",
+    "BB",
+    "GD",
+    "LC",
+    "VC",
+    "AG",
+    "KN",
+    "DM",
+  ];
+  const oceaniaCodes = [
+    "AU",
+    "NZ",
+    "FJ",
+    "PG",
+    "SB",
+    "VU",
+    "NC",
+    "PF",
+    "WS",
+    "TO",
+    "KI",
+    "TV",
+    "NR",
+    "MH",
+    "FM",
+    "PW",
+  ];
 
   if (africanCodes.includes(countryCode)) return regionDefaults.XA;
   if (asianCodes.includes(countryCode)) return regionDefaults.XAS;
@@ -417,7 +671,7 @@ function getRegionalPriceEstimates(countryCode: string, currency: string): { pet
   if (oceaniaCodes.includes(countryCode)) return regionDefaults.XOC;
 
   // Ultimate fallback - use USD estimates
-  return { petrol: 1.20, diesel: 1.10, kerosene: 0.95 };
+  return { petrol: 1.2, diesel: 1.1, kerosene: 0.95 };
 }
 
 // ============================================================
@@ -428,8 +682,8 @@ async function fetchWithFallback(urls: string[]): Promise<Response | null> {
   for (const url of urls) {
     try {
       const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json, text/html' },
+        method: "GET",
+        headers: { Accept: "application/json, text/html" },
       });
       if (response.ok) return response;
     } catch {
@@ -444,14 +698,17 @@ async function fetchWithFallback(urls: string[]): Promise<Response | null> {
  * EPRA announces prices on 14th of every month
  */
 async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_KE';
-  markSyncing(key, 'EPRA Kenya');
+  const key = "fuel_price_KE";
+  markSyncing(key, "EPRA Kenya");
 
   try {
     // EPRA website and public data sources
     const urls = [
-      'https://www.epra.go.ke/api/fuel-prices/current',
-      'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.epra.go.ke/index.php/component/content/article/25-pump-prices'),
+      "https://www.epra.go.ke/api/fuel-prices/current",
+      "https://api.allorigins.win/raw?url=" +
+        encodeURIComponent(
+          "https://www.epra.go.ke/index.php/component/content/article/25-pump-prices"
+        ),
     ];
 
     const response = await fetchWithFallback(urls);
@@ -461,10 +718,14 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
     if (response) {
       const text = await response.text();
       // Try to extract prices from HTML
-      const petrolMatch = text.match(/(?:super\s*petrol|petrol).*?([\d,]+\.\d{2})/i);
+      const petrolMatch = text.match(
+        /(?:super\s*petrol|petrol).*?([\d,]+\.\d{2})/i
+      );
       const dieselMatch = text.match(/(?:diesel|ago).*?([\d,]+\.\d{2})/i);
-      if (petrolMatch) petrolPrice = parseFloat(petrolMatch[1].replace(/,/g, ''));
-      if (dieselMatch) dieselPrice = parseFloat(dieselMatch[1].replace(/,/g, ''));
+      if (petrolMatch)
+        petrolPrice = parseFloat(petrolMatch[1].replace(/,/g, ""));
+      if (dieselMatch)
+        dieselPrice = parseFloat(dieselMatch[1].replace(/,/g, ""));
     }
 
     // Fallback to known data + web search simulation
@@ -472,13 +733,21 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       // Try web search for latest prices
       try {
         const searchResponse = await fetch(
-          'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.google.com/search?q=kenya+fuel+prices+epra+' + new Date().toISOString().slice(0,7))
+          "https://api.allorigins.win/raw?url=" +
+            encodeURIComponent(
+              "https://www.google.com/search?q=kenya+fuel+prices+epra+" +
+                new Date().toISOString().slice(0, 7)
+            )
         );
         if (searchResponse?.ok) {
           const html = await searchResponse.text();
           // Extract prices from search results
-          const priceMatches = html.matchAll(/KES?\s*([\d,]+\.?\d*)\s*(?:per|\/)?\s*liter/gi);
-          const prices = Array.from(priceMatches).map(m => parseFloat(m[1].replace(/,/g, ''))).filter(p => p > 100 && p < 500);
+          const priceMatches = html.matchAll(
+            /KES?\s*([\d,]+\.?\d*)\s*(?:per|\/)?\s*liter/gi
+          );
+          const prices = Array.from(priceMatches)
+            .map(m => parseFloat(m[1].replace(/,/g, "")))
+            .filter(p => p > 100 && p < 500);
           if (prices.length >= 2) {
             petrolPrice = prices[0];
             dieselPrice = prices[1];
@@ -496,55 +765,175 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
     if (dieselPrice === 0) dieselPrice = 178.56; // Nairobi diesel
 
     const data: FuelPriceData = {
-      countryCode: 'KE',
-      countryName: 'Kenya',
+      countryCode: "KE",
+      countryName: "Kenya",
       petrolPrice,
       dieselPrice,
       kerosenePrice: 170.22,
-      currency: 'KES',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Energy and Petroleum Regulatory Authority (EPRA)',
-      sourceUrl: 'https://www.epra.go.ke',
-      sourceName: 'EPRA Kenya',
+      currency: "KES",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Energy and Petroleum Regulatory Authority (EPRA)",
+      sourceUrl: "https://www.epra.go.ke",
+      sourceName: "EPRA Kenya",
       lastUpdated: new Date().toISOString(),
       // EPRA regional pump prices - updated monthly on the 14th
       regionalPrices: [
-        { city: 'Nairobi',    petrolPrice: 193.43, dieselPrice: 178.56, kerosenePrice: 170.22, transportSurcharge: 0.00 },
-        { city: 'Mombasa',    petrolPrice: 190.15, dieselPrice: 175.21, kerosenePrice: 167.05, transportSurcharge: -3.28 }, // coastal = import point, cheapest
-        { city: 'Kisumu',     petrolPrice: 196.78, dieselPrice: 181.92, kerosenePrice: 173.45, transportSurcharge: 3.35 },
-        { city: 'Nakuru',     petrolPrice: 195.12, dieselPrice: 180.34, kerosenePrice: 171.88, transportSurcharge: 1.69 },
-        { city: 'Eldoret',    petrolPrice: 197.55, dieselPrice: 182.67, kerosenePrice: 174.21, transportSurcharge: 4.12 },
-        { city: 'Meru',       petrolPrice: 195.88, dieselPrice: 181.01, kerosenePrice: 172.55, transportSurcharge: 2.45 },
-        { city: 'Nyeri',      petrolPrice: 194.76, dieselPrice: 179.89, kerosenePrice: 171.44, transportSurcharge: 1.33 },
-        { city: 'Thika',      petrolPrice: 193.87, dieselPrice: 179.01, kerosenePrice: 170.66, transportSurcharge: 0.44 },
-        { city: 'Malindi',    petrolPrice: 190.89, dieselPrice: 175.95, kerosenePrice: 167.79, transportSurcharge: -2.54 },
-        { city: 'Kitale',     petrolPrice: 198.12, dieselPrice: 183.25, kerosenePrice: 174.78, transportSurcharge: 4.69 },
-        { city: 'Machakos',   petrolPrice: 194.21, dieselPrice: 179.34, kerosenePrice: 171.01, transportSurcharge: 0.78 },
-        { city: 'Kericho',    petrolPrice: 196.34, dieselPrice: 181.48, kerosenePrice: 173.01, transportSurcharge: 2.91 },
-        { city: 'Bungoma',    petrolPrice: 197.89, dieselPrice: 183.01, kerosenePrice: 174.55, transportSurcharge: 4.46 },
-        { city: 'Kakamega',   petrolPrice: 197.45, dieselPrice: 182.58, kerosenePrice: 174.12, transportSurcharge: 4.02 },
-        { city: 'Garissa',    petrolPrice: 198.67, dieselPrice: 183.78, kerosenePrice: 175.32, transportSurcharge: 5.24 },
-        { city: 'Lodwar',     petrolPrice: 220.30, dieselPrice: 250.01, kerosenePrice: 164.90, transportSurcharge: 15.92 }, // Turkana - AI confirmed May 2026 prices
-        { city: 'Kanamkemer', petrolPrice: 220.30, dieselPrice: 250.01, kerosenePrice: 164.90, transportSurcharge: 15.92 }, // Lodwar suburb
-        { city: 'Kakuma',     petrolPrice: 205.50, dieselPrice: 204.80, kerosenePrice: 166.00, transportSurcharge: 12.07 }, // refugee camp area
-        { city: 'Mandera',    petrolPrice: 202.45, dieselPrice: 187.56, kerosenePrice: 179.10, transportSurcharge: 9.02 }, // border town
-        { city: 'Moyale',     petrolPrice: 203.12, dieselPrice: 188.23, kerosenePrice: 179.77, transportSurcharge: 9.69 }, // Ethiopia border
+        {
+          city: "Nairobi",
+          petrolPrice: 193.43,
+          dieselPrice: 178.56,
+          kerosenePrice: 170.22,
+          transportSurcharge: 0.0,
+        },
+        {
+          city: "Mombasa",
+          petrolPrice: 190.15,
+          dieselPrice: 175.21,
+          kerosenePrice: 167.05,
+          transportSurcharge: -3.28,
+        }, // coastal = import point, cheapest
+        {
+          city: "Kisumu",
+          petrolPrice: 196.78,
+          dieselPrice: 181.92,
+          kerosenePrice: 173.45,
+          transportSurcharge: 3.35,
+        },
+        {
+          city: "Nakuru",
+          petrolPrice: 195.12,
+          dieselPrice: 180.34,
+          kerosenePrice: 171.88,
+          transportSurcharge: 1.69,
+        },
+        {
+          city: "Eldoret",
+          petrolPrice: 197.55,
+          dieselPrice: 182.67,
+          kerosenePrice: 174.21,
+          transportSurcharge: 4.12,
+        },
+        {
+          city: "Meru",
+          petrolPrice: 195.88,
+          dieselPrice: 181.01,
+          kerosenePrice: 172.55,
+          transportSurcharge: 2.45,
+        },
+        {
+          city: "Nyeri",
+          petrolPrice: 194.76,
+          dieselPrice: 179.89,
+          kerosenePrice: 171.44,
+          transportSurcharge: 1.33,
+        },
+        {
+          city: "Thika",
+          petrolPrice: 193.87,
+          dieselPrice: 179.01,
+          kerosenePrice: 170.66,
+          transportSurcharge: 0.44,
+        },
+        {
+          city: "Malindi",
+          petrolPrice: 190.89,
+          dieselPrice: 175.95,
+          kerosenePrice: 167.79,
+          transportSurcharge: -2.54,
+        },
+        {
+          city: "Kitale",
+          petrolPrice: 198.12,
+          dieselPrice: 183.25,
+          kerosenePrice: 174.78,
+          transportSurcharge: 4.69,
+        },
+        {
+          city: "Machakos",
+          petrolPrice: 194.21,
+          dieselPrice: 179.34,
+          kerosenePrice: 171.01,
+          transportSurcharge: 0.78,
+        },
+        {
+          city: "Kericho",
+          petrolPrice: 196.34,
+          dieselPrice: 181.48,
+          kerosenePrice: 173.01,
+          transportSurcharge: 2.91,
+        },
+        {
+          city: "Bungoma",
+          petrolPrice: 197.89,
+          dieselPrice: 183.01,
+          kerosenePrice: 174.55,
+          transportSurcharge: 4.46,
+        },
+        {
+          city: "Kakamega",
+          petrolPrice: 197.45,
+          dieselPrice: 182.58,
+          kerosenePrice: 174.12,
+          transportSurcharge: 4.02,
+        },
+        {
+          city: "Garissa",
+          petrolPrice: 198.67,
+          dieselPrice: 183.78,
+          kerosenePrice: 175.32,
+          transportSurcharge: 5.24,
+        },
+        {
+          city: "Lodwar",
+          petrolPrice: 220.3,
+          dieselPrice: 250.01,
+          kerosenePrice: 164.9,
+          transportSurcharge: 15.92,
+        }, // Turkana - AI confirmed May 2026 prices
+        {
+          city: "Kanamkemer",
+          petrolPrice: 220.3,
+          dieselPrice: 250.01,
+          kerosenePrice: 164.9,
+          transportSurcharge: 15.92,
+        }, // Lodwar suburb
+        {
+          city: "Kakuma",
+          petrolPrice: 205.5,
+          dieselPrice: 204.8,
+          kerosenePrice: 166.0,
+          transportSurcharge: 12.07,
+        }, // refugee camp area
+        {
+          city: "Mandera",
+          petrolPrice: 202.45,
+          dieselPrice: 187.56,
+          kerosenePrice: 179.1,
+          transportSurcharge: 9.02,
+        }, // border town
+        {
+          city: "Moyale",
+          petrolPrice: 203.12,
+          dieselPrice: 188.23,
+          kerosenePrice: 179.77,
+          transportSurcharge: 9.69,
+        }, // Ethiopia border
       ],
       breakdown: {
         landedCost: petrolPrice * 0.46,
         taxes: petrolPrice * 0.32,
         margins: petrolPrice * 0.12,
         regulatoryLevy: 0.75,
-        roadLevy: 25.00,
-        petroleumDevelopmentLevy: 5.40,
-      }
+        roadLevy: 25.0,
+        petroleumDevelopmentLevy: 5.4,
+      },
     };
 
-    markSuccess(key, 'EPRA Kenya', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_KE', JSON.stringify(data));
+    markSuccess(key, "EPRA Kenya", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_KE", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'EPRA Kenya', (error as Error).message);
+    markError(key, "EPRA Kenya", (error as Error).message);
     return null;
   }
 }
@@ -553,26 +942,26 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Uganda fuel prices
  */
 async function fetchUgandaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_UG';
-  markSyncing(key, 'Uganda MEMD');
+  const key = "fuel_price_UG";
+  markSyncing(key, "Uganda MEMD");
   try {
     const data: FuelPriceData = {
-      countryCode: 'UG',
-      countryName: 'Uganda',
+      countryCode: "UG",
+      countryName: "Uganda",
       petrolPrice: 5450, // UGX per liter
       dieselPrice: 4980,
-      currency: 'UGX',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Ministry of Energy and Mineral Development',
-      sourceUrl: 'https://www.energyandminerals.go.ug',
-      sourceName: 'Uganda MEMD',
+      currency: "UGX",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Ministry of Energy and Mineral Development",
+      sourceUrl: "https://www.energyandminerals.go.ug",
+      sourceName: "Uganda MEMD",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'Uganda MEMD', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_UG', JSON.stringify(data));
+    markSuccess(key, "Uganda MEMD", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_UG", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'Uganda MEMD', (error as Error).message);
+    markError(key, "Uganda MEMD", (error as Error).message);
     return null;
   }
 }
@@ -581,27 +970,28 @@ async function fetchUgandaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Tanzania fuel prices from EWURA
  */
 async function fetchTanzaniaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_TZ';
-  markSyncing(key, 'EWURA Tanzania');
+  const key = "fuel_price_TZ";
+  markSyncing(key, "EWURA Tanzania");
   try {
     const data: FuelPriceData = {
-      countryCode: 'TZ',
-      countryName: 'Tanzania',
+      countryCode: "TZ",
+      countryName: "Tanzania",
       petrolPrice: 3199, // TZS per liter
       dieselPrice: 2943,
       kerosenePrice: 2840,
-      currency: 'TZS',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Energy and Water Utilities Regulatory Authority (EWURA)',
-      sourceUrl: 'https://www.ewura.go.tz',
-      sourceName: 'EWURA Tanzania',
+      currency: "TZS",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody:
+        "Energy and Water Utilities Regulatory Authority (EWURA)",
+      sourceUrl: "https://www.ewura.go.tz",
+      sourceName: "EWURA Tanzania",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'EWURA Tanzania', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_TZ', JSON.stringify(data));
+    markSuccess(key, "EWURA Tanzania", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_TZ", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'EWURA Tanzania', (error as Error).message);
+    markError(key, "EWURA Tanzania", (error as Error).message);
     return null;
   }
 }
@@ -610,26 +1000,26 @@ async function fetchTanzaniaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Nigeria fuel prices from NNPC
  */
 async function fetchNigeriaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_NG';
-  markSyncing(key, 'NNPC Nigeria');
+  const key = "fuel_price_NG";
+  markSyncing(key, "NNPC Nigeria");
   try {
     const data: FuelPriceData = {
-      countryCode: 'NG',
-      countryName: 'Nigeria',
+      countryCode: "NG",
+      countryName: "Nigeria",
       petrolPrice: 617, // NGN per liter
       dieselPrice: 992,
-      currency: 'NGN',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Nigerian National Petroleum Company (NNPC)',
-      sourceUrl: 'https://nnpcgroup.com',
-      sourceName: 'NNPC Nigeria',
+      currency: "NGN",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Nigerian National Petroleum Company (NNPC)",
+      sourceUrl: "https://nnpcgroup.com",
+      sourceName: "NNPC Nigeria",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'NNPC Nigeria', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_NG', JSON.stringify(data));
+    markSuccess(key, "NNPC Nigeria", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_NG", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'NNPC Nigeria', (error as Error).message);
+    markError(key, "NNPC Nigeria", (error as Error).message);
     return null;
   }
 }
@@ -638,34 +1028,34 @@ async function fetchNigeriaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch South Africa fuel prices from DMRE
  */
 async function fetchSouthAfricaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_ZA';
-  markSyncing(key, 'DMRE South Africa');
+  const key = "fuel_price_ZA";
+  markSyncing(key, "DMRE South Africa");
   try {
     const data: FuelPriceData = {
-      countryCode: 'ZA',
-      countryName: 'South Africa',
+      countryCode: "ZA",
+      countryName: "South Africa",
       petrolPrice: 23.36, // ZAR per liter
       dieselPrice: 20.52,
-      currency: 'ZAR',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Department of Mineral Resources and Energy (DMRE)',
-      sourceUrl: 'https://www.dmre.gov.za',
-      sourceName: 'DMRE South Africa',
+      currency: "ZAR",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Department of Mineral Resources and Energy (DMRE)",
+      sourceUrl: "https://www.dmre.gov.za",
+      sourceName: "DMRE South Africa",
       lastUpdated: new Date().toISOString(),
       breakdown: {
-        landedCost: 12.50,
+        landedCost: 12.5,
         taxes: 6.23,
         margins: 3.93,
         regulatoryLevy: 0,
         roadLevy: 2.18,
         petroleumDevelopmentLevy: 0,
-      }
+      },
     };
-    markSuccess(key, 'DMRE South Africa', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_ZA', JSON.stringify(data));
+    markSuccess(key, "DMRE South Africa", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_ZA", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'DMRE South Africa', (error as Error).message);
+    markError(key, "DMRE South Africa", (error as Error).message);
     return null;
   }
 }
@@ -674,26 +1064,31 @@ async function fetchSouthAfricaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Ethiopia fuel prices
  */
 async function fetchEthiopiaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_ET';
-  markSyncing(key, 'Ethiopia Ministry of Trade');
+  const key = "fuel_price_ET";
+  markSyncing(key, "Ethiopia Ministry of Trade");
   try {
     const data: FuelPriceData = {
-      countryCode: 'ET',
-      countryName: 'Ethiopia',
-      petrolPrice: 79.00, // ETB per liter
-      dieselPrice: 76.00,
-      currency: 'ETB',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Ministry of Trade and Regional Integration',
-      sourceUrl: 'https://www.motr.gov.et',
-      sourceName: 'Ethiopia MoT',
+      countryCode: "ET",
+      countryName: "Ethiopia",
+      petrolPrice: 79.0, // ETB per liter
+      dieselPrice: 76.0,
+      currency: "ETB",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Ministry of Trade and Regional Integration",
+      sourceUrl: "https://www.motr.gov.et",
+      sourceName: "Ethiopia MoT",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'Ethiopia Ministry of Trade', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_ET', JSON.stringify(data));
+    markSuccess(
+      key,
+      "Ethiopia Ministry of Trade",
+      data,
+      FUEL_PRICE_SYNC_INTERVAL
+    );
+    localStorage.setItem("fuelpro_fuel_prices_ET", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'Ethiopia Ministry of Trade', (error as Error).message);
+    markError(key, "Ethiopia Ministry of Trade", (error as Error).message);
     return null;
   }
 }
@@ -702,26 +1097,26 @@ async function fetchEthiopiaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Rwanda fuel prices from RURA
  */
 async function fetchRwandaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_RW';
-  markSyncing(key, 'RURA Rwanda');
+  const key = "fuel_price_RW";
+  markSyncing(key, "RURA Rwanda");
   try {
     const data: FuelPriceData = {
-      countryCode: 'RW',
-      countryName: 'Rwanda',
+      countryCode: "RW",
+      countryName: "Rwanda",
       petrolPrice: 1680, // RWF per liter
       dieselPrice: 1620,
-      currency: 'RWF',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'Rwanda Utilities Regulatory Authority (RURA)',
-      sourceUrl: 'https://www.rura.rw',
-      sourceName: 'RURA Rwanda',
+      currency: "RWF",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "Rwanda Utilities Regulatory Authority (RURA)",
+      sourceUrl: "https://www.rura.rw",
+      sourceName: "RURA Rwanda",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'RURA Rwanda', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_RW', JSON.stringify(data));
+    markSuccess(key, "RURA Rwanda", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_RW", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'RURA Rwanda', (error as Error).message);
+    markError(key, "RURA Rwanda", (error as Error).message);
     return null;
   }
 }
@@ -730,26 +1125,26 @@ async function fetchRwandaFuelPrices(): Promise<FuelPriceData | null> {
  * Fetch Ghana fuel prices from NPA
  */
 async function fetchGhanaFuelPrices(): Promise<FuelPriceData | null> {
-  const key = 'fuel_price_GH';
-  markSyncing(key, 'NPA Ghana');
+  const key = "fuel_price_GH";
+  markSyncing(key, "NPA Ghana");
   try {
     const data: FuelPriceData = {
-      countryCode: 'GH',
-      countryName: 'Ghana',
-      petrolPrice: 14.50, // GHS per liter
-      dieselPrice: 15.20,
-      currency: 'GHS',
-      effectiveDate: new Date().toISOString().split('T')[0],
-      priceSettingBody: 'National Petroleum Authority (NPA)',
-      sourceUrl: 'https://www.npa.gov.gh',
-      sourceName: 'NPA Ghana',
+      countryCode: "GH",
+      countryName: "Ghana",
+      petrolPrice: 14.5, // GHS per liter
+      dieselPrice: 15.2,
+      currency: "GHS",
+      effectiveDate: new Date().toISOString().split("T")[0],
+      priceSettingBody: "National Petroleum Authority (NPA)",
+      sourceUrl: "https://www.npa.gov.gh",
+      sourceName: "NPA Ghana",
       lastUpdated: new Date().toISOString(),
     };
-    markSuccess(key, 'NPA Ghana', data, FUEL_PRICE_SYNC_INTERVAL);
-    localStorage.setItem('fuelpro_fuel_prices_GH', JSON.stringify(data));
+    markSuccess(key, "NPA Ghana", data, FUEL_PRICE_SYNC_INTERVAL);
+    localStorage.setItem("fuelpro_fuel_prices_GH", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'NPA Ghana', (error as Error).message);
+    markError(key, "NPA Ghana", (error as Error).message);
     return null;
   }
 }
@@ -758,7 +1153,9 @@ async function fetchGhanaFuelPrices(): Promise<FuelPriceData | null> {
 // MAIN FUEL PRICE FETCHER - Dispatches per country (ALL 250+)
 // ============================================================
 
-export async function syncFuelPrices(countryCode?: string): Promise<FuelPriceData[]> {
+export async function syncFuelPrices(
+  countryCode?: string
+): Promise<FuelPriceData[]> {
   const results: FuelPriceData[] = [];
 
   // If a specific country is requested, sync just that one
@@ -768,13 +1165,20 @@ export async function syncFuelPrices(countryCode?: string): Promise<FuelPriceDat
     if (!shouldSync(key, FUEL_PRICE_SYNC_INTERVAL)) {
       const cached = localStorage.getItem(`fuelpro_fuel_prices_${countryCode}`);
       if (cached) {
-        try { results.push(JSON.parse(cached)); } catch { /* ignore */ }
+        try {
+          results.push(JSON.parse(cached));
+        } catch {
+          /* ignore */
+        }
       }
       return results;
     }
 
     // Try specific fetchers first, then fall back to generic
-    const specificFetchers: Record<string, () => Promise<FuelPriceData | null>> = {
+    const specificFetchers: Record<
+      string,
+      () => Promise<FuelPriceData | null>
+    > = {
       KE: fetchKenyaFuelPrices,
       UG: fetchUgandaFuelPrices,
       TZ: fetchTanzaniaFuelPrices,
@@ -799,24 +1203,29 @@ export async function syncFuelPrices(countryCode?: string): Promise<FuelPriceDat
 
   // No specific country - sync the 8 core countries with detailed fetchers
   // plus any additional countries that have cached data and need refresh
-  const coreCodes = ['KE', 'UG', 'TZ', 'NG', 'ZA', 'ET', 'RW', 'GH'];
-  const specificFetchers: Record<string, () => Promise<FuelPriceData | null>> = {
-    KE: fetchKenyaFuelPrices,
-    UG: fetchUgandaFuelPrices,
-    TZ: fetchTanzaniaFuelPrices,
-    NG: fetchNigeriaFuelPrices,
-    ZA: fetchSouthAfricaFuelPrices,
-    ET: fetchEthiopiaFuelPrices,
-    RW: fetchRwandaFuelPrices,
-    GH: fetchGhanaFuelPrices,
-  };
+  const coreCodes = ["KE", "UG", "TZ", "NG", "ZA", "ET", "RW", "GH"];
+  const specificFetchers: Record<string, () => Promise<FuelPriceData | null>> =
+    {
+      KE: fetchKenyaFuelPrices,
+      UG: fetchUgandaFuelPrices,
+      TZ: fetchTanzaniaFuelPrices,
+      NG: fetchNigeriaFuelPrices,
+      ZA: fetchSouthAfricaFuelPrices,
+      ET: fetchEthiopiaFuelPrices,
+      RW: fetchRwandaFuelPrices,
+      GH: fetchGhanaFuelPrices,
+    };
 
   for (const code of coreCodes) {
     const key = `fuel_price_${code}`;
     if (!shouldSync(key, FUEL_PRICE_SYNC_INTERVAL)) {
       const cached = localStorage.getItem(`fuelpro_fuel_prices_${code}`);
       if (cached) {
-        try { results.push(JSON.parse(cached)); } catch { /* ignore */ }
+        try {
+          results.push(JSON.parse(cached));
+        } catch {
+          /* ignore */
+        }
       }
       continue;
     }
@@ -831,12 +1240,18 @@ export async function syncFuelPrices(countryCode?: string): Promise<FuelPriceDat
 // TAX RATE SYNC - Updates tax configuration from sources
 // ============================================================
 
-export async function syncTaxRates(countryCode: string): Promise<TaxRateData | null> {
+export async function syncTaxRates(
+  countryCode: string
+): Promise<TaxRateData | null> {
   const key = `tax_rates_${countryCode}`;
   if (!shouldSync(key, TAX_SYNC_INTERVAL)) {
     const cached = localStorage.getItem(`fuelpro_tax_rates_${countryCode}`);
     if (cached) {
-      try { return JSON.parse(cached); } catch { /* ignore */ }
+      try {
+        return JSON.parse(cached);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -844,7 +1259,7 @@ export async function syncTaxRates(countryCode: string): Promise<TaxRateData | n
 
   const country = getCountryById(countryCode);
   if (!country) {
-    markError(key, 'Unknown country', 'Country not found');
+    markError(key, "Unknown country", "Country not found");
     return null;
   }
 
@@ -871,7 +1286,10 @@ export async function syncTaxRates(countryCode: string): Promise<TaxRateData | n
   };
 
   markSuccess(key, country.revenueAuthority.name, taxData, TAX_SYNC_INTERVAL);
-  localStorage.setItem(`fuelpro_tax_rates_${countryCode}`, JSON.stringify(taxData));
+  localStorage.setItem(
+    `fuelpro_tax_rates_${countryCode}`,
+    JSON.stringify(taxData)
+  );
   return taxData;
 }
 
@@ -880,71 +1298,170 @@ export async function syncTaxRates(countryCode: string): Promise<TaxRateData | n
 // ============================================================
 
 export async function syncExchangeRates(): Promise<ExchangeRateData | null> {
-  const key = 'exchange_rates';
+  const key = "exchange_rates";
   if (!shouldSync(key, SYNC_INTERVAL_MS)) {
-    const cached = localStorage.getItem('fuelpro_exchange_rates');
+    const cached = localStorage.getItem("fuelpro_exchange_rates");
     if (cached) {
-      try { return JSON.parse(cached); } catch { /* ignore */ }
+      try {
+        return JSON.parse(cached);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
-  markSyncing(key, 'Exchange Rate API');
+  markSyncing(key, "Exchange Rate API");
 
   try {
-    const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const response = await fetch(
+      "https://api.exchangerate-api.com/v4/latest/USD"
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const apiData = await response.json();
     const data: ExchangeRateData = {
-      base: 'USD',
+      base: "USD",
       rates: buildWorldExchangeRates(apiData),
       lastUpdated: new Date().toISOString(),
-      source: 'exchangerate-api.com',
+      source: "exchangerate-api.com",
     };
 
-    markSuccess(key, 'exchangerate-api.com', data);
-    localStorage.setItem('fuelpro_exchange_rates', JSON.stringify(data));
+    markSuccess(key, "exchangerate-api.com", data);
+    localStorage.setItem("fuelpro_exchange_rates", JSON.stringify(data));
     return data;
   } catch (error) {
-    markError(key, 'exchangerate-api.com', (error as Error).message);
+    markError(key, "exchangerate-api.com", (error as Error).message);
     // Return cached or default
-    const cached = localStorage.getItem('fuelpro_exchange_rates');
+    const cached = localStorage.getItem("fuelpro_exchange_rates");
     if (cached) {
-      try { return JSON.parse(cached); } catch { /* ignore */ }
+      try {
+        return JSON.parse(cached);
+      } catch {
+        /* ignore */
+      }
     }
     // Build comprehensive fallback rates
     const fallbackRates: Record<string, number> = {
-      USD: 1, EUR: 0.92, GBP: 0.79, JPY: 150, CHF: 0.88, CAD: 1.36, AUD: 1.52,
-      CNY: 7.24, INR: 83.5, KRW: 1340, BRL: 5.05, MXN: 17.1, RUB: 92.5,
+      USD: 1,
+      EUR: 0.92,
+      GBP: 0.79,
+      JPY: 150,
+      CHF: 0.88,
+      CAD: 1.36,
+      AUD: 1.52,
+      CNY: 7.24,
+      INR: 83.5,
+      KRW: 1340,
+      BRL: 5.05,
+      MXN: 17.1,
+      RUB: 92.5,
       // African currencies
-      KES: 129.5, UGX: 3750, TZS: 2700, NGN: 1540, ZAR: 18.5, ETB: 135, RWF: 1350,
-      GHS: 15.5, XOF: 605, XAF: 605, ZMW: 26.5, MWK: 1730, BWP: 13.5, NAD: 18.5,
-      SZL: 18.5, LSL: 18.5, MZN: 63.5, SCR: 13.5, MUR: 46.5, MAD: 10.0, TND: 3.1,
-      EGP: 30.9, LYD: 4.85, SDG: 600, DZD: 134, MRU: 39.5, CVE: 101,
+      KES: 129.5,
+      UGX: 3750,
+      TZS: 2700,
+      NGN: 1540,
+      ZAR: 18.5,
+      ETB: 135,
+      RWF: 1350,
+      GHS: 15.5,
+      XOF: 605,
+      XAF: 605,
+      ZMW: 26.5,
+      MWK: 1730,
+      BWP: 13.5,
+      NAD: 18.5,
+      SZL: 18.5,
+      LSL: 18.5,
+      MZN: 63.5,
+      SCR: 13.5,
+      MUR: 46.5,
+      MAD: 10.0,
+      TND: 3.1,
+      EGP: 30.9,
+      LYD: 4.85,
+      SDG: 600,
+      DZD: 134,
+      MRU: 39.5,
+      CVE: 101,
       // Asian currencies
-      IDR: 15800, THB: 35.5, VND: 24800, MYR: 4.72, PHP: 56.5, SGD: 1.34,
-      PKR: 278, BDT: 109.5, LKR: 300, NPR: 133.5, MMK: 2100, KHR: 4100,
-      LAK: 20800, BND: 1.34, HKD: 7.82, TWD: 31.5, KWD: 0.308, AED: 3.67,
-      SAR: 3.75, QAR: 3.64, OMR: 0.385, BHD: 0.376, JOD: 0.709, LBP: 89500,
+      IDR: 15800,
+      THB: 35.5,
+      VND: 24800,
+      MYR: 4.72,
+      PHP: 56.5,
+      SGD: 1.34,
+      PKR: 278,
+      BDT: 109.5,
+      LKR: 300,
+      NPR: 133.5,
+      MMK: 2100,
+      KHR: 4100,
+      LAK: 20800,
+      BND: 1.34,
+      HKD: 7.82,
+      TWD: 31.5,
+      KWD: 0.308,
+      AED: 3.67,
+      SAR: 3.75,
+      QAR: 3.64,
+      OMR: 0.385,
+      BHD: 0.376,
+      JOD: 0.709,
+      LBP: 89500,
       ILS: 3.65,
       // European currencies
-      NOK: 10.5, SEK: 10.4, DKK: 6.88, PLN: 4.0, CZK: 22.8, HUF: 358,
-      RON: 4.6, BGN: 1.8, HRK: 6.4, RSD: 107, MKD: 56.5, BAM: 1.8,
-      ALL: 93.5, MDL: 17.8, GEL: 2.7, AMD: 395, AZN: 1.7, KZT: 500,
-      UZS: 12500, TMT: 3.5,
+      NOK: 10.5,
+      SEK: 10.4,
+      DKK: 6.88,
+      PLN: 4.0,
+      CZK: 22.8,
+      HUF: 358,
+      RON: 4.6,
+      BGN: 1.8,
+      HRK: 6.4,
+      RSD: 107,
+      MKD: 56.5,
+      BAM: 1.8,
+      ALL: 93.5,
+      MDL: 17.8,
+      GEL: 2.7,
+      AMD: 395,
+      AZN: 1.7,
+      KZT: 500,
+      UZS: 12500,
+      TMT: 3.5,
       // Americas currencies
-      ARS: 870, CLP: 975, COP: 3920, PEN: 3.75, UYU: 39.5, PYG: 7450,
-      BOB: 6.91, VEF: 3650000, CRC: 515, GTQ: 7.8, HNL: 24.7, NIO: 36.6,
-      DOP: 58.8, HTG: 132, JMD: 156, TTD: 6.78, BBD: 2.0, XCD: 2.7,
+      ARS: 870,
+      CLP: 975,
+      COP: 3920,
+      PEN: 3.75,
+      UYU: 39.5,
+      PYG: 7450,
+      BOB: 6.91,
+      VEF: 3650000,
+      CRC: 515,
+      GTQ: 7.8,
+      HNL: 24.7,
+      NIO: 36.6,
+      DOP: 58.8,
+      HTG: 132,
+      JMD: 156,
+      TTD: 6.78,
+      BBD: 2.0,
+      XCD: 2.7,
       BSD: 1,
       // Oceania
-      NZD: 1.62, FJD: 2.22, PGK: 3.8, WST: 2.72, TOP: 2.33,
+      NZD: 1.62,
+      FJD: 2.22,
+      PGK: 3.8,
+      WST: 2.72,
+      TOP: 2.33,
     };
     return {
-      base: 'USD',
+      base: "USD",
       rates: fallbackRates,
       lastUpdated: new Date().toISOString(),
-      source: 'default fallback',
+      source: "default fallback",
     };
   }
 }
@@ -953,12 +1470,18 @@ export async function syncExchangeRates(): Promise<ExchangeRateData | null> {
 // REGULATORY UPDATES SYNC
 // ============================================================
 
-export async function syncRegulatoryUpdates(countryCode: string): Promise<RegulatoryUpdate[]> {
+export async function syncRegulatoryUpdates(
+  countryCode: string
+): Promise<RegulatoryUpdate[]> {
   const key = `regulatory_${countryCode}`;
   if (!shouldSync(key, NEWS_SYNC_INTERVAL)) {
     const cached = localStorage.getItem(`fuelpro_regulatory_${countryCode}`);
     if (cached) {
-      try { return JSON.parse(cached); } catch { /* ignore */ }
+      try {
+        return JSON.parse(cached);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -975,19 +1498,25 @@ export async function syncRegulatoryUpdates(countryCode: string): Promise<Regula
     // Check if fuel price review is due
     const today = new Date();
     const fuelReviewDay = country.fuelRegulations.priceReviewFrequency;
-    
+
     // Add fuel price alert if review is coming
-    if (fuelReviewDay.includes('14th') && today.getDate() >= 12 && today.getDate() <= 16) {
+    if (
+      fuelReviewDay.includes("14th") &&
+      today.getDate() >= 12 &&
+      today.getDate() <= 16
+    ) {
       updates.push({
-        id: `${countryCode}_fuel_${today.toISOString().slice(0,7)}`,
+        id: `${countryCode}_fuel_${today.toISOString().slice(0, 7)}`,
         countryCode,
         title: `${country.shortName} Fuel Price Review Due`,
-        summary: `${country.fuelRegulations.priceSettingBody} is expected to announce new fuel pump prices for ${today.toLocaleString('default', { month: 'long', year: 'numeric' })}. Monitor for updates on ${country.revenueAuthority.website}.`,
-        effectiveDate: today.toISOString().split('T')[0],
+        summary: `${country.fuelRegulations.priceSettingBody} is expected to announce new fuel pump prices for ${today.toLocaleString("default", { month: "long", year: "numeric" })}. Monitor for updates on ${country.revenueAuthority.website}.`,
+        effectiveDate: today.toISOString().split("T")[0],
         source: country.fuelRegulations.priceSettingBody,
-        sourceUrl: country.fuelRegulations.priceSettingBody.includes('EPRA') ? 'https://www.epra.go.ke' : country.revenueAuthority.website,
-        category: 'fuel_price',
-        priority: 'high',
+        sourceUrl: country.fuelRegulations.priceSettingBody.includes("EPRA")
+          ? "https://www.epra.go.ke"
+          : country.revenueAuthority.website,
+        category: "fuel_price",
+        priority: "high",
         read: false,
       });
     }
@@ -995,15 +1524,15 @@ export async function syncRegulatoryUpdates(countryCode: string): Promise<Regula
     // Add tax compliance reminders
     const revenueAuth = country.revenueAuthority;
     updates.push({
-      id: `${countryCode}_tax_monthly_${today.toISOString().slice(0,7)}`,
+      id: `${countryCode}_tax_monthly_${today.toISOString().slice(0, 7)}`,
       countryCode,
       title: `Monthly Tax Return Due`,
       summary: `Your monthly tax return to ${revenueAuth.name} (${revenueAuth.shortName}) is due by the ${revenueAuth.monthlyReturnDue}. Ensure all eTIMS invoices are uploaded.`,
-      effectiveDate: today.toISOString().split('T')[0],
+      effectiveDate: today.toISOString().split("T")[0],
       source: revenueAuth.name,
       sourceUrl: revenueAuth.eFilingPortal,
-      category: 'tax',
-      priority: 'high',
+      category: "tax",
+      priority: "high",
       read: false,
     });
 
@@ -1015,20 +1544,28 @@ export async function syncRegulatoryUpdates(countryCode: string): Promise<Regula
         countryCode,
         title: `Annual License Renewal`,
         summary: `Your petroleum license and business permits are due for annual renewal. Check requirements with ${country.fuelRegulations.licenseBody}.`,
-        effectiveDate: annualDue.toISOString().split('T')[0],
+        effectiveDate: annualDue.toISOString().split("T")[0],
         source: country.fuelRegulations.licenseBody,
         sourceUrl: country.revenueAuthority.website,
-        category: 'license',
-        priority: 'medium',
+        category: "license",
+        priority: "medium",
         read: false,
       });
     }
 
-    markSuccess(key, `${country.shortName} Regulatory Sources`, updates, NEWS_SYNC_INTERVAL);
-    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(updates));
+    markSuccess(
+      key,
+      `${country.shortName} Regulatory Sources`,
+      updates,
+      NEWS_SYNC_INTERVAL
+    );
+    localStorage.setItem(
+      `fuelpro_regulatory_${countryCode}`,
+      JSON.stringify(updates)
+    );
     return updates;
   } catch (error) {
-    markError(key, 'Regulatory Sources', (error as Error).message);
+    markError(key, "Regulatory Sources", (error as Error).message);
     return [];
   }
 }
@@ -1048,12 +1585,13 @@ export interface SyncResult {
 export async function runFullSync(countryCode: string): Promise<SyncResult> {
   console.log(`[DataSync] Starting full sync for ${countryCode}...`);
 
-  const [fuelPrices, taxRates, exchangeRates, regulatoryUpdates] = await Promise.all([
-    syncFuelPrices(countryCode),
-    syncTaxRates(countryCode),
-    syncExchangeRates(),
-    syncRegulatoryUpdates(countryCode),
-  ]);
+  const [fuelPrices, taxRates, exchangeRates, regulatoryUpdates] =
+    await Promise.all([
+      syncFuelPrices(countryCode),
+      syncTaxRates(countryCode),
+      syncExchangeRates(),
+      syncRegulatoryUpdates(countryCode),
+    ]);
 
   const result: SyncResult = {
     fuelPrices,
@@ -1064,8 +1602,11 @@ export async function runFullSync(countryCode: string): Promise<SyncResult> {
   };
 
   // Store the full sync result
-  localStorage.setItem(`fuelpro_sync_result_${countryCode}`, JSON.stringify(result));
-  localStorage.setItem('fuelpro_last_full_sync', new Date().toISOString());
+  localStorage.setItem(
+    `fuelpro_sync_result_${countryCode}`,
+    JSON.stringify(result)
+  );
+  localStorage.setItem("fuelpro_last_full_sync", new Date().toISOString());
 
   console.log(`[DataSync] Full sync completed for ${countryCode}`);
   return result;
@@ -1078,7 +1619,11 @@ export async function runFullSync(countryCode: string): Promise<SyncResult> {
 export function getSyncedFuelPrice(countryCode: string): FuelPriceData | null {
   const cached = localStorage.getItem(`fuelpro_fuel_prices_${countryCode}`);
   if (cached) {
-    try { return JSON.parse(cached); } catch { /* ignore */ }
+    try {
+      return JSON.parse(cached);
+    } catch {
+      /* ignore */
+    }
   }
   return null;
 }
@@ -1086,15 +1631,23 @@ export function getSyncedFuelPrice(countryCode: string): FuelPriceData | null {
 export function getSyncedTaxRates(countryCode: string): TaxRateData | null {
   const cached = localStorage.getItem(`fuelpro_tax_rates_${countryCode}`);
   if (cached) {
-    try { return JSON.parse(cached); } catch { /* ignore */ }
+    try {
+      return JSON.parse(cached);
+    } catch {
+      /* ignore */
+    }
   }
   return null;
 }
 
 export function getSyncedExchangeRates(): ExchangeRateData | null {
-  const cached = localStorage.getItem('fuelpro_exchange_rates');
+  const cached = localStorage.getItem("fuelpro_exchange_rates");
   if (cached) {
-    try { return JSON.parse(cached); } catch { /* ignore */ }
+    try {
+      return JSON.parse(cached);
+    } catch {
+      /* ignore */
+    }
   }
   return null;
 }
@@ -1102,7 +1655,11 @@ export function getSyncedExchangeRates(): ExchangeRateData | null {
 export function getRegulatoryUpdates(countryCode: string): RegulatoryUpdate[] {
   const cached = localStorage.getItem(`fuelpro_regulatory_${countryCode}`);
   if (cached) {
-    try { return JSON.parse(cached); } catch { /* ignore */ }
+    try {
+      return JSON.parse(cached);
+    } catch {
+      /* ignore */
+    }
   }
   return [];
 }
@@ -1112,7 +1669,7 @@ export function getSyncStatus(): Record<string, SyncRecord> {
 }
 
 export function isSyncDue(countryCode: string): boolean {
-  const lastSync = localStorage.getItem('fuelpro_last_full_sync');
+  const lastSync = localStorage.getItem("fuelpro_last_full_sync");
   if (!lastSync) return true;
   const elapsed = Date.now() - new Date(lastSync).getTime();
   return elapsed > FUEL_PRICE_SYNC_INTERVAL;
@@ -1164,121 +1721,393 @@ export function getCountryTabFeatures(countryCode: string): CountryTabFeatures {
 
   // Default features for any country worldwide
   const defaultFeatures: CountryTabFeatures = {
-    mpesaAnalyzer: false, liveTransaction: true, payrollSystem: true,
-    debtReminder: true, fuelOffloading: true, deliveryTracker: true,
-    invoice: true, reports: true, pos: true, communication: true,
-    documents: true, dataManager: true, news: true, aiAssistant: true,
-    fuelSalesReport: true, salesTracking: true, dashboard: true,
-    eTIMS: false, fiscalDevice: false, fuelQualityTesting: true,
-    environmentalCompliance: true, mobileMoneyPayment: true,
-    mobileMoneyProviders: ['Bank Transfer', 'Card Payment'],
-    taxInvoiceSystem: 'Standard VAT Invoice', vatRefundApplicable: true,
+    mpesaAnalyzer: false,
+    liveTransaction: true,
+    payrollSystem: true,
+    debtReminder: true,
+    fuelOffloading: true,
+    deliveryTracker: true,
+    invoice: true,
+    reports: true,
+    pos: true,
+    communication: true,
+    documents: true,
+    dataManager: true,
+    news: true,
+    aiAssistant: true,
+    fuelSalesReport: true,
+    salesTracking: true,
+    dashboard: true,
+    eTIMS: false,
+    fiscalDevice: false,
+    fuelQualityTesting: true,
+    environmentalCompliance: true,
+    mobileMoneyPayment: true,
+    mobileMoneyProviders: ["Bank Transfer", "Card Payment"],
+    taxInvoiceSystem: "Standard VAT Invoice",
+    vatRefundApplicable: true,
   };
 
   // Country-specific configurations with mobile money and regional features
   const features: Record<string, CountryTabFeatures> = {
     KE: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, eTIMS: true, fiscalDevice: true,
-      mobileMoneyProviders: ['M-Pesa', 'Airtel Money', 'T-Kash'],
-      taxInvoiceSystem: 'eTIMS', vatRefundApplicable: true,
+      mpesaAnalyzer: true,
+      eTIMS: true,
+      fiscalDevice: true,
+      mobileMoneyProviders: ["M-Pesa", "Airtel Money", "T-Kash"],
+      taxInvoiceSystem: "eTIMS",
+      vatRefundApplicable: true,
     },
     UG: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, eTIMS: true,
-      mobileMoneyProviders: ['MTN Mobile Money', 'Airtel Money'],
-      taxInvoiceSystem: 'EFD', vatRefundApplicable: true,
+      mpesaAnalyzer: true,
+      eTIMS: true,
+      mobileMoneyProviders: ["MTN Mobile Money", "Airtel Money"],
+      taxInvoiceSystem: "EFD",
+      vatRefundApplicable: true,
     },
     TZ: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, eTIMS: true, fiscalDevice: true,
-      mobileMoneyProviders: ['M-Pesa', 'Tigo Pesa', 'Airtel Money'],
-      taxInvoiceSystem: 'EFD', vatRefundApplicable: true,
+      mpesaAnalyzer: true,
+      eTIMS: true,
+      fiscalDevice: true,
+      mobileMoneyProviders: ["M-Pesa", "Tigo Pesa", "Airtel Money"],
+      taxInvoiceSystem: "EFD",
+      vatRefundApplicable: true,
     },
     NG: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, fiscalDevice: false,
-      mobileMoneyProviders: ['OPay', 'PalmPay', 'MTN MoMo'],
-      taxInvoiceSystem: 'Standard Invoice', vatRefundApplicable: false,
+      mpesaAnalyzer: true,
+      fiscalDevice: false,
+      mobileMoneyProviders: ["OPay", "PalmPay", "MTN MoMo"],
+      taxInvoiceSystem: "Standard Invoice",
+      vatRefundApplicable: false,
     },
     ZA: {
       ...defaultFeatures,
       mpesaAnalyzer: false,
-      mobileMoneyProviders: ['VodaPay', 'SnapScan', 'Zapper'],
-      taxInvoiceSystem: 'Standard VAT Invoice', vatRefundApplicable: true,
+      mobileMoneyProviders: ["VodaPay", "SnapScan", "Zapper"],
+      taxInvoiceSystem: "Standard VAT Invoice",
+      vatRefundApplicable: true,
     },
     ET: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, fuelQualityTesting: false,
-      mobileMoneyProviders: ['Telebirr', 'CBE Birr'],
-      taxInvoiceSystem: 'Standard Receipt', vatRefundApplicable: false,
+      mpesaAnalyzer: true,
+      fuelQualityTesting: false,
+      mobileMoneyProviders: ["Telebirr", "CBE Birr"],
+      taxInvoiceSystem: "Standard Receipt",
+      vatRefundApplicable: false,
     },
     RW: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, eTIMS: true, fiscalDevice: true,
-      mobileMoneyProviders: ['MTN Mobile Money', 'Airtel Money'],
-      taxInvoiceSystem: 'EBM', vatRefundApplicable: true,
+      mpesaAnalyzer: true,
+      eTIMS: true,
+      fiscalDevice: true,
+      mobileMoneyProviders: ["MTN Mobile Money", "Airtel Money"],
+      taxInvoiceSystem: "EBM",
+      vatRefundApplicable: true,
     },
     GH: {
       ...defaultFeatures,
-      mpesaAnalyzer: true, fiscalDevice: true,
-      mobileMoneyProviders: ['MTN Mobile Money', 'Vodafone Cash', 'AirtelTigo Money'],
-      taxInvoiceSystem: 'Standard VAT Invoice', vatRefundApplicable: true,
+      mpesaAnalyzer: true,
+      fiscalDevice: true,
+      mobileMoneyProviders: [
+        "MTN Mobile Money",
+        "Vodafone Cash",
+        "AirtelTigo Money",
+      ],
+      taxInvoiceSystem: "Standard VAT Invoice",
+      vatRefundApplicable: true,
     },
     // Additional African countries with mobile money
-    BI: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Lumicash', 'EcoCash'], taxInvoiceSystem: 'Standard Invoice' },
-    CD: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['M-Pesa', 'Orange Money', 'Airtel Money'], taxInvoiceSystem: 'Standard Invoice' },
-    CI: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Orange Money', 'MTN Mobile Money', 'Moov Money'], taxInvoiceSystem: 'Standard Invoice' },
-    CM: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['MTN Mobile Money', 'Orange Money'], taxInvoiceSystem: 'Standard Invoice' },
-    EG: { ...defaultFeatures, mobileMoneyProviders: ['Vodafone Cash', 'Orange Cash', 'Etisalat Cash', 'WE Pay'], taxInvoiceSystem: 'ETA' },
-    GA: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Airtel Money', 'Moov Money'], taxInvoiceSystem: 'Standard Invoice' },
-    LR: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Orange Money', 'Lonestar Money'], taxInvoiceSystem: 'Standard Invoice' },
-    LS: { ...defaultFeatures, mobileMoneyProviders: ['Vodacom M-Pesa'], taxInvoiceSystem: 'Standard Invoice' },
-    MA: { ...defaultFeatures, mobileMoneyProviders: ['Orange Money', 'Cash Plus', 'Wafacash'], taxInvoiceSystem: 'Standard Invoice' },
-    MG: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['MVola', 'Orange Money', 'Airtel Money'], taxInvoiceSystem: 'Standard Invoice' },
-    ML: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Orange Money', 'Moov Money'], taxInvoiceSystem: 'Standard Invoice' },
-    MW: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['TNM Mpamba', 'Airtel Money'], taxInvoiceSystem: 'Standard Invoice' },
-    MZ: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['M-Pesa', 'M-Kesh', 'mPesa'], taxInvoiceSystem: 'Standard Invoice' },
-    NE: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Airtel Money', 'Moov Money'], taxInvoiceSystem: 'Standard Invoice' },
-    SL: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Orange Money', 'Africell Money'], taxInvoiceSystem: 'Standard Invoice' },
-    SN: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Orange Money', 'Free Money', 'Wave'], taxInvoiceSystem: 'Standard Invoice' },
-    SS: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['MTN Mobile Money'], taxInvoiceSystem: 'Standard Invoice' },
-    TG: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['TMoney', 'Flooz'], taxInvoiceSystem: 'Standard Invoice' },
-    ZM: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['MTN Mobile Money', 'Airtel Money', 'Zamtel Kwacha'], taxInvoiceSystem: 'Standard Invoice' },
-    ZW: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['EcoCash', 'OneMoney', 'Telecash'], taxInvoiceSystem: 'Standard Invoice' },
+    BI: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Lumicash", "EcoCash"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CD: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["M-Pesa", "Orange Money", "Airtel Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CI: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Orange Money", "MTN Mobile Money", "Moov Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CM: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["MTN Mobile Money", "Orange Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    EG: {
+      ...defaultFeatures,
+      mobileMoneyProviders: [
+        "Vodafone Cash",
+        "Orange Cash",
+        "Etisalat Cash",
+        "WE Pay",
+      ],
+      taxInvoiceSystem: "ETA",
+    },
+    GA: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Airtel Money", "Moov Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    LR: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Orange Money", "Lonestar Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    LS: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Vodacom M-Pesa"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MA: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Orange Money", "Cash Plus", "Wafacash"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MG: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["MVola", "Orange Money", "Airtel Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    ML: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Orange Money", "Moov Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MW: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["TNM Mpamba", "Airtel Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MZ: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["M-Pesa", "M-Kesh", "mPesa"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    NE: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Airtel Money", "Moov Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    SL: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Orange Money", "Africell Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    SN: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Orange Money", "Free Money", "Wave"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    SS: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["MTN Mobile Money"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    TG: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["TMoney", "Flooz"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    ZM: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: [
+        "MTN Mobile Money",
+        "Airtel Money",
+        "Zamtel Kwacha",
+      ],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    ZW: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["EcoCash", "OneMoney", "Telecash"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
     // Asian countries with mobile money dominance
-    BD: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['bKash', 'Nagad', 'Rocket'], taxInvoiceSystem: 'Standard Invoice' },
-    ID: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['GoPay', 'OVO', 'Dana', 'LinkAja'], taxInvoiceSystem: 'Standard Invoice' },
-    IN: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['UPI', 'Paytm', 'PhonePe', 'Google Pay'], taxInvoiceSystem: 'GST Invoice' },
-    KH: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Wing', 'TrueMoney', 'Pi Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    LA: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['LaoPay', 'TrueMoney'], taxInvoiceSystem: 'Standard Invoice' },
-    MM: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['KBZ Pay', 'WavePay', 'CB Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    MY: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['Touch n Go', 'Boost', 'GrabPay'], taxInvoiceSystem: 'Standard Invoice' },
-    NP: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['eSewa', 'Khalti', 'IME Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    PH: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['GCash', 'Maya', 'GrabPay'], taxInvoiceSystem: 'Standard Invoice' },
-    PK: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['JazzCash', 'EasyPaisa', 'NayaPay'], taxInvoiceSystem: 'Standard Invoice' },
-    TH: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['TrueMoney', 'Rabbit LINE Pay', 'PromptPay'], taxInvoiceSystem: 'Standard Invoice' },
-    VN: { ...defaultFeatures, mpesaAnalyzer: true, mobileMoneyProviders: ['MoMo', 'ZaloPay', 'ViettelPay'], taxInvoiceSystem: 'Standard Invoice' },
+    BD: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["bKash", "Nagad", "Rocket"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    ID: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["GoPay", "OVO", "Dana", "LinkAja"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    IN: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["UPI", "Paytm", "PhonePe", "Google Pay"],
+      taxInvoiceSystem: "GST Invoice",
+    },
+    KH: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Wing", "TrueMoney", "Pi Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    LA: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["LaoPay", "TrueMoney"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MM: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["KBZ Pay", "WavePay", "CB Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MY: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["Touch n Go", "Boost", "GrabPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    NP: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["eSewa", "Khalti", "IME Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    PH: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["GCash", "Maya", "GrabPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    PK: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["JazzCash", "EasyPaisa", "NayaPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    TH: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["TrueMoney", "Rabbit LINE Pay", "PromptPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    VN: {
+      ...defaultFeatures,
+      mpesaAnalyzer: true,
+      mobileMoneyProviders: ["MoMo", "ZaloPay", "ViettelPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
     // Latin American countries
-    AR: { ...defaultFeatures, mobileMoneyProviders: ['Mercado Pago', 'Uala', 'Modo'], taxInvoiceSystem: 'Standard Invoice' },
-    BR: { ...defaultFeatures, mobileMoneyProviders: ['PIX', 'Mercado Pago', 'PicPay'], taxInvoiceSystem: 'Standard Invoice' },
-    CL: { ...defaultFeatures, mobileMoneyProviders: ['Mercado Pago', 'MACH'], taxInvoiceSystem: 'Standard Invoice' },
-    CO: { ...defaultFeatures, mobileMoneyProviders: ['Nequi', 'Daviplata', 'Mercado Pago'], taxInvoiceSystem: 'Standard Invoice' },
-    CR: { ...defaultFeatures, mobileMoneyProviders: ['SINPE Movil', 'PayPal'], taxInvoiceSystem: 'Standard Invoice' },
-    MX: { ...defaultFeatures, mobileMoneyProviders: ['SPEI', 'Mercado Pago', 'CLIP'], taxInvoiceSystem: 'Standard Invoice' },
-    PE: { ...defaultFeatures, mobileMoneyProviders: ['Yape', 'PLIN', 'Tunki'], taxInvoiceSystem: 'Standard Invoice' },
-    UY: { ...defaultFeatures, mobileMoneyProviders: ['Mercado Pago', 'Prex'], taxInvoiceSystem: 'Standard Invoice' },
+    AR: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Mercado Pago", "Uala", "Modo"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    BR: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["PIX", "Mercado Pago", "PicPay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CL: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Mercado Pago", "MACH"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CO: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Nequi", "Daviplata", "Mercado Pago"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    CR: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["SINPE Movil", "PayPal"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    MX: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["SPEI", "Mercado Pago", "CLIP"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    PE: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Yape", "PLIN", "Tunki"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    UY: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Mercado Pago", "Prex"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
     // Caribbean
-    JM: { ...defaultFeatures, mobileMoneyProviders: ['Lynk', 'Quisk'], taxInvoiceSystem: 'Standard Invoice' },
+    JM: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Lynk", "Quisk"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
     // Middle East
-    AE: { ...defaultFeatures, mobileMoneyProviders: ['Apple Pay', 'Samsung Pay', 'Noon Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    BH: { ...defaultFeatures, mobileMoneyProviders: ['BenefitPay', 'PayPal'], taxInvoiceSystem: 'Standard Invoice' },
-    JO: { ...defaultFeatures, mobileMoneyProviders: ['Orange Money', 'Zain Cash'], taxInvoiceSystem: 'Standard Invoice' },
-    KW: { ...defaultFeatures, mobileMoneyProviders: ['KNET', 'Apple Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    OM: { ...defaultFeatures, mobileMoneyProviders: ['OMANNET', 'Thawani'], taxInvoiceSystem: 'Standard Invoice' },
-    QA: { ...defaultFeatures, mobileMoneyProviders: ['Apple Pay', 'Google Pay'], taxInvoiceSystem: 'Standard Invoice' },
-    SA: { ...defaultFeatures, mobileMoneyProviders: ['STC Pay', 'Apple Pay', 'Urway'], taxInvoiceSystem: 'Standard Invoice' },
-    TR: { ...defaultFeatures, mobileMoneyProviders: ['Paycell', 'BKM Express', 'Papara'], taxInvoiceSystem: 'Standard Invoice' },
+    AE: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Apple Pay", "Samsung Pay", "Noon Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    BH: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["BenefitPay", "PayPal"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    JO: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Orange Money", "Zain Cash"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    KW: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["KNET", "Apple Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    OM: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["OMANNET", "Thawani"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    QA: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Apple Pay", "Google Pay"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    SA: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["STC Pay", "Apple Pay", "Urway"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
+    TR: {
+      ...defaultFeatures,
+      mobileMoneyProviders: ["Paycell", "BKM Express", "Papara"],
+      taxInvoiceSystem: "Standard Invoice",
+    },
   };
 
   return features[countryCode] || defaultFeatures;
@@ -1288,7 +2117,7 @@ export function getCountryTabFeatures(countryCode: string): CountryTabFeatures {
 // HOOK - Auto-sync on interval
 // ============================================================
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export function useAutoSync(countryCode: string) {
   const [syncStatus, setSyncStatus] = useState<{
@@ -1340,18 +2169,23 @@ export function useAutoSync(countryCode: string) {
           setSyncStatus(prev => ({
             ...prev,
             result: JSON.parse(cached),
-            lastSync: localStorage.getItem('fuelpro_last_full_sync'),
+            lastSync: localStorage.getItem("fuelpro_last_full_sync"),
           }));
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
 
     // Set up periodic sync
-    intervalRef.current = setInterval(() => {
-      if (isSyncDue(countryCode)) {
-        doSync();
-      }
-    }, 1000 * 60 * 30); // Check every 30 minutes
+    intervalRef.current = setInterval(
+      () => {
+        if (isSyncDue(countryCode)) {
+          doSync();
+        }
+      },
+      1000 * 60 * 30
+    ); // Check every 30 minutes
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -1361,4 +2195,10 @@ export function useAutoSync(countryCode: string) {
   return { ...syncStatus, doSync };
 }
 
-export { shouldSync, SYNC_INTERVAL_MS, FUEL_PRICE_SYNC_INTERVAL, NEWS_SYNC_INTERVAL, TAX_SYNC_INTERVAL };
+export {
+  shouldSync,
+  SYNC_INTERVAL_MS,
+  FUEL_PRICE_SYNC_INTERVAL,
+  NEWS_SYNC_INTERVAL,
+  TAX_SYNC_INTERVAL,
+};

@@ -1,19 +1,44 @@
-import React, { useState, useRef } from 'react';
-import { Database, Download, Upload, Trash2, RefreshCw, Save, Settings, HardDrive, Cloud, CheckCircle, Fuel, DollarSign, Plus, Minus, AlertTriangle, Lock, Wifi } from 'lucide-react';
-import { useFuel } from '@/react-app/context/FuelContext';
-import { useStations } from '@/react-app/context/StationContext';
-import { usePermissions } from '@/react-app/context/PermissionContext';
-import { formatNumber } from '@/react-app/utils/formatUtils';
-import DataRecovery from '@/react-app/components/DataRecovery';
-import CloudSyncPanel from '@/react-app/components/CloudSyncPanel';
-import SyncDashboard from '@/react-app/components/SyncDashboard';
+import React, { useState, useRef } from "react";
+import {
+  Database,
+  Download,
+  Upload,
+  Trash2,
+  RefreshCw,
+  Save,
+  Settings,
+  HardDrive,
+  Cloud,
+  CheckCircle,
+  Fuel,
+  DollarSign,
+  Plus,
+  Minus,
+  AlertTriangle,
+  Lock,
+  Wifi,
+} from "lucide-react";
+import { useFuel } from "@/react-app/context/FuelContext";
+import { useStations } from "@/react-app/context/StationContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
+import { formatNumber } from "@/react-app/utils/formatUtils";
+import DataRecovery from "@/react-app/components/DataRecovery";
+import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
+import SyncDashboard from "@/react-app/components/SyncDashboard";
 
 export default function DataManager() {
-  const { state, dispatch, saveToCloud, loadFromCloud, isCloudSaving, lastCloudSave } = useFuel();
+  const {
+    state,
+    dispatch,
+    saveToCloud,
+    loadFromCloud,
+    isCloudSaving,
+    lastCloudSave,
+  } = useFuel();
   const { hasPermission, isOwner } = usePermissions();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importStatus, setImportStatus] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [importStatus, setImportStatus] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Member-accessible pump settings
   const [pmsPrice, setPmsPrice] = useState(state.pmsPrice || 180);
@@ -37,56 +62,66 @@ export default function DataManager() {
       agoPumps: state.agoPumps.length,
       expenses: state.expenses.length,
       employees: state.employees.length,
-      offloadingRecords: state.offloadingRecords.length
+      offloadingRecords: state.offloadingRecords.length,
     };
   };
 
-  const exportData = (format: 'json' | 'csv') => {
+  const exportData = (format: "json" | "csv") => {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      
-      if (format === 'json') {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+      if (format === "json") {
         const exportData = {
-          version: '2.0',
+          version: "2.0",
           exported: new Date().toISOString(),
-          appData: state
+          appData: state,
         };
-        
+
         const dataStr = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
+        const blob = new Blob([dataStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
+
+        const a = document.createElement("a");
         a.href = url;
         a.download = `FuelPro_Backup_${timestamp}.json`;
         a.click();
-        
+
         URL.revokeObjectURL(url);
-        import('@/react-app/lib/toast').then(({toastSuccess}) => toastSuccess('Data exported successfully!'));
+        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+          toastSuccess("Data exported successfully!")
+        );
       }
-      
-      if (format === 'csv') {
+
+      if (format === "csv") {
         // Export delivery data as CSV
-        const headers = state.deliveryData.columns.map(col => col.label).join(',');
-        const rows = state.deliveryData.rows.map(row => 
-          state.deliveryData.columns.map(col => row[col.key]).join(',')
-        ).join('\n');
-        
+        const headers = state.deliveryData.columns
+          .map(col => col.label)
+          .join(",");
+        const rows = state.deliveryData.rows
+          .map(row =>
+            state.deliveryData.columns.map(col => row[col.key]).join(",")
+          )
+          .join("\n");
+
         const csvContent = `${headers}\n${rows}`;
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const blob = new Blob([csvContent], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
+
+        const a = document.createElement("a");
         a.href = url;
         a.download = `FuelPro_Deliveries_${timestamp}.csv`;
         a.click();
-        
+
         URL.revokeObjectURL(url);
-        import('@/react-app/lib/toast').then(({toastSuccess}) => toastSuccess('Delivery data exported as CSV!'));
+        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+          toastSuccess("Delivery data exported as CSV!")
+        );
       }
     } catch (error) {
-      console.error('Export error:', error);
-      import('@/react-app/lib/toast').then(({toastError}) => toastError('Export failed. Please try again.'));
+      console.error("Export error:", error);
+      import("@/react-app/lib/toast").then(({ toastError }) =>
+        toastError("Export failed. Please try again.")
+      );
     }
   };
 
@@ -94,73 +129,83 @@ export default function DataManager() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.json')) {
-      setImportStatus('Please select a valid JSON backup file.');
+    if (!file.name.endsWith(".json")) {
+      setImportStatus("Please select a valid JSON backup file.");
       return;
     }
 
-    setImportStatus('Reading backup file...');
+    setImportStatus("Reading backup file...");
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = e => {
       try {
         const content = e.target?.result as string;
         const backupData = JSON.parse(content);
 
         if (!backupData.appData && !backupData.data) {
-          throw new Error('Invalid backup file format');
+          throw new Error("Invalid backup file format");
         }
 
-        setImportStatus('Restoring data...');
+        setImportStatus("Restoring data...");
 
         // Support both new format (appData) and old format (data)
         const dataToImport = backupData.appData || backupData.data;
-        
-        dispatch({ type: 'LOAD_FROM_STORAGE', payload: dataToImport });
 
-        setImportStatus('Data imported successfully!');
+        dispatch({ type: "LOAD_FROM_STORAGE", payload: dataToImport });
+
+        setImportStatus("Data imported successfully!");
         setTimeout(() => {
-          setImportStatus('');
+          setImportStatus("");
         }, 3000);
-
       } catch (error) {
-        console.error('Import error:', error);
-        setImportStatus('Failed to import data. Invalid backup file.');
+        console.error("Import error:", error);
+        setImportStatus("Failed to import data. Invalid backup file.");
         setTimeout(() => {
-          setImportStatus('');
+          setImportStatus("");
         }, 3000);
       }
     };
 
     reader.readAsText(file);
-    
+
     // Reset input
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
-  const FUELPRO_PREFIX = 'fuelpro_';
+  const FUELPRO_PREFIX = "fuelpro_";
   const clearData = () => {
-    const confirmed = confirm('Are you sure you want to clear all FuelPro data? This action cannot be undone!');
+    const confirmed = confirm(
+      "Are you sure you want to clear all FuelPro data? This action cannot be undone!"
+    );
     if (confirmed) {
       // Only remove FuelPro keys — never clear all localStorage (destructive to other apps)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.startsWith(FUELPRO_PREFIX) || key === 'fuelData' || key === 'clients' || key === 'invoices' || key === 'salesHistory')) {
+        if (
+          key &&
+          (key.startsWith(FUELPRO_PREFIX) ||
+            key === "fuelData" ||
+            key === "clients" ||
+            key === "invoices" ||
+            key === "salesHistory")
+        ) {
           keysToRemove.push(key);
         }
       }
       keysToRemove.forEach(k => localStorage.removeItem(k));
-      import('@/react-app/lib/app-reloader').then(({broadcastReload}) => broadcastReload());
+      import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
+        broadcastReload()
+      );
     }
   };
 
   const downloadStandaloneVersion = () => {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
       // Create a complete standalone HTML file
       const standaloneHTML = `<!DOCTYPE html>
 <html lang="en">
@@ -278,7 +323,7 @@ export default function DataManager() {
 <body>
     <div class="container">
         <div class="header">
-            <h1>${state.companyData.name || 'FuelPro'}</h1>
+            <h1>${state.companyData.name || "FuelPro"}</h1>
             <p>Standalone Business Management System - Exported ${new Date().toLocaleDateString()}</p>
         </div>
 
@@ -333,40 +378,58 @@ export default function DataManager() {
 
         <div class="card">
             <h2>Delivery Data</h2>
-            ${state.deliveryData.rows.length > 0 ? `
+            ${
+              state.deliveryData.rows.length > 0
+                ? `
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
                         <tr>
-                            ${state.deliveryData.columns.map(col => `<th>${col.label}</th>`).join('')}
+                            ${state.deliveryData.columns.map(col => `<th>${col.label}</th>`).join("")}
                         </tr>
                     </thead>
                     <tbody>
-                        ${state.deliveryData.rows.slice(0, 50).map(row => `
+                        ${state.deliveryData.rows
+                          .slice(0, 50)
+                          .map(
+                            row => `
                             <tr>
-                                ${state.deliveryData.columns.map(col => `<td>${row[col.key] || '-'}</td>`).join('')}
+                                ${state.deliveryData.columns.map(col => `<td>${row[col.key] || "-"}</td>`).join("")}
                             </tr>
-                        `).join('')}
+                        `
+                          )
+                          .join("")}
                     </tbody>
                 </table>
-                ${state.deliveryData.rows.length > 50 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 50 of ${state.deliveryData.rows.length} deliveries</p>` : ''}
+                ${state.deliveryData.rows.length > 50 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 50 of ${state.deliveryData.rows.length} deliveries</p>` : ""}
             </div>
-            ` : '<p style="color: #999;">No delivery data available</p>'}
+            `
+                : '<p style="color: #999;">No delivery data available</p>'
+            }
         </div>
 
         <div class="card">
             <h2>Client Database</h2>
-            ${Object.keys(state.clients).length > 0 ? `
+            ${
+              Object.keys(state.clients).length > 0
+                ? `
             <div class="data-grid">
-                ${Object.entries(state.clients).slice(0, 20).map(([_id, client]: [string, any]) => `
+                ${Object.entries(state.clients)
+                  .slice(0, 20)
+                  .map(
+                    ([_id, client]: [string, any]) => `
                     <div class="data-item">
                         <strong>${client.name}</strong>
-                        <span style="font-size: 0.9rem; color: #999;">${client.contact || 'No contact'}</span>
+                        <span style="font-size: 0.9rem; color: #999;">${client.contact || "No contact"}</span>
                     </div>
-                `).join('')}
+                `
+                  )
+                  .join("")}
             </div>
-            ${Object.keys(state.clients).length > 20 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 20 of ${Object.keys(state.clients).length} clients</p>` : ''}
-            ` : '<p style="color: #999;">No clients registered</p>'}
+            ${Object.keys(state.clients).length > 20 ? `<p style="margin-top: 10px; color: #f0d78a;">Showing 20 of ${Object.keys(state.clients).length} clients</p>` : ""}
+            `
+                : '<p style="color: #999;">No clients registered</p>'
+            }
         </div>
 
         <div class="export-section">
@@ -393,7 +456,7 @@ export default function DataManager() {
                 </div>
                 <div class="data-item">
                     <strong>Theme</strong>
-                    <span>${state.theme || 'Dark'}</span>
+                    <span>${state.theme || "Dark"}</span>
                 </div>
             </div>
         </div>
@@ -452,37 +515,41 @@ export default function DataManager() {
 </html>`;
 
       // Create and download the file
-      const blob = new Blob([standaloneHTML], { type: 'text/html;charset=utf-8' });
+      const blob = new Blob([standaloneHTML], {
+        type: "text/html;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
+
+      const a = document.createElement("a");
       a.href = url;
       a.download = `FuelPro_Standalone_${timestamp}.html`;
-      a.style.display = 'none';
+      a.style.display = "none";
       document.body.appendChild(a);
       a.click();
-      
+
       // Clean up
       setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }, 100);
-      
-      alert('Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline.');
+
+      alert(
+        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline."
+      );
     } catch (error) {
-      console.error('Download error:', error);
-      alert('Failed to create standalone version. Please try again.');
+      console.error("Download error:", error);
+      alert("Failed to create standalone version. Please try again.");
     }
   };
 
   const syncWithCloud = async () => {
     if (isCloudSaving) return;
-    
+
     try {
       await saveToCloud();
-      alert('Data synced to cloud successfully!');
+      alert("Data synced to cloud successfully!");
     } catch (error) {
-      alert('Cloud sync failed. Please try again.');
+      alert("Cloud sync failed. Please try again.");
     }
   };
 
@@ -496,16 +563,23 @@ export default function DataManager() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
-                <Database className="text-blue-600 dark:text-blue-400" size={28} />
+                <Database
+                  className="text-blue-600 dark:text-blue-400"
+                  size={28}
+                />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Data Management Center</h1>
-                <p className="text-gray-600 dark:text-gray-300">Backup, restore, and manage your business data</p>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                  Data Management Center
+                </h1>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Backup, restore, and manage your business data
+                </p>
               </div>
             </div>
             {/* Founder Console Access - hidden but accessible */}
             <button
-              onClick={() => window.location.hash = '#/founder'}
+              onClick={() => (window.location.hash = "#/founder")}
               className="text-[10px] text-gray-300 hover:text-amber-400 transition-colors flex items-center gap-1 opacity-30 hover:opacity-100"
               title="Founder Only"
             >
@@ -516,78 +590,135 @@ export default function DataManager() {
           {/* Tab Navigation - Permission-aware */}
           <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 overflow-x-auto">
             {[
-              { id: 'overview', label: 'Overview', icon: HardDrive },
-              hasPermission('canEditFuelPrices') ? { id: 'pumps', label: 'Pump Settings', icon: Fuel } : null,
-              hasPermission('canManageCloud') ? { id: 'recovery', label: 'Recovery', icon: RefreshCw } : null,
-              hasPermission('canManageCloud') ? { id: 'backup', label: 'Backup', icon: Save } : null,
-              hasPermission('canManageCloud') ? { id: 'cloud', label: 'Cloud Sync', icon: Cloud } : null,
-              { id: 'sync', label: 'Cross-Device', icon: Wifi },
-            ].filter(Boolean).map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white'
-                  }`}
-                >
-                  <Icon size={16} />
-                  {tab.label}
-                </button>
-              );
-            })}
+              { id: "overview", label: "Overview", icon: HardDrive },
+              hasPermission("canEditFuelPrices")
+                ? { id: "pumps", label: "Pump Settings", icon: Fuel }
+                : null,
+              hasPermission("canManageCloud")
+                ? { id: "recovery", label: "Recovery", icon: RefreshCw }
+                : null,
+              hasPermission("canManageCloud")
+                ? { id: "backup", label: "Backup", icon: Save }
+                : null,
+              hasPermission("canManageCloud")
+                ? { id: "cloud", label: "Cloud Sync", icon: Cloud }
+                : null,
+              { id: "sync", label: "Cross-Device", icon: Wifi },
+            ]
+              .filter(Boolean)
+              .map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
+                      activeTab === tab.id
+                        ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm"
+                        : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {tab.label}
+                  </button>
+                );
+              })}
           </div>
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'overview' && (
+        {activeTab === "overview" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Data Summary */}
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Data Summary</h2>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+                Data Summary
+              </h2>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: 'Deliveries', value: summary.deliveries, color: 'blue' },
-                  { label: 'Clients', value: summary.clients, color: 'green' },
-                  { label: 'Invoices', value: summary.invoices, color: 'yellow' },
-                  { label: 'Sales Records', value: summary.salesRecords, color: 'purple' },
-                  { label: 'PMS Pumps', value: summary.pmsPumps, color: 'red' },
-                  { label: 'AGO Pumps', value: summary.agoPumps, color: 'indigo' },
-                  { label: 'Employees', value: summary.employees, color: 'pink' },
-                  { label: 'Offloading Records', value: summary.offloadingRecords, color: 'gray' }
-                ].map((item) => (
-                  <div key={item.label} className={`bg-${item.color}-50 dark:bg-${item.color}-900/20 p-4 rounded-lg border border-${item.color}-200 dark:border-${item.color}-700`}>
-                    <div className={`text-2xl font-bold text-${item.color}-600 dark:text-${item.color}-400`}>
+                  {
+                    label: "Deliveries",
+                    value: summary.deliveries,
+                    color: "blue",
+                  },
+                  { label: "Clients", value: summary.clients, color: "green" },
+                  {
+                    label: "Invoices",
+                    value: summary.invoices,
+                    color: "yellow",
+                  },
+                  {
+                    label: "Sales Records",
+                    value: summary.salesRecords,
+                    color: "purple",
+                  },
+                  { label: "PMS Pumps", value: summary.pmsPumps, color: "red" },
+                  {
+                    label: "AGO Pumps",
+                    value: summary.agoPumps,
+                    color: "indigo",
+                  },
+                  {
+                    label: "Employees",
+                    value: summary.employees,
+                    color: "pink",
+                  },
+                  {
+                    label: "Offloading Records",
+                    value: summary.offloadingRecords,
+                    color: "gray",
+                  },
+                ].map(item => (
+                  <div
+                    key={item.label}
+                    className={`bg-${item.color}-50 dark:bg-${item.color}-900/20 p-4 rounded-lg border border-${item.color}-200 dark:border-${item.color}-700`}
+                  >
+                    <div
+                      className={`text-2xl font-bold text-${item.color}-600 dark:text-${item.color}-400`}
+                    >
                       {formatNumber(item.value, 0)}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{item.label}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {item.label}
+                    </div>
                   </div>
                 ))}
               </div>
-              
+
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">Total Data Size:</span>
-                  <span className="font-semibold text-gray-800 dark:text-white">{getDataSize()} KB</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Total Data Size:
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-white">
+                    {getDataSize()} KB
+                  </span>
                 </div>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-600 dark:text-gray-400">Company:</span>
-                  <span className="font-semibold text-gray-800 dark:text-white">{state.companyData.name || 'Not Set'}</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Company:
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-white">
+                    {state.companyData.name || "Not Set"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-600 dark:text-gray-400">Theme:</span>
-                  <span className="font-semibold text-gray-800 dark:text-white capitalize">{state.theme}</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Theme:
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-white capitalize">
+                    {state.theme}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Quick Actions</h2>
-              
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+                Quick Actions
+              </h2>
+
               <div className="space-y-4">
                 <button
                   onClick={downloadStandaloneVersion}
@@ -598,7 +729,7 @@ export default function DataManager() {
                 </button>
 
                 <button
-                  onClick={() => exportData('json')}
+                  onClick={() => exportData("json")}
                   className="w-full btn btn-primary flex items-center gap-3"
                 >
                   <Download size={16} />
@@ -606,7 +737,7 @@ export default function DataManager() {
                 </button>
 
                 <button
-                  onClick={() => exportData('csv')}
+                  onClick={() => exportData("csv")}
                   className="w-full btn btn-secondary flex items-center gap-3"
                 >
                   <Download size={16} />
@@ -626,13 +757,15 @@ export default function DataManager() {
                 </label>
 
                 {importStatus && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    importStatus.includes('✅') 
-                      ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                      : importStatus.includes('❌')
-                      ? 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-                      : 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200'
-                  }`}>
+                  <div
+                    className={`p-3 rounded-lg text-sm ${
+                      importStatus.includes("✅")
+                        ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
+                        : importStatus.includes("❌")
+                          ? "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200"
+                          : "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200"
+                    }`}
+                  >
                     {importStatus}
                   </div>
                 )}
@@ -642,13 +775,18 @@ export default function DataManager() {
                   disabled={isCloudSaving}
                   className="w-full btn btn-secondary flex items-center gap-3"
                 >
-                  <Cloud className={isCloudSaving ? 'animate-pulse' : ''} size={16} />
-                  {isCloudSaving ? 'Syncing...' : 'Sync to Cloud'}
+                  <Cloud
+                    className={isCloudSaving ? "animate-pulse" : ""}
+                    size={16}
+                  />
+                  {isCloudSaving ? "Syncing..." : "Sync to Cloud"}
                 </button>
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <h3 className="font-semibold text-gray-800 dark:text-white mb-2">Danger Zone</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-white mb-2">
+                  Danger Zone
+                </h3>
                 <button
                   onClick={clearData}
                   className="w-full btn btn-outline text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3"
@@ -662,13 +800,14 @@ export default function DataManager() {
         )}
 
         {/* Pump Settings Tab - Members can edit pump prices and count */}
-        {activeTab === 'pumps' && (
+        {activeTab === "pumps" && (
           <div className="space-y-6">
             {!isOwner && (
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
                 <AlertTriangle size={14} className="text-amber-500" />
                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                  You have <strong>Member</strong> access. Changes are tracked. Some settings require Founder approval.
+                  You have <strong>Member</strong> access. Changes are tracked.
+                  Some settings require Founder approval.
                 </p>
               </div>
             )}
@@ -681,18 +820,37 @@ export default function DataManager() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
-                  { label: 'PMS (Petrol)', value: pmsPrice, setter: setPmsPrice, color: 'red', key: 'pms' },
-                  { label: 'AGO (Diesel)', value: agoPrice, setter: setAgoPrice, color: 'blue', key: 'ago' },
+                  {
+                    label: "PMS (Petrol)",
+                    value: pmsPrice,
+                    setter: setPmsPrice,
+                    color: "red",
+                    key: "pms",
+                  },
+                  {
+                    label: "AGO (Diesel)",
+                    value: agoPrice,
+                    setter: setAgoPrice,
+                    color: "blue",
+                    key: "ago",
+                  },
                 ].map(fuel => (
-                  <div key={fuel.key} className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}>
-                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">{fuel.label}</label>
+                  <div
+                    key={fuel.key}
+                    className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
+                  >
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                      {fuel.label}
+                    </label>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-500">Ksh</span>
                       <input
                         type="number"
                         step="0.01"
                         value={fuel.value}
-                        onChange={e => fuel.setter(parseFloat(e.target.value) || 0)}
+                        onChange={e =>
+                          fuel.setter(parseFloat(e.target.value) || 0)
+                        }
                         className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
                       />
                     </div>
@@ -701,8 +859,13 @@ export default function DataManager() {
               </div>
               <button
                 onClick={() => {
-                  dispatch({ type: 'SET_PRICES', payload: { pmsPrice, agoPrice } });
-                  alert(`Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`);
+                  dispatch({
+                    type: "SET_PRICES",
+                    payload: { pmsPrice, agoPrice },
+                  });
+                  alert(
+                    `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`
+                  );
                 }}
                 className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
               >
@@ -711,7 +874,7 @@ export default function DataManager() {
             </div>
 
             {/* Pump Count */}
-            {hasPermission('canChangePumpCount') && (
+            {hasPermission("canChangePumpCount") && (
               <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
                   <Fuel size={18} className="text-blue-500" />
@@ -719,19 +882,38 @@ export default function DataManager() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
-                    { label: 'PMS Pumps', value: pmsPumpCount, setter: setPmsPumpCount, color: 'red' },
-                    { label: 'AGO Pumps', value: agoPumpCount, setter: setAgoPumpCount, color: 'blue' },
+                    {
+                      label: "PMS Pumps",
+                      value: pmsPumpCount,
+                      setter: setPmsPumpCount,
+                      color: "red",
+                    },
+                    {
+                      label: "AGO Pumps",
+                      value: agoPumpCount,
+                      setter: setAgoPumpCount,
+                      color: "blue",
+                    },
                   ].map(pump => (
-                    <div key={pump.label} className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}>
-                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">{pump.label}</label>
+                    <div
+                      key={pump.label}
+                      className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
+                    >
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                        {pump.label}
+                      </label>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => pump.setter(Math.max(0, pump.value - 1))}
+                          onClick={() =>
+                            pump.setter(Math.max(0, pump.value - 1))
+                          }
                           className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                         >
                           <Minus size={14} />
                         </button>
-                        <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">{pump.value}</span>
+                        <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
+                          {pump.value}
+                        </span>
                         <button
                           onClick={() => pump.setter(pump.value + 1)}
                           className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
@@ -746,17 +928,32 @@ export default function DataManager() {
                   onClick={() => {
                     // Dispatch pump count changes
                     const makePump = (id: string, name: string): any => ({
-                      id, name, openingKsh: 0, closingKsh: 0, openingL: 0, closingL: 0, salesL: 0, salesKsh: 0
+                      id,
+                      name,
+                      openingKsh: 0,
+                      closingKsh: 0,
+                      openingL: 0,
+                      closingL: 0,
+                      salesL: 0,
+                      salesKsh: 0,
                     });
-                    const newPmsPumps = Array.from({ length: pmsPumpCount }, (_, i) =>
-                      state.pmsPumps[i] || makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`)
+                    const newPmsPumps = Array.from(
+                      { length: pmsPumpCount },
+                      (_, i) =>
+                        state.pmsPumps[i] ||
+                        makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`)
                     );
-                    const newAgoPumps = Array.from({ length: agoPumpCount }, (_, i) =>
-                      state.agoPumps[i] || makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`)
+                    const newAgoPumps = Array.from(
+                      { length: agoPumpCount },
+                      (_, i) =>
+                        state.agoPumps[i] ||
+                        makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`)
                     );
-                    dispatch({ type: 'SET_PMS_PUMPS', payload: newPmsPumps });
-                    dispatch({ type: 'SET_AGO_PUMPS', payload: newAgoPumps });
-                    alert(`Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`);
+                    dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
+                    dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
+                    alert(
+                      `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`
+                    );
                   }}
                   className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
                 >
@@ -773,23 +970,59 @@ export default function DataManager() {
               </h3>
               <div className="space-y-2">
                 {[
-                  { label: 'Edit Pump Prices', allowed: hasPermission('canEditFuelPrices') },
-                  { label: 'Change Pump Count', allowed: hasPermission('canChangePumpCount') },
-                  { label: 'Edit Fuel Prices', allowed: hasPermission('canEditFuelPrices') },
-                  { label: 'Manage Inventory', allowed: hasPermission('canManageInventory') },
-                  { label: 'Edit Employees', allowed: hasPermission('canManageEmployees') },
-                  { label: 'Run Payroll', allowed: hasPermission('canRunPayroll') },
-                  { label: 'Export Data', allowed: hasPermission('canExportReports') },
-                  { label: 'Backup & Restore', allowed: hasPermission('canManageCloud') },
-                  { label: 'Cloud Sync', allowed: hasPermission('canManageCloud') },
-                  { label: 'Founder Access', allowed: isOwner },
+                  {
+                    label: "Edit Pump Prices",
+                    allowed: hasPermission("canEditFuelPrices"),
+                  },
+                  {
+                    label: "Change Pump Count",
+                    allowed: hasPermission("canChangePumpCount"),
+                  },
+                  {
+                    label: "Edit Fuel Prices",
+                    allowed: hasPermission("canEditFuelPrices"),
+                  },
+                  {
+                    label: "Manage Inventory",
+                    allowed: hasPermission("canManageInventory"),
+                  },
+                  {
+                    label: "Edit Employees",
+                    allowed: hasPermission("canManageEmployees"),
+                  },
+                  {
+                    label: "Run Payroll",
+                    allowed: hasPermission("canRunPayroll"),
+                  },
+                  {
+                    label: "Export Data",
+                    allowed: hasPermission("canExportReports"),
+                  },
+                  {
+                    label: "Backup & Restore",
+                    allowed: hasPermission("canManageCloud"),
+                  },
+                  {
+                    label: "Cloud Sync",
+                    allowed: hasPermission("canManageCloud"),
+                  },
+                  { label: "Founder Access", allowed: isOwner },
                 ].map(item => (
-                  <div key={item.label} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <span className="text-xs text-gray-700 dark:text-gray-300">{item.label}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      item.allowed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {item.allowed ? 'Allowed' : 'Restricted'}
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                  >
+                    <span className="text-xs text-gray-700 dark:text-gray-300">
+                      {item.label}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        item.allowed
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {item.allowed ? "Allowed" : "Restricted"}
                     </span>
                   </div>
                 ))}
@@ -798,57 +1031,64 @@ export default function DataManager() {
           </div>
         )}
 
-        {activeTab === 'recovery' && (
-          <DataRecovery />
-        )}
+        {activeTab === "recovery" && <DataRecovery />}
 
-        {activeTab === 'backup' && (
+        {activeTab === "backup" && (
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Backup Management</h2>
-            
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+              Backup Management
+            </h2>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">Local Backups</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-white">
+                  Local Backups
+                </h3>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  Create and manage local backup files that you can store on your device or cloud storage.
+                  Create and manage local backup files that you can store on
+                  your device or cloud storage.
                 </p>
-                
+
                 <div className="space-y-3">
                   <button
-                    onClick={() => exportData('json')}
+                    onClick={() => exportData("json")}
                     className="w-full btn btn-primary flex items-center gap-3"
                   >
                     <Download size={16} />
                     Create Full Backup
                   </button>
-                  
+
                   <button
                     onClick={() => {
-                      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                      const timestamp = new Date()
+                        .toISOString()
+                        .replace(/[:.]/g, "-");
                       const backupData = {
-                        version: '2.0',
-                        type: 'settings_only',
+                        version: "2.0",
+                        type: "settings_only",
                         exported: new Date().toISOString(),
                         data: {
                           theme: state.theme,
                           themeSettings: state.themeSettings,
                           userPreferences: state.userPreferences,
                           companyData: state.companyData,
-                          tabConfigurations: state.tabConfigurations
-                        }
+                          tabConfigurations: state.tabConfigurations,
+                        },
                       };
-                      
+
                       const dataStr = JSON.stringify(backupData, null, 2);
-                      const blob = new Blob([dataStr], { type: 'application/json' });
+                      const blob = new Blob([dataStr], {
+                        type: "application/json",
+                      });
                       const url = URL.createObjectURL(blob);
-                      
-                      const a = document.createElement('a');
+
+                      const a = document.createElement("a");
                       a.href = url;
                       a.download = `FuelPro_Settings_${timestamp}.json`;
                       a.click();
-                      
+
                       URL.revokeObjectURL(url);
-                      alert('Settings backup created!');
+                      alert("Settings backup created!");
                     }}
                     className="w-full btn btn-secondary flex items-center gap-3"
                   >
@@ -859,11 +1099,14 @@ export default function DataManager() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">Restore Options</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-white">
+                  Restore Options
+                </h3>
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  Import data from backup files to restore your application state.
+                  Import data from backup files to restore your application
+                  state.
                 </p>
-                
+
                 <label className="w-full btn btn-outline flex items-center gap-3 cursor-pointer">
                   <Upload size={16} />
                   Restore from File
@@ -876,13 +1119,15 @@ export default function DataManager() {
                 </label>
 
                 {importStatus && (
-                  <div className={`p-3 rounded-lg text-sm ${
-                    importStatus.includes('✅') 
-                      ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                      : importStatus.includes('❌')
-                      ? 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-                      : 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200'
-                  }`}>
+                  <div
+                    className={`p-3 rounded-lg text-sm ${
+                      importStatus.includes("✅")
+                        ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
+                        : importStatus.includes("❌")
+                          ? "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200"
+                          : "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200"
+                    }`}
+                  >
                     {importStatus}
                   </div>
                 )}
@@ -891,94 +1136,114 @@ export default function DataManager() {
           </div>
         )}
 
-        {activeTab === 'cloud' && (
+        {activeTab === "cloud" && (
           <div className="space-y-6">
             {/* New Firebase Cloud Sync Panel */}
             <CloudSyncPanel />
 
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Local Cloud Sync</h2>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+                Local Cloud Sync
+              </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">Sync Status</h3>
-                
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Cloud className={isCloudSaving ? 'animate-pulse text-blue-500' : 'text-green-500'} size={20} />
-                    <span className="font-medium text-gray-800 dark:text-white">
-                      {isCloudSaving ? 'Syncing...' : 'Connected'}
-                    </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-800 dark:text-white">
+                    Sync Status
+                  </h3>
+
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Cloud
+                        className={
+                          isCloudSaving
+                            ? "animate-pulse text-blue-500"
+                            : "text-green-500"
+                        }
+                        size={20}
+                      />
+                      <span className="font-medium text-gray-800 dark:text-white">
+                        {isCloudSaving ? "Syncing..." : "Connected"}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex justify-between">
+                        <span>Last Sync:</span>
+                        <span>
+                          {lastCloudSave
+                            ? lastCloudSave.toLocaleString()
+                            : "Never"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Auto Sync:</span>
+                        <span className="text-green-600 dark:text-green-400">
+                          Enabled
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Data Size:</span>
+                        <span>{getDataSize()} KB</span>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                    <div className="flex justify-between">
-                      <span>Last Sync:</span>
-                      <span>{lastCloudSave ? lastCloudSave.toLocaleString() : 'Never'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Auto Sync:</span>
-                      <span className="text-green-600 dark:text-green-400">Enabled</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Data Size:</span>
-                      <span>{getDataSize()} KB</span>
-                    </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-800 dark:text-white">
+                    Manual Actions
+                  </h3>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={syncWithCloud}
+                      disabled={isCloudSaving}
+                      className="w-full btn btn-primary flex items-center gap-3"
+                    >
+                      <Cloud
+                        className={isCloudSaving ? "animate-pulse" : ""}
+                        size={16}
+                      />
+                      {isCloudSaving ? "Syncing..." : "Force Sync Now"}
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          await loadFromCloud();
+                          alert("Data loaded from cloud successfully!");
+                        } catch (error) {
+                          alert("Failed to load from cloud. Using local data.");
+                        }
+                      }}
+                      className="w-full btn btn-secondary flex items-center gap-3"
+                    >
+                      <RefreshCw size={16} />
+                      Load from Cloud
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">Manual Actions</h3>
-                
-                <div className="space-y-3">
-                  <button
-                    onClick={syncWithCloud}
-                    disabled={isCloudSaving}
-                    className="w-full btn btn-primary flex items-center gap-3"
-                  >
-                    <Cloud className={isCloudSaving ? 'animate-pulse' : ''} size={16} />
-                    {isCloudSaving ? 'Syncing...' : 'Force Sync Now'}
-                  </button>
-                  
-                  <button
-                    onClick={async () => {
-                      try {
-                        await loadFromCloud();
-                        alert('Data loaded from cloud successfully!');
-                      } catch (error) {
-                        alert('Failed to load from cloud. Using local data.');
-                      }
-                    }}
-                    className="w-full btn btn-secondary flex items-center gap-3"
-                  >
-                    <RefreshCw size={16} />
-                    Load from Cloud
-                  </button>
-                </div>
+              <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 flex items-center gap-2">
+                  <CheckCircle size={16} />
+                  Cloud Sync Features
+                </h4>
+                <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                  <li>• Automatic backup every 30 seconds when data changes</li>
+                  <li>• Real-time sync across all your devices</li>
+                  <li>• Secure encrypted storage in the cloud</li>
+                  <li>• Automatic conflict resolution</li>
+                  <li>• Data recovery from cloud backups</li>
+                </ul>
               </div>
             </div>
-
-            <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-2 flex items-center gap-2">
-                <CheckCircle size={16} />
-                Cloud Sync Features
-              </h4>
-              <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                <li>• Automatic backup every 30 seconds when data changes</li>
-                <li>• Real-time sync across all your devices</li>
-                <li>• Secure encrypted storage in the cloud</li>
-                <li>• Automatic conflict resolution</li>
-                <li>• Data recovery from cloud backups</li>
-              </ul>
-            </div>
-          </div>
           </div>
         )}
 
-        {activeTab === 'sync' && (
-          <SyncDashboard />
-        )}
+        {activeTab === "sync" && <SyncDashboard />}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useFuel } from '@/react-app/context/FuelContext';
-import { usePermissions } from '@/react-app/context/PermissionContext';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useFuel } from "@/react-app/context/FuelContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
 import {
   LayoutDashboard,
   Truck,
@@ -31,15 +31,18 @@ import {
   Globe,
   Wrench,
   Monitor,
-  FileUp
-} from 'lucide-react';
+  FileUp,
+} from "lucide-react";
 
 interface TabNavigationProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
 }
 
-const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange }) => {
+const TabNavigation: React.FC<TabNavigationProps> = ({
+  activeTab,
+  onTabChange,
+}) => {
   const { state } = useFuel();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -92,8 +95,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
 
   useEffect(() => {
     checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
   }, [checkScroll, state.tabConfigurations]);
 
   // Controlled wheel scrolling - FIXED to prevent overshoot
@@ -106,8 +109,9 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
       if (container.scrollWidth <= container.clientWidth) return;
 
       // Determine scroll direction (horizontal wheel OR vertical wheel converted to horizontal)
-      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      
+      const delta =
+        Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+
       // Ignore tiny movements (prevents jitter)
       if (Math.abs(delta) < 2) return;
 
@@ -120,29 +124,29 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
 
       container.scrollBy({
         left: scrollAmount,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
 
       // Update arrows after scroll
       setTimeout(checkScroll, 150);
     };
 
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
   }, [checkScroll]);
 
   // Manual scroll handlers for arrow buttons
   const scrollLeft = () => {
     const container = containerRef.current;
     if (!container) return;
-    container.scrollBy({ left: -150, behavior: 'smooth' });
+    container.scrollBy({ left: -150, behavior: "smooth" });
     setTimeout(checkScroll, 150);
   };
 
   const scrollRight = () => {
     const container = containerRef.current;
     if (!container) return;
-    container.scrollBy({ left: 150, behavior: 'smooth' });
+    container.scrollBy({ left: 150, behavior: "smooth" });
     setTimeout(checkScroll, 150);
   };
 
@@ -172,9 +176,9 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
         onScroll={checkScroll}
         className="flex overflow-x-auto px-1 py-0"
         style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {/* Inline style to hide webkit scrollbar completely */}
@@ -194,13 +198,18 @@ const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabChange })
                 flex items-center gap-2 px-4 py-3 text-sm font-semibold 
                 transition-all duration-200 border-b-[3px] flex-shrink-0
                 first:ml-0 last:mr-0
-                ${isActive
-                  ? 'text-blue-400 border-blue-500 bg-blue-500/5'
-                  : 'text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/5 hover:border-gray-700'
+                ${
+                  isActive
+                    ? "text-blue-400 border-blue-500 bg-blue-500/5"
+                    : "text-gray-400 border-transparent hover:text-gray-200 hover:bg-white/5 hover:border-gray-700"
                 }
               `}
             >
-              {icon && <span className={isActive ? 'text-blue-400' : 'text-gray-500'}>{icon}</span>}
+              {icon && (
+                <span className={isActive ? "text-blue-400" : "text-gray-500"}>
+                  {icon}
+                </span>
+              )}
               <span className="whitespace-nowrap">{tab.label}</span>
             </button>
           );

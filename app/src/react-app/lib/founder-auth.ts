@@ -5,29 +5,40 @@
  */
 
 const DEFAULT_CREDS = {
-  username: 'FOUNDER',
-  password: 'fuelpro2026',
+  username: "FOUNDER",
+  password: "fuelpro2026",
 };
 
-const STORAGE_KEY = 'fuelpro_founder_creds';
-const SESSION_KEY = 'fuelpro_founder_session';
+const STORAGE_KEY = "fuelpro_founder_creds";
+const SESSION_KEY = "fuelpro_founder_session";
 
 /** Get current credentials (configurable, not hardcoded) */
-export function getFounderCredentials(): { username: string; password: string } {
+export function getFounderCredentials(): {
+  username: string;
+  password: string;
+} {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   return DEFAULT_CREDS;
 }
 
 /** Update founder credentials */
-export function setFounderCredentials(username: string, password: string): void {
+export function setFounderCredentials(
+  username: string,
+  password: string
+): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ username, password }));
 }
 
 /** Check if credentials match */
-export function validateFounderAuth(inputUser: string, inputPw: string): boolean {
+export function validateFounderAuth(
+  inputUser: string,
+  inputPw: string
+): boolean {
   const creds = getFounderCredentials();
   return inputUser === creds.username && inputPw === creds.password;
 }
@@ -40,12 +51,17 @@ export function hasFounderSession(): boolean {
     const { loginTime } = JSON.parse(s);
     // Session valid for 8 hours
     return Date.now() - loginTime < 8 * 60 * 60 * 1000;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /** Start founder session */
 export function startFounderSession(): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ loginTime: Date.now(), active: true }));
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({ loginTime: Date.now(), active: true })
+  );
 }
 
 /** End founder session */

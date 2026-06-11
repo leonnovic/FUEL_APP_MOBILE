@@ -1,7 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
-import { Upload, Search, FileText, Image, FileSpreadsheet, File, Download, Share2, Trash2, X, Loader2, FolderOpen, Camera, ChevronDown, Folder, Sparkles, ArrowLeft, Eye, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
-import { useAuth } from '@/react-app/context/AuthContext';
-import { useFuel } from '../context/FuelContext';
+import { useState, useEffect, useRef } from "react";
+import {
+  Upload,
+  Search,
+  FileText,
+  Image,
+  FileSpreadsheet,
+  File,
+  Download,
+  Share2,
+  Trash2,
+  X,
+  Loader2,
+  FolderOpen,
+  Camera,
+  ChevronDown,
+  Folder,
+  Sparkles,
+  ArrowLeft,
+  Eye,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+} from "lucide-react";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useFuel } from "../context/FuelContext";
 
 interface DocumentFolder {
   id: number;
@@ -41,7 +63,7 @@ const folderColors: Record<string, string> = {
   pink: "from-pink-500 to-pink-600",
   rose: "from-rose-500 to-rose-600",
   lime: "from-lime-500 to-lime-600",
-  sky: "from-sky-500 to-sky-600"
+  sky: "from-sky-500 to-sky-600",
 };
 
 export default function Documents() {
@@ -49,8 +71,10 @@ export default function Documents() {
   const { state } = useFuel();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -63,12 +87,14 @@ export default function Documents() {
   const [imageZoom, setImageZoom] = useState(1);
   const [imageRotation, setImageRotation] = useState(0);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
+  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
+    new Set()
+  );
   const [quickPreviewDoc, setQuickPreviewDoc] = useState<Document | null>(null);
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
   const [quickPreviewLoading, setQuickPreviewLoading] = useState(false);
   const [showAllDocuments, setShowAllDocuments] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,19 +109,19 @@ export default function Documents() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('/api/documents');
+      const response = await fetch("/api/documents");
       if (response.ok) {
         const data = await response.json();
         setDocuments(data.documents || []);
       }
     } catch (err) {
-      setError('Failed to load documents');
+      setError("Failed to load documents");
     }
   };
 
   const fetchFolders = async () => {
     try {
-      const response = await fetch('/api/documents/folders');
+      const response = await fetch("/api/documents/folders");
       if (response.ok) {
         const data = await response.json();
         setFolders(data.folders || []);
@@ -108,8 +134,8 @@ export default function Documents() {
   // Organize only NEW unorganized documents (default behavior)
   const organizeNewDocuments = async () => {
     try {
-      const response = await fetch('/api/documents/organize-all', {
-        method: 'POST',
+      const response = await fetch("/api/documents/organize-all", {
+        method: "POST",
       });
       if (response.ok) {
         const data = await response.json();
@@ -126,10 +152,10 @@ export default function Documents() {
 
   // Force reorganize ALL documents (manual action only)
   const forceReorganizeAll = async () => {
-    setOrganizingStatus('Reorganizing all documents...');
+    setOrganizingStatus("Reorganizing all documents...");
     try {
-      const response = await fetch('/api/documents/organize-all?force=true', {
-        method: 'POST',
+      const response = await fetch("/api/documents/organize-all?force=true", {
+        method: "POST",
       });
       if (response.ok) {
         await fetchData();
@@ -149,104 +175,148 @@ export default function Documents() {
   }, [isLoading]); // Only run once when loading completes
 
   // Generate HTML document for business data
-  const generateHTMLDocument = (title: string, data: any, type: string): string => {
-    const formatDate = (d: string | Date) => new Date(d).toLocaleDateString('en-GB');
-    const formatCurrency = (n: number) => `Ksh ${(n || 0).toLocaleString('en-KE')}`;
-    
-    let content = '';
-    
-    if (type === 'clients' && Array.isArray(data)) {
-      content = data.map((c: any) => `
+  const generateHTMLDocument = (
+    title: string,
+    data: any,
+    type: string
+  ): string => {
+    const formatDate = (d: string | Date) =>
+      new Date(d).toLocaleDateString("en-GB");
+    const formatCurrency = (n: number) =>
+      `Ksh ${(n || 0).toLocaleString("en-KE")}`;
+
+    let content = "";
+
+    if (type === "clients" && Array.isArray(data)) {
+      content = data
+        .map(
+          (c: any) => `
         <div class="card">
-          <h3>${c.name || 'Unknown'}</h3>
-          <p><strong>Phone:</strong> ${c.phone || '-'}</p>
-          <p><strong>Vehicle:</strong> ${c.vehicleRegistration || '-'}</p>
+          <h3>${c.name || "Unknown"}</h3>
+          <p><strong>Phone:</strong> ${c.phone || "-"}</p>
+          <p><strong>Vehicle:</strong> ${c.vehicleRegistration || "-"}</p>
           <p><strong>Balance:</strong> ${formatCurrency(c.balance || 0)}</p>
-          ${c.notes ? `<p><strong>Notes:</strong> ${c.notes}</p>` : ''}
+          ${c.notes ? `<p><strong>Notes:</strong> ${c.notes}</p>` : ""}
         </div>
-      `).join('');
-    } else if (type === 'offloading' && Array.isArray(data)) {
-      content = data.map((r: any) => `
+      `
+        )
+        .join("");
+    } else if (type === "offloading" && Array.isArray(data)) {
+      content = data
+        .map(
+          (r: any) => `
         <div class="card">
           <h3>${formatDate(r.date)}</h3>
-          <p><strong>Driver:</strong> ${r.driverName || '-'}</p>
-          <p><strong>Vehicle:</strong> ${r.vehicleReg || '-'}</p>
-          <p><strong>Product:</strong> ${r.product || '-'}</p>
+          <p><strong>Driver:</strong> ${r.driverName || "-"}</p>
+          <p><strong>Vehicle:</strong> ${r.vehicleReg || "-"}</p>
+          <p><strong>Product:</strong> ${r.product || "-"}</p>
           <p><strong>Quantity:</strong> ${r.quantity || 0} L</p>
           <p><strong>Total:</strong> ${formatCurrency(r.totalCost || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'invoices') {
+      `
+        )
+        .join("");
+    } else if (type === "invoices") {
       const invoices = data.invoices || [];
-      content = invoices.map((inv: any) => `
+      content = invoices
+        .map(
+          (inv: any) => `
         <div class="card">
-          <h3>Invoice #${inv.invoiceNumber || '-'}</h3>
+          <h3>Invoice #${inv.invoiceNumber || "-"}</h3>
           <p><strong>Date:</strong> ${formatDate(inv.date)}</p>
-          <p><strong>Client:</strong> ${inv.clientName || '-'}</p>
+          <p><strong>Client:</strong> ${inv.clientName || "-"}</p>
           <p><strong>Total:</strong> ${formatCurrency(inv.total || 0)}</p>
-          <p><strong>Status:</strong> ${inv.status || 'Pending'}</p>
+          <p><strong>Status:</strong> ${inv.status || "Pending"}</p>
         </div>
-      `).join('');
-    } else if (type === 'debtHistory' && Array.isArray(data)) {
-      content = data.map((h: any) => `
+      `
+        )
+        .join("");
+    } else if (type === "debtHistory" && Array.isArray(data)) {
+      content = data
+        .map(
+          (h: any) => `
         <div class="card">
-          <h3>${h.clientName || 'Unknown'}</h3>
+          <h3>${h.clientName || "Unknown"}</h3>
           <p><strong>Date:</strong> ${formatDate(h.date)}</p>
-          <p><strong>Type:</strong> ${h.type || '-'}</p>
+          <p><strong>Type:</strong> ${h.type || "-"}</p>
           <p><strong>Amount:</strong> ${formatCurrency(h.amount || 0)}</p>
           <p><strong>Balance:</strong> ${formatCurrency(h.balance || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'sales') {
+      `
+        )
+        .join("");
+    } else if (type === "sales") {
       const sales = data.salesHistory || [];
-      content = sales.map((s: any) => `
+      content = sales
+        .map(
+          (s: any) => `
         <div class="card">
-          <h3>${formatDate(s.date)} - ${s.shift || 'Day'}</h3>
+          <h3>${formatDate(s.date)} - ${s.shift || "Day"}</h3>
           <p><strong>PMS:</strong> ${formatCurrency(s.totalPMSSalesKsh || 0)}</p>
           <p><strong>AGO:</strong> ${formatCurrency(s.totalAGOSalesKsh || 0)}</p>
           <p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
           <p><strong>Cash:</strong> ${formatCurrency(s.cashPayments || 0)}</p>
           <p><strong>M-Pesa:</strong> ${formatCurrency(s.mpesaPayments || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'mpesa' && Array.isArray(data)) {
-      content = data.slice(0, 100).map((t: any) => `
+      `
+        )
+        .join("");
+    } else if (type === "mpesa" && Array.isArray(data)) {
+      content = data
+        .slice(0, 100)
+        .map(
+          (t: any) => `
         <div class="card">
-          <p><strong>Receipt:</strong> ${t.receiptNo || '-'}</p>
-          <p><strong>Date:</strong> ${t.date || '-'}</p>
-          <p><strong>Details:</strong> ${t.details || '-'}</p>
+          <p><strong>Receipt:</strong> ${t.receiptNo || "-"}</p>
+          <p><strong>Date:</strong> ${t.date || "-"}</p>
+          <p><strong>Details:</strong> ${t.details || "-"}</p>
           <p><strong>Amount:</strong> ${formatCurrency(t.paidIn || t.amount || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'employees' && Array.isArray(data)) {
-      content = data.map((e: any) => `
+      `
+        )
+        .join("");
+    } else if (type === "employees" && Array.isArray(data)) {
+      content = data
+        .map(
+          (e: any) => `
         <div class="card">
-          <h3>${e.name || 'Unknown'}</h3>
-          <p><strong>ID:</strong> ${e.idNumber || '-'}</p>
-          <p><strong>Phone:</strong> ${e.phone || '-'}</p>
-          <p><strong>Position:</strong> ${e.position || '-'}</p>
+          <h3>${e.name || "Unknown"}</h3>
+          <p><strong>ID:</strong> ${e.idNumber || "-"}</p>
+          <p><strong>Phone:</strong> ${e.phone || "-"}</p>
+          <p><strong>Position:</strong> ${e.position || "-"}</p>
           <p><strong>Salary:</strong> ${formatCurrency(e.basicSalary || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'payroll' && Array.isArray(data)) {
-      content = data.map((p: any) => `
+      `
+        )
+        .join("");
+    } else if (type === "payroll" && Array.isArray(data)) {
+      content = data
+        .map(
+          (p: any) => `
         <div class="card">
-          <h3>${p.month || 'Unknown Month'}</h3>
-          <p><strong>Employee:</strong> ${p.employeeName || '-'}</p>
+          <h3>${p.month || "Unknown Month"}</h3>
+          <p><strong>Employee:</strong> ${p.employeeName || "-"}</p>
           <p><strong>Gross:</strong> ${formatCurrency(p.grossPay || 0)}</p>
           <p><strong>Deductions:</strong> ${formatCurrency(p.totalDeductions || 0)}</p>
           <p><strong>Net:</strong> ${formatCurrency(p.netPay || 0)}</p>
         </div>
-      `).join('');
-    } else if (type === 'messages' && Array.isArray(data)) {
-      content = data.slice(-50).map((m: any) => `
-        <div class="card ${m.role === 'user' ? 'user' : 'assistant'}">
-          <p><strong>${m.role === 'user' ? 'You' : 'AI Assistant'}:</strong></p>
-          <p>${m.content || '-'}</p>
+      `
+        )
+        .join("");
+    } else if (type === "messages" && Array.isArray(data)) {
+      content = data
+        .slice(-50)
+        .map(
+          (m: any) => `
+        <div class="card ${m.role === "user" ? "user" : "assistant"}">
+          <p><strong>${m.role === "user" ? "You" : "AI Assistant"}:</strong></p>
+          <p>${m.content || "-"}</p>
         </div>
-      `).join('');
+      `
+        )
+        .join("");
     }
-    
+
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -267,42 +337,116 @@ export default function Documents() {
 </head>
 <body>
   <h1>${title}</h1>
-  <p class="meta">Generated: ${new Date().toLocaleString('en-GB')}</p>
-  ${content || '<p>No data available</p>'}
+  <p class="meta">Generated: ${new Date().toLocaleString("en-GB")}</p>
+  ${content || "<p>No data available</p>"}
 </body>
 </html>`;
   };
 
   // Auto-save business data from all tabs as HTML documents
   const autoSaveBusinessData = async () => {
-    const dateStr = new Date().toISOString().split('T')[0];
-    
+    const dateStr = new Date().toISOString().split("T")[0];
+
     const documentsToSave = [
-      { name: `Saved_Clients_${dateStr}.html`, title: 'Saved Clients', data: state.clients, type: 'clients', check: state.clients?.length },
-      { name: `Offloading_Records_${dateStr}.html`, title: 'Fuel Offloading Records', data: state.offloadingRecords, type: 'offloading', check: state.offloadingRecords?.length },
-      { name: `Invoices_${dateStr}.html`, title: 'Invoices', data: { items: state.invoiceItems, settings: state.invoiceSettings, invoices: state.invoices }, type: 'invoices', check: state.invoices?.length },
-      { name: `Client_History_${dateStr}.html`, title: 'Client Debt History', data: state.debtHistory, type: 'debtHistory', check: state.debtHistory?.length },
-      { name: `Sales_Tracking_${dateStr}.html`, title: 'Sales Tracking', data: { salesHistory: state.salesHistory, pumps: { pms: state.pmsPumps, ago: state.agoPumps }, expenses: state.expenses }, type: 'sales', check: state.salesHistory?.length },
-      { name: `Fuel_Sales_Report_${dateStr}.html`, title: 'Fuel Sales Report', data: { salesHistory: state.salesHistory }, type: 'sales', check: state.salesHistory?.length },
-      { name: `MPESA_Inflows_${dateStr}.html`, title: 'M-PESA Inflows', data: state.mpesaTransactions, type: 'mpesa', check: state.mpesaTransactions?.length },
-      { name: `Payroll_Employees_${dateStr}.html`, title: 'Payroll - Employees', data: state.employees, type: 'employees', check: state.employees?.length },
-      { name: `Payroll_Records_${dateStr}.html`, title: 'Payroll Records', data: state.payrollRecords, type: 'payroll', check: state.payrollRecords?.length },
-      { name: `AI_Chat_History_${dateStr}.html`, title: 'AI Assistant Chat History', data: state.chatHistory, type: 'messages', check: state.chatHistory?.length },
+      {
+        name: `Saved_Clients_${dateStr}.html`,
+        title: "Saved Clients",
+        data: state.clients,
+        type: "clients",
+        check: state.clients?.length,
+      },
+      {
+        name: `Offloading_Records_${dateStr}.html`,
+        title: "Fuel Offloading Records",
+        data: state.offloadingRecords,
+        type: "offloading",
+        check: state.offloadingRecords?.length,
+      },
+      {
+        name: `Invoices_${dateStr}.html`,
+        title: "Invoices",
+        data: {
+          items: state.invoiceItems,
+          settings: state.invoiceSettings,
+          invoices: state.invoices,
+        },
+        type: "invoices",
+        check: state.invoices?.length,
+      },
+      {
+        name: `Client_History_${dateStr}.html`,
+        title: "Client Debt History",
+        data: state.debtHistory,
+        type: "debtHistory",
+        check: state.debtHistory?.length,
+      },
+      {
+        name: `Sales_Tracking_${dateStr}.html`,
+        title: "Sales Tracking",
+        data: {
+          salesHistory: state.salesHistory,
+          pumps: { pms: state.pmsPumps, ago: state.agoPumps },
+          expenses: state.expenses,
+        },
+        type: "sales",
+        check: state.salesHistory?.length,
+      },
+      {
+        name: `Fuel_Sales_Report_${dateStr}.html`,
+        title: "Fuel Sales Report",
+        data: { salesHistory: state.salesHistory },
+        type: "sales",
+        check: state.salesHistory?.length,
+      },
+      {
+        name: `MPESA_Inflows_${dateStr}.html`,
+        title: "M-PESA Inflows",
+        data: state.mpesaTransactions,
+        type: "mpesa",
+        check: state.mpesaTransactions?.length,
+      },
+      {
+        name: `Payroll_Employees_${dateStr}.html`,
+        title: "Payroll - Employees",
+        data: state.employees,
+        type: "employees",
+        check: state.employees?.length,
+      },
+      {
+        name: `Payroll_Records_${dateStr}.html`,
+        title: "Payroll Records",
+        data: state.payrollRecords,
+        type: "payroll",
+        check: state.payrollRecords?.length,
+      },
+      {
+        name: `AI_Chat_History_${dateStr}.html`,
+        title: "AI Assistant Chat History",
+        data: state.chatHistory,
+        type: "messages",
+        check: state.chatHistory?.length,
+      },
     ];
 
     for (const doc of documentsToSave) {
       if (doc.check) {
         // Check if document already exists today
-        const existingDoc = documents.find(d => d.name === doc.name || d.original_name === doc.name);
+        const existingDoc = documents.find(
+          d => d.name === doc.name || d.original_name === doc.name
+        );
         if (!existingDoc) {
-          const htmlContent = generateHTMLDocument(doc.title, doc.data, doc.type);
-          const blob = new Blob([htmlContent], { type: 'text/html' });
+          const htmlContent = generateHTMLDocument(
+            doc.title,
+            doc.data,
+            doc.type
+          );
+          const blob = new Blob([htmlContent], { type: "text/html" });
           const formData = new FormData();
-          formData.append('file', blob, doc.name);
-          
+          formData.append("file", blob, doc.name);
+
           try {
-            await fetch('/api/documents/upload', {
-              method: 'POST',
+            await fetch("/api/documents/upload", {
+              method: "POST",
               body: formData,
             });
           } catch {
@@ -311,7 +455,7 @@ export default function Documents() {
         }
       }
     }
-    
+
     await fetchData();
   };
 
@@ -336,11 +480,11 @@ export default function Documents() {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       try {
-        const response = await fetch('/api/documents/upload', {
-          method: 'POST',
+        const response = await fetch("/api/documents/upload", {
+          method: "POST",
           body: formData,
         });
 
@@ -361,7 +505,7 @@ export default function Documents() {
 
     setIsUploading(false);
     setUploadProgress(0);
-    
+
     // Trigger smart organization for new documents only
     if (uploadedIds.length > 0) {
       await organizeNewDocuments();
@@ -369,8 +513,8 @@ export default function Documents() {
 
     await fetchData();
 
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   const handlePreview = async (doc: Document) => {
@@ -379,16 +523,16 @@ export default function Documents() {
     setPreviewLoading(true);
     setImageZoom(1);
     setImageRotation(0);
-    
+
     try {
       const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error('Preview failed');
-      
+      if (!response.ok) throw new Error("Preview failed");
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch {
-      setError('Failed to load preview');
+      setError("Failed to load preview");
       setPreviewMode(false);
     } finally {
       setPreviewLoading(false);
@@ -411,25 +555,25 @@ export default function Documents() {
       closeQuickPreview();
       return;
     }
-    
+
     // Close existing preview URL
     if (quickPreviewUrl) {
       window.URL.revokeObjectURL(quickPreviewUrl);
     }
-    
+
     setQuickPreviewDoc(doc);
     setQuickPreviewLoading(true);
     setQuickPreviewUrl(null);
-    
+
     try {
       const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error('Preview failed');
-      
+      if (!response.ok) throw new Error("Preview failed");
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       setQuickPreviewUrl(url);
     } catch {
-      setError('Failed to load preview');
+      setError("Failed to load preview");
       setQuickPreviewDoc(null);
     } finally {
       setQuickPreviewLoading(false);
@@ -447,11 +591,11 @@ export default function Documents() {
   const handleDownload = async (doc: Document) => {
     try {
       const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error('Download failed');
-      
+      if (!response.ok) throw new Error("Download failed");
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = doc.original_name;
       document.body.appendChild(a);
@@ -459,23 +603,25 @@ export default function Documents() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch {
-      setError('Failed to download document');
+      setError("Failed to download document");
     }
   };
 
   const handleShare = async (doc: Document) => {
     try {
       const shareUrl = `${window.location.origin}/api/documents/${doc.id}/download`;
-      
+
       if (navigator.share) {
         await navigator.share({
           title: doc.original_name,
           text: `Check out this document: ${doc.original_name}`,
-          url: shareUrl
+          url: shareUrl,
         });
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        import('@/react-app/lib/toast').then(({toastSuccess}) => toastSuccess('Download link copied to clipboard!'));
+        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+          toastSuccess("Download link copied to clipboard!")
+        );
       }
     } catch {
       // User cancelled or share failed
@@ -487,7 +633,7 @@ export default function Documents() {
 
     try {
       const response = await fetch(`/api/documents/${doc.id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
 
       if (response.ok) {
@@ -498,26 +644,36 @@ export default function Documents() {
         }
         await fetchFolders();
       } else {
-        throw new Error('Delete failed');
+        throw new Error("Delete failed");
       }
     } catch {
-      setError('Failed to delete document');
+      setError("Failed to delete document");
     }
   };
 
   const getFileIcon = (fileType: string, size: "sm" | "lg" = "lg") => {
     const sizeClass = size === "sm" ? "w-5 h-5" : "w-8 h-8";
-    if (fileType.includes('image')) return <Image className={`${sizeClass} text-green-500`} />;
-    if (fileType.includes('pdf')) return <FileText className={`${sizeClass} text-red-500`} />;
-    if (fileType.includes('sheet') || fileType.includes('excel') || fileType.includes('csv')) 
+    if (fileType.includes("image"))
+      return <Image className={`${sizeClass} text-green-500`} />;
+    if (fileType.includes("pdf"))
+      return <FileText className={`${sizeClass} text-red-500`} />;
+    if (
+      fileType.includes("sheet") ||
+      fileType.includes("excel") ||
+      fileType.includes("csv")
+    )
       return <FileSpreadsheet className={`${sizeClass} text-emerald-500`} />;
-    if (fileType.includes('word') || fileType.includes('document')) 
+    if (fileType.includes("word") || fileType.includes("document"))
       return <FileText className={`${sizeClass} text-blue-500`} />;
     return <File className={`${sizeClass} text-gray-500`} />;
   };
 
   const canPreview = (fileType: string) => {
-    return fileType.includes('image') || fileType.includes('pdf') || fileType.includes('html');
+    return (
+      fileType.includes("image") ||
+      fileType.includes("pdf") ||
+      fileType.includes("html")
+    );
   };
 
   const formatFileSize = (bytes: number) => {
@@ -527,30 +683,36 @@ export default function Documents() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = doc.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      doc.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (doc.ai_description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    
+      (doc.ai_description || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+
     if (selectedFolder) {
       // Use Number() conversion to ensure type-safe comparison (SQLite may return integers as strings)
-      return Number(doc.folder_id) === Number(selectedFolder.id) && matchesSearch;
+      return (
+        Number(doc.folder_id) === Number(selectedFolder.id) && matchesSearch
+      );
     }
     return matchesSearch;
   });
 
   // Calculate actual document counts per folder from loaded documents
   const getFolderDocCount = (folderId: number): number => {
-    return documents.filter(doc => Number(doc.folder_id) === Number(folderId)).length;
+    return documents.filter(doc => Number(doc.folder_id) === Number(folderId))
+      .length;
   };
 
   return (
@@ -563,8 +725,12 @@ export default function Documents() {
             <div className="flex items-center gap-3 min-w-0 flex-1">
               {getFileIcon(quickPreviewDoc.file_type, "sm")}
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-white truncate">{quickPreviewDoc.original_name}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(quickPreviewDoc.file_size)}</p>
+                <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                  {quickPreviewDoc.original_name}
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatFileSize(quickPreviewDoc.file_size)}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
@@ -599,7 +765,7 @@ export default function Documents() {
                 <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
               </div>
             ) : quickPreviewUrl ? (
-              quickPreviewDoc.file_type.includes('image') ? (
+              quickPreviewDoc.file_type.includes("image") ? (
                 <div className="flex items-center justify-center h-full p-4">
                   <img
                     src={quickPreviewUrl}
@@ -608,7 +774,8 @@ export default function Documents() {
                     draggable={false}
                   />
                 </div>
-              ) : quickPreviewDoc.file_type.includes('pdf') || quickPreviewDoc.file_type.includes('html') ? (
+              ) : quickPreviewDoc.file_type.includes("pdf") ||
+                quickPreviewDoc.file_type.includes("html") ? (
                 <iframe
                   src={quickPreviewUrl}
                   className="w-full h-full bg-white"
@@ -655,7 +822,7 @@ export default function Documents() {
 
       {/* Backdrop for mobile when quick preview is open */}
       {quickPreviewDoc && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={closeQuickPreview}
         />
@@ -687,9 +854,10 @@ export default function Documents() {
             )}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {organizingStatus || (selectedFolder 
-              ? `${filteredDocuments.length} document${filteredDocuments.length !== 1 ? 's' : ''} in this folder`
-              : 'Auto-organized by AI into smart folders')}
+            {organizingStatus ||
+              (selectedFolder
+                ? `${filteredDocuments.length} document${filteredDocuments.length !== 1 ? "s" : ""} in this folder`
+                : "Auto-organized by AI into smart folders")}
           </p>
         </div>
 
@@ -700,93 +868,108 @@ export default function Documents() {
             onClick={() => forceReorganizeAll()}
             disabled={!!organizingStatus || documents.length === 0}
             className={`flex items-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
-              organizingStatus 
-                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
-                : 'bg-purple-500 hover:bg-purple-600 text-white shadow-lg'
+              organizingStatus
+                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                : "bg-purple-500 hover:bg-purple-600 text-white shadow-lg"
             }`}
             title="Reorganize all documents into smart folders"
           >
-            <Sparkles className={`w-5 h-5 ${organizingStatus ? 'animate-pulse' : ''}`} />
-            {organizingStatus ? 'Organizing...' : 'Reorganize All'}
+            <Sparkles
+              className={`w-5 h-5 ${organizingStatus ? "animate-pulse" : ""}`}
+            />
+            {organizingStatus ? "Organizing..." : "Reorganize All"}
           </button>
-          
+
           {/* Upload Button */}
           <div className="relative inline-block">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileUpload}
-            className="hidden"
-            accept="*/*"
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          
-          {isUploading ? (
-            <button
-              disabled
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg opacity-50"
-            >
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Uploading... {Math.round(uploadProgress)}%
-            </button>
-          ) : (
-            <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="*/*"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            {isUploading ? (
               <button
-                onClick={() => setShowUploadMenu(!showUploadMenu)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-semibold shadow-lg transition-all"
+                disabled
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg opacity-50"
               >
-                <Upload className="w-5 h-5" />
-                Add Document
-                <ChevronDown className={`w-4 h-4 transition-transform ${showUploadMenu ? 'rotate-180' : ''}`} />
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Uploading... {Math.round(uploadProgress)}%
               </button>
-              
-              {showUploadMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowUploadMenu(false)} />
-                  <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[200px]">
-                    <button
-                      onClick={() => {
-                        cameraInputRef.current?.click();
-                        setShowUploadMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                        <Camera className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">Capture Document</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Use device camera to capture</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        fileInputRef.current?.click();
-                        setShowUploadMenu(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left border-t border-gray-100 dark:border-gray-700"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-                        <Upload className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">Upload File</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">PDF, Word, Excel, images...</p>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowUploadMenu(!showUploadMenu)}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-semibold shadow-lg transition-all"
+                >
+                  <Upload className="w-5 h-5" />
+                  Add Document
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${showUploadMenu ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {showUploadMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowUploadMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50 min-w-[200px]">
+                      <button
+                        onClick={() => {
+                          cameraInputRef.current?.click();
+                          setShowUploadMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                          <Camera className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            Capture Document
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Use device camera to capture
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                          setShowUploadMenu(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left border-t border-gray-100 dark:border-gray-700"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+                          <Upload className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">
+                            Upload File
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            PDF, Word, Excel, images...
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -799,74 +982,103 @@ export default function Documents() {
             Smart Folders
           </h3>
           <div className="space-y-2">
-            {folders.filter(f => f.parent_id === null).map((mainFolder) => {
-              const subFolders = folders.filter(f => f.parent_id === mainFolder.id);
-              const isExpanded = expandedFolders.has(mainFolder.id);
-              // Calculate actual document counts from loaded documents
-              const mainFolderDocs = getFolderDocCount(mainFolder.id);
-              const subFolderDocs = subFolders.reduce((sum, sf) => sum + getFolderDocCount(sf.id), 0);
-              const totalDocs = mainFolderDocs + subFolderDocs;
-              
-              return (
-                <div key={mainFolder.id} className="bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 overflow-hidden">
-                  {/* Main Folder Header */}
-                  <button
-                    onClick={() => {
-                      if (subFolders.length > 0) {
-                        setExpandedFolders(prev => {
-                          const next = new Set(prev);
-                          if (next.has(mainFolder.id)) next.delete(mainFolder.id);
-                          else next.add(mainFolder.id);
-                          return next;
-                        });
-                      } else {
-                        setSelectedFolder(mainFolder);
-                      }
-                    }}
-                    className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            {folders
+              .filter(f => f.parent_id === null)
+              .map(mainFolder => {
+                const subFolders = folders.filter(
+                  f => f.parent_id === mainFolder.id
+                );
+                const isExpanded = expandedFolders.has(mainFolder.id);
+                // Calculate actual document counts from loaded documents
+                const mainFolderDocs = getFolderDocCount(mainFolder.id);
+                const subFolderDocs = subFolders.reduce(
+                  (sum, sf) => sum + getFolderDocCount(sf.id),
+                  0
+                );
+                const totalDocs = mainFolderDocs + subFolderDocs;
+
+                return (
+                  <div
+                    key={mainFolder.id}
+                    className="bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 overflow-hidden"
                   >
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${folderColors[mainFolder.color] || folderColors.gray} flex items-center justify-center text-2xl shadow-lg`}>
-                      {mainFolder.icon}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <h4 className="font-semibold text-gray-900 dark:text-white">{mainFolder.name}</h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {subFolders.length > 0 ? `${subFolders.length} sub-folders • ` : ''}{totalDocs} file{totalDocs !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    {subFolders.length > 0 && (
-                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                    )}
-                  </button>
-                  
-                  {/* Sub-Folders */}
-                  {isExpanded && subFolders.length > 0 && (
-                    <div className="border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-3">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                        {subFolders.map((subFolder) => {
-                          const subFolderDocCount = getFolderDocCount(subFolder.id);
-                          return (
-                            <button
-                              key={subFolder.id}
-                              onClick={() => setSelectedFolder(subFolder)}
-                              className="group p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-md hover:border-amber-300 dark:hover:border-amber-500 transition-all text-left"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg">{subFolder.icon}</span>
-                                <div className="flex-1 min-w-0">
-                                  <h5 className="font-medium text-gray-800 dark:text-gray-200 truncate text-sm">{subFolder.name}</h5>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">{subFolderDocCount} file{subFolderDocCount !== 1 ? 's' : ''}</p>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
+                    {/* Main Folder Header */}
+                    <button
+                      onClick={() => {
+                        if (subFolders.length > 0) {
+                          setExpandedFolders(prev => {
+                            const next = new Set(prev);
+                            if (next.has(mainFolder.id))
+                              next.delete(mainFolder.id);
+                            else next.add(mainFolder.id);
+                            return next;
+                          });
+                        } else {
+                          setSelectedFolder(mainFolder);
+                        }
+                      }}
+                      className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <div
+                        className={`w-12 h-12 rounded-xl bg-gradient-to-br ${folderColors[mainFolder.color] || folderColors.gray} flex items-center justify-center text-2xl shadow-lg`}
+                      >
+                        {mainFolder.icon}
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      <div className="flex-1 text-left">
+                        <h4 className="font-semibold text-gray-900 dark:text-white">
+                          {mainFolder.name}
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {subFolders.length > 0
+                            ? `${subFolders.length} sub-folders • `
+                            : ""}
+                          {totalDocs} file{totalDocs !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      {subFolders.length > 0 && (
+                        <ChevronDown
+                          className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                        />
+                      )}
+                    </button>
+
+                    {/* Sub-Folders */}
+                    {isExpanded && subFolders.length > 0 && (
+                      <div className="border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {subFolders.map(subFolder => {
+                            const subFolderDocCount = getFolderDocCount(
+                              subFolder.id
+                            );
+                            return (
+                              <button
+                                key={subFolder.id}
+                                onClick={() => setSelectedFolder(subFolder)}
+                                className="group p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:shadow-md hover:border-amber-300 dark:hover:border-amber-500 transition-all text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg">
+                                    {subFolder.icon}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <h5 className="font-medium text-gray-800 dark:text-gray-200 truncate text-sm">
+                                      {subFolder.name}
+                                    </h5>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      {subFolderDocCount} file
+                                      {subFolderDocCount !== 1 ? "s" : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -878,12 +1090,12 @@ export default function Documents() {
           type="text"
           placeholder="Search documents by name..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={e => setSearchQuery(e.target.value)}
           className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
         />
         {searchQuery && (
           <button
-            onClick={() => setSearchQuery('')}
+            onClick={() => setSearchQuery("")}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
           >
             <X className="w-5 h-5" />
@@ -895,7 +1107,9 @@ export default function Documents() {
       {error && (
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          <button onClick={() => setError(null)} className="ml-2 underline">
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -908,10 +1122,16 @@ export default function Documents() {
         <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
           <Folder className="w-16 h-16 mb-4 opacity-50" />
           <p className="text-lg font-medium">
-            {searchQuery ? 'No documents match your search' : selectedFolder ? 'No documents in this folder' : 'No documents uploaded yet'}
+            {searchQuery
+              ? "No documents match your search"
+              : selectedFolder
+                ? "No documents in this folder"
+                : "No documents uploaded yet"}
           </p>
           <p className="text-sm mt-1">
-            {searchQuery ? 'Try a different search term' : 'Upload documents and they\'ll be auto-organized'}
+            {searchQuery
+              ? "Try a different search term"
+              : "Upload documents and they'll be auto-organized"}
           </p>
         </div>
       ) : (
@@ -923,105 +1143,139 @@ export default function Documents() {
             >
               <span className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                {searchQuery ? 'Search Results' : `All Documents (${documents.length})`}
+                {searchQuery
+                  ? "Search Results"
+                  : `All Documents (${documents.length})`}
               </span>
-              <ChevronDown className={`w-5 h-5 transition-transform duration-200 ${showAllDocuments ? 'rotate-180' : ''}`} />
+              <ChevronDown
+                className={`w-5 h-5 transition-transform duration-200 ${showAllDocuments ? "rotate-180" : ""}`}
+              />
             </button>
           )}
           {(showAllDocuments || selectedFolder) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="group bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 p-4 hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500 transition-all cursor-pointer relative"
-                onClick={() => canPreview(doc.file_type) ? handlePreview(doc) : setSelectedDoc(doc)}
-              >
-                <div className="flex items-start gap-3">
-                  {getFileIcon(doc.file_type)}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-gray-900 dark:text-white truncate" title={doc.original_name}>
-                      {doc.original_name}
-                    </h3>
-                    {doc.ai_description && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate" title={doc.ai_description}>
-                        {doc.ai_description}
+              {filteredDocuments.map(doc => (
+                <div
+                  key={doc.id}
+                  className="group bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 p-4 hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500 transition-all cursor-pointer relative"
+                  onClick={() =>
+                    canPreview(doc.file_type)
+                      ? handlePreview(doc)
+                      : setSelectedDoc(doc)
+                  }
+                >
+                  <div className="flex items-start gap-3">
+                    {getFileIcon(doc.file_type)}
+                    <div className="flex-1 min-w-0">
+                      <h3
+                        className="font-medium text-gray-900 dark:text-white truncate"
+                        title={doc.original_name}
+                      >
+                        {doc.original_name}
+                      </h3>
+                      {doc.ai_description && (
+                        <p
+                          className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate"
+                          title={doc.ai_description}
+                        >
+                          {doc.ai_description}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {formatFileSize(doc.file_size)}
                       </p>
-                    )}
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formatFileSize(doc.file_size)}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {formatDate(doc.created_at)}
-                    </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {formatDate(doc.created_at)}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {/* Category badge */}
-                {doc.ai_category && !selectedFolder && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-600 dark:text-gray-300">
-                      <Folder className="w-3 h-3" />
-                      {doc.ai_category}
-                    </span>
-                  </div>
-                )}
-
-                {/* Quick Actions - Always visible */}
-                <div className="flex items-center gap-2 mt-3">
-                  {canPreview(doc.file_type) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleQuickPreview(doc); }}
-                      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        quickPreviewDoc?.id === doc.id 
-                          ? 'bg-amber-500 text-white' 
-                          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-                      }`}
-                    >
-                      <Eye className="w-4 h-4" />
-                      {quickPreviewDoc?.id === doc.id ? 'Viewing' : 'Preview'}
-                    </button>
+                  {/* Category badge */}
+                  {doc.ai_category && !selectedFolder && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-600">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded-full text-xs text-gray-600 dark:text-gray-300">
+                        <Folder className="w-3 h-3" />
+                        {doc.ai_category}
+                      </span>
+                    </div>
                   )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDownload(doc); }}
-                    className={`${canPreview(doc.file_type) ? '' : 'flex-1'} flex items-center justify-center gap-1 px-3 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors`}
-                  >
-                    <Download className="w-4 h-4" />
-                    {!canPreview(doc.file_type) && 'Download'}
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleShare(doc); }}
-                    className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(doc); }}
-                    className="p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                  {/* Quick Actions - Always visible */}
+                  <div className="flex items-center gap-2 mt-3">
+                    {canPreview(doc.file_type) && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleQuickPreview(doc);
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          quickPreviewDoc?.id === doc.id
+                            ? "bg-amber-500 text-white"
+                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                        }`}
+                      >
+                        <Eye className="w-4 h-4" />
+                        {quickPreviewDoc?.id === doc.id ? "Viewing" : "Preview"}
+                      </button>
+                    )}
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleDownload(doc);
+                      }}
+                      className={`${canPreview(doc.file_type) ? "" : "flex-1"} flex items-center justify-center gap-1 px-3 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors`}
+                    >
+                      <Download className="w-4 h-4" />
+                      {!canPreview(doc.file_type) && "Download"}
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleShare(doc);
+                      }}
+                      className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleDelete(doc);
+                      }}
+                      className="p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
         </div>
       )}
 
       {/* Preview Modal */}
       {previewMode && selectedDoc && (
-        <div className="fixed inset-0 bg-black/90 flex flex-col z-50" onClick={closePreview}>
+        <div
+          className="fixed inset-0 bg-black/90 flex flex-col z-50"
+          onClick={closePreview}
+        >
           {/* Preview Header */}
-          <div className="flex items-center justify-between p-4 bg-black/50" onClick={e => e.stopPropagation()}>
+          <div
+            className="flex items-center justify-between p-4 bg-black/50"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 text-white">
               {getFileIcon(selectedDoc.file_type, "sm")}
               <div>
                 <h3 className="font-semibold">{selectedDoc.original_name}</h3>
-                <p className="text-xs text-gray-400">{formatFileSize(selectedDoc.file_size)}</p>
+                <p className="text-xs text-gray-400">
+                  {formatFileSize(selectedDoc.file_size)}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {selectedDoc.file_type.includes('image') && (
+              {selectedDoc.file_type.includes("image") && (
                 <>
                   <button
                     onClick={() => setImageZoom(z => Math.max(0.5, z - 0.25))}
@@ -1030,7 +1284,9 @@ export default function Documents() {
                   >
                     <ZoomOut className="w-5 h-5" />
                   </button>
-                  <span className="text-white/60 text-sm min-w-[3rem] text-center">{Math.round(imageZoom * 100)}%</span>
+                  <span className="text-white/60 text-sm min-w-[3rem] text-center">
+                    {Math.round(imageZoom * 100)}%
+                  </span>
                   <button
                     onClick={() => setImageZoom(z => Math.min(3, z + 0.25))}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
@@ -1049,14 +1305,20 @@ export default function Documents() {
                 </>
               )}
               <button
-                onClick={(e) => { e.stopPropagation(); handleDownload(selectedDoc); }}
+                onClick={e => {
+                  e.stopPropagation();
+                  handleDownload(selectedDoc);
+                }}
                 className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 title="Download"
               >
                 <Download className="w-5 h-5" />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); handleShare(selectedDoc); }}
+                onClick={e => {
+                  e.stopPropagation();
+                  handleShare(selectedDoc);
+                }}
                 className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 title="Share"
               >
@@ -1073,11 +1335,14 @@ export default function Documents() {
           </div>
 
           {/* Preview Content */}
-          <div className="flex-1 flex items-center justify-center overflow-auto p-4" onClick={e => e.stopPropagation()}>
+          <div
+            className="flex-1 flex items-center justify-center overflow-auto p-4"
+            onClick={e => e.stopPropagation()}
+          >
             {previewLoading ? (
               <Loader2 className="w-12 h-12 animate-spin text-white" />
             ) : previewUrl ? (
-              selectedDoc.file_type.includes('image') ? (
+              selectedDoc.file_type.includes("image") ? (
                 <img
                   src={previewUrl}
                   alt={selectedDoc.original_name}
@@ -1087,7 +1352,8 @@ export default function Documents() {
                   }}
                   draggable={false}
                 />
-              ) : selectedDoc.file_type.includes('pdf') || selectedDoc.file_type.includes('html') ? (
+              ) : selectedDoc.file_type.includes("pdf") ||
+                selectedDoc.file_type.includes("html") ? (
                 <iframe
                   src={previewUrl}
                   className="w-full h-full bg-white rounded-lg"
@@ -1116,26 +1382,42 @@ export default function Documents() {
 
       {/* Document Info Modal (for non-previewable files) */}
       {selectedDoc && !previewMode && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedDoc(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedDoc(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 {getFileIcon(selectedDoc.file_type)}
                 <div>
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">{selectedDoc.original_name}</h3>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                    {selectedDoc.original_name}
+                  </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {formatFileSize(selectedDoc.file_size)} • {selectedDoc.file_type}
+                    {formatFileSize(selectedDoc.file_size)} •{" "}
+                    {selectedDoc.file_type}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedDoc(null)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => setSelectedDoc(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             <div className="text-sm text-gray-600 dark:text-gray-300 space-y-2">
-              <p><strong>Uploaded:</strong> {formatDate(selectedDoc.created_at)}</p>
-              <p><strong>Type:</strong> {selectedDoc.file_type}</p>
+              <p>
+                <strong>Uploaded:</strong> {formatDate(selectedDoc.created_at)}
+              </p>
+              <p>
+                <strong>Type:</strong> {selectedDoc.file_type}
+              </p>
               {selectedDoc.ai_category && (
                 <p className="flex items-center gap-2">
                   <strong>Folder:</strong>
@@ -1146,7 +1428,9 @@ export default function Documents() {
                 </p>
               )}
               {selectedDoc.ai_description && (
-                <p><strong>Description:</strong> {selectedDoc.ai_description}</p>
+                <p>
+                  <strong>Description:</strong> {selectedDoc.ai_description}
+                </p>
               )}
             </div>
 
@@ -1175,7 +1459,10 @@ export default function Documents() {
                 Share
               </button>
               <button
-                onClick={() => { handleDelete(selectedDoc); setSelectedDoc(null); }}
+                onClick={() => {
+                  handleDelete(selectedDoc);
+                  setSelectedDoc(null);
+                }}
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-all"
               >
                 <Trash2 className="w-5 h-5" />

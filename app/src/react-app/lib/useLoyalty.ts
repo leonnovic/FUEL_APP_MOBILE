@@ -3,7 +3,7 @@
  * React hook for managing multi-station loyalty programs
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   LoyaltyCustomer,
   StationReward,
@@ -13,14 +13,14 @@ import {
   getTierFromPoints,
   calculatePointsEarned,
   generateCardNumber,
-  DEFAULT_TIER_THRESHOLDS
-} from './loyaltyProgram';
+  DEFAULT_TIER_THRESHOLDS,
+} from "./loyaltyProgram";
 
-const LOYALTY_CUSTOMERS_KEY = 'fuelpro_loyalty_customers';
-const LOYALTY_REWARDS_KEY = 'fuelpro_loyalty_rewards';
-const LOYALTY_TRANSACTIONS_KEY = 'fuelpro_loyalty_transactions';
-const LOYALTY_CONFIG_KEY = 'fuelpro_loyalty_config';
-const LOYALTY_STATS_KEY = 'fuelpro_loyalty_stats';
+const LOYALTY_CUSTOMERS_KEY = "fuelpro_loyalty_customers";
+const LOYALTY_REWARDS_KEY = "fuelpro_loyalty_rewards";
+const LOYALTY_TRANSACTIONS_KEY = "fuelpro_loyalty_transactions";
+const LOYALTY_CONFIG_KEY = "fuelpro_loyalty_config";
+const LOYALTY_STATS_KEY = "fuelpro_loyalty_stats";
 
 // ─── Storage Helpers ───
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -36,12 +36,15 @@ function saveToStorage<T>(key: string, data: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.error('[Loyalty] Storage error:', e);
+    console.error("[Loyalty] Storage error:", e);
   }
 }
 
 // ─── Default Station Config ───
-function getDefaultStationConfig(stationId: string, stationName: string): StationLoyaltyConfig {
+function getDefaultStationConfig(
+  stationId: string,
+  stationName: string
+): StationLoyaltyConfig {
   return {
     stationId,
     stationName,
@@ -53,28 +56,30 @@ function getDefaultStationConfig(stationId: string, stationName: string): Statio
     autoUpgradeTier: true,
     upgradeNotifications: true,
     pointsExpirationMonths: 12,
-    cardPrefix: 'FP',
-    cardBgColor: '#1a1a2e',
-    cardTextColor: '#ffffff',
-    updatedAt: new Date().toISOString()
+    cardPrefix: "FP",
+    cardBgColor: "#1a1a2e",
+    cardTextColor: "#ffffff",
+    updatedAt: new Date().toISOString(),
   };
 }
 
 // ─── Default Rewards ───
 function getDefaultRewards(stationId: string): StationReward[] {
   const now = new Date().toISOString();
-  const yearLater = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  
+  const yearLater = new Date(
+    Date.now() + 365 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
   return [
     {
       id: `${stationId}_r1`,
       stationId,
-      name: '5% Off Next Fill',
-      description: 'Get 5% discount on your next fuel purchase',
-      category: 'discount',
+      name: "5% Off Next Fill",
+      description: "Get 5% discount on your next fuel purchase",
+      category: "discount",
       pointsCost: 500,
       value: 5,
-      valueType: 'percentage',
+      valueType: "percentage",
       maxDiscount: 500,
       minPurchaseAmount: 1000,
       validFrom: now,
@@ -83,414 +88,541 @@ function getDefaultRewards(stationId: string): StationReward[] {
       totalQuantity: 100,
       remainingQuantity: 100,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r2`,
       stationId,
-      name: '10% Off Total',
-      description: '10% discount on entire purchase',
-      category: 'discount',
+      name: "10% Off Total",
+      description: "10% discount on entire purchase",
+      category: "discount",
       pointsCost: 1000,
       value: 10,
-      valueType: 'percentage',
+      valueType: "percentage",
       maxDiscount: 1000,
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r3`,
       stationId,
-      name: 'Free Oil Check',
-      description: 'Complimentary engine oil level check',
-      category: 'service',
+      name: "Free Oil Check",
+      description: "Complimentary engine oil level check",
+      category: "service",
       pointsCost: 300,
       value: 0,
-      valueType: 'free',
+      valueType: "free",
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r4`,
       stationId,
-      name: 'Free Car Wash',
-      description: 'Premium car wash service on us',
-      category: 'service',
+      name: "Free Car Wash",
+      description: "Premium car wash service on us",
+      category: "service",
       pointsCost: 1000,
       value: 0,
-      valueType: 'free',
+      valueType: "free",
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r5`,
       stationId,
-      name: 'Free Engine Oil (1L)',
-      description: '1L of quality engine oil (5W-30)',
-      category: 'free_item',
+      name: "Free Engine Oil (1L)",
+      description: "1L of quality engine oil (5W-30)",
+      category: "free_item",
       pointsCost: 2000,
       value: 500,
-      valueType: 'fixed',
+      valueType: "fixed",
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       totalQuantity: 50,
       remainingQuantity: 50,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r6`,
       stationId,
-      name: 'KSh 500 Voucher',
-      description: 'KSh 500 off any purchase over KSh 2000',
-      category: 'voucher',
+      name: "KSh 500 Voucher",
+      description: "KSh 500 off any purchase over KSh 2000",
+      category: "voucher",
       pointsCost: 3000,
       value: 500,
-      valueType: 'fixed',
+      valueType: "fixed",
       minPurchaseAmount: 2000,
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r7`,
       stationId,
-      name: '20% Off (Gold Members)',
-      description: 'Exclusive 20% discount for Gold & Platinum members',
-      category: 'discount',
+      name: "20% Off (Gold Members)",
+      description: "Exclusive 20% discount for Gold & Platinum members",
+      category: "discount",
       pointsCost: 5000,
       minPointsRequired: 5000,
       value: 20,
-      valueType: 'percentage',
+      valueType: "percentage",
       maxDiscount: 2000,
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     },
     {
       id: `${stationId}_r8`,
       stationId,
-      name: 'Free Tire Pressure',
-      description: 'Tire pressure check and inflate',
-      category: 'service',
+      name: "Free Tire Pressure",
+      description: "Tire pressure check and inflate",
+      category: "service",
       pointsCost: 200,
       value: 0,
-      valueType: 'free',
+      valueType: "free",
       validFrom: now,
       validUntil: yearLater,
       isActive: true,
       createdAt: now,
-      updatedAt: now
-    }
+      updatedAt: now,
+    },
   ];
 }
 
 // ─── Main Hook ───
 export function useLoyalty(stationId: string) {
   // ─── State ───
-  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() => 
+  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() =>
     loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
   );
-  const [rewards, setRewards] = useState<StationReward[]>(() => 
+  const [rewards, setRewards] = useState<StationReward[]>(() =>
     loadFromStorage(LOYALTY_REWARDS_KEY, getDefaultRewards(stationId))
   );
-  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() => 
+  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() =>
     loadFromStorage(LOYALTY_TRANSACTIONS_KEY, [])
   );
-  const [configs, setConfigs] = useState<Record<string, StationLoyaltyConfig>>(() => {
-    const stored = loadFromStorage<Record<string, StationLoyaltyConfig>>(LOYALTY_CONFIG_KEY, {});
-    if (!stored[stationId]) {
-      stored[stationId] = getDefaultStationConfig(stationId, `Station ${stationId.slice(0, 4)}`);
-      saveToStorage(LOYALTY_CONFIG_KEY, stored);
+  const [configs, setConfigs] = useState<Record<string, StationLoyaltyConfig>>(
+    () => {
+      const stored = loadFromStorage<Record<string, StationLoyaltyConfig>>(
+        LOYALTY_CONFIG_KEY,
+        {}
+      );
+      if (!stored[stationId]) {
+        stored[stationId] = getDefaultStationConfig(
+          stationId,
+          `Station ${stationId.slice(0, 4)}`
+        );
+        saveToStorage(LOYALTY_CONFIG_KEY, stored);
+      }
+      return stored;
     }
-    return stored;
-  });
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   // ─── Persist to localStorage ───
-  useEffect(() => { saveToStorage(LOYALTY_CUSTOMERS_KEY, customers); }, [customers]);
-  useEffect(() => { saveToStorage(LOYALTY_REWARDS_KEY, rewards); }, [rewards]);
-  useEffect(() => { saveToStorage(LOYALTY_TRANSACTIONS_KEY, transactions); }, [transactions]);
-  useEffect(() => { saveToStorage(LOYALTY_CONFIG_KEY, configs); }, [configs]);
+  useEffect(() => {
+    saveToStorage(LOYALTY_CUSTOMERS_KEY, customers);
+  }, [customers]);
+  useEffect(() => {
+    saveToStorage(LOYALTY_REWARDS_KEY, rewards);
+  }, [rewards]);
+  useEffect(() => {
+    saveToStorage(LOYALTY_TRANSACTIONS_KEY, transactions);
+  }, [transactions]);
+  useEffect(() => {
+    saveToStorage(LOYALTY_CONFIG_KEY, configs);
+  }, [configs]);
 
   // ─── Station-specific data ───
-  const stationCustomers = useMemo(() => 
-    customers.filter(c => c.stationId === stationId),
+  const stationCustomers = useMemo(
+    () => customers.filter(c => c.stationId === stationId),
     [customers, stationId]
   );
-  
-  const stationRewards = useMemo(() => 
-    rewards.filter(r => r.stationId === stationId && r.isActive),
+
+  const stationRewards = useMemo(
+    () => rewards.filter(r => r.stationId === stationId && r.isActive),
     [rewards, stationId]
   );
-  
-  const stationTransactions = useMemo(() => 
-    transactions.filter(t => t.stationId === stationId),
+
+  const stationTransactions = useMemo(
+    () => transactions.filter(t => t.stationId === stationId),
     [transactions, stationId]
   );
-  
+
   const config = useMemo(() => configs[stationId], [configs, stationId]);
 
   // ─── Stats ───
   const stats: LoyaltyStats = useMemo(() => {
-    const stationCusts = stationCustomers.filter(c => c.cardStatus === 'active');
+    const stationCusts = stationCustomers.filter(
+      c => c.cardStatus === "active"
+    );
     return {
       stationId,
       totalCustomers: stationCustomers.length,
       activeCustomers: stationCusts.length,
-      totalPointsIssued: stationTransactions.filter(t => t.type === 'earn').reduce((s, t) => s + t.points, 0),
-      totalPointsRedeemed: Math.abs(stationTransactions.filter(t => t.type === 'redeem').reduce((s, t) => s + t.points, 0)),
+      totalPointsIssued: stationTransactions
+        .filter(t => t.type === "earn")
+        .reduce((s, t) => s + t.points, 0),
+      totalPointsRedeemed: Math.abs(
+        stationTransactions
+          .filter(t => t.type === "redeem")
+          .reduce((s, t) => s + t.points, 0)
+      ),
       totalRevenue: stationCusts.reduce((s, c) => s + c.totalSpent, 0),
-      averageSpend: stationCusts.length > 0 ? stationCusts.reduce((s, c) => s + c.totalSpent, 0) / stationCusts.length : 0,
+      averageSpend:
+        stationCusts.length > 0
+          ? stationCusts.reduce((s, c) => s + c.totalSpent, 0) /
+            stationCusts.length
+          : 0,
       topTierBreakdown: {
-        Bronze: stationCusts.filter(c => c.tier === 'Bronze').length,
-        Silver: stationCusts.filter(c => c.tier === 'Silver').length,
-        Gold: stationCusts.filter(c => c.tier === 'Gold').length,
-        Platinum: stationCusts.filter(c => c.tier === 'Platinum').length
-      }
+        Bronze: stationCusts.filter(c => c.tier === "Bronze").length,
+        Silver: stationCusts.filter(c => c.tier === "Silver").length,
+        Gold: stationCusts.filter(c => c.tier === "Gold").length,
+        Platinum: stationCusts.filter(c => c.tier === "Platinum").length,
+      },
     };
   }, [stationCustomers, stationTransactions, stationId]);
 
   // ─── Customer Operations ───
-  const addCustomer = useCallback((
-    data: Omit<LoyaltyCustomer, 'id' | 'stationId' | 'points' | 'lifetimePoints' | 'tier' | 'totalSpent' | 'totalVisits' | 'lastVisit' | 'joinDate' | 'cardNumber' | 'cardStatus' | 'createdAt' | 'updatedAt' | 'createdBy'>,
-    createdBy: string
-  ): LoyaltyCustomer => {
-    const stationIndex = parseInt(stationId.slice(0, 2), 16) % 100;
-    const customerIndex = stationCustomers.length + 1;
-    
-    const newCustomer: LoyaltyCustomer = {
-      ...data,
-      id: `cust_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      stationId,
-      points: 0,
-      lifetimePoints: 0,
-      tier: 'Bronze',
-      totalSpent: 0,
-      totalVisits: 0,
-      lastVisit: '-',
-      joinDate: new Date().toISOString().split('T')[0],
-      cardNumber: generateCardNumber(stationId, stationIndex, customerIndex),
-      cardStatus: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy
-    };
-    
-    setCustomers(prev => [newCustomer, ...prev]);
-    return newCustomer;
-  }, [stationId, stationCustomers.length]);
+  const addCustomer = useCallback(
+    (
+      data: Omit<
+        LoyaltyCustomer,
+        | "id"
+        | "stationId"
+        | "points"
+        | "lifetimePoints"
+        | "tier"
+        | "totalSpent"
+        | "totalVisits"
+        | "lastVisit"
+        | "joinDate"
+        | "cardNumber"
+        | "cardStatus"
+        | "createdAt"
+        | "updatedAt"
+        | "createdBy"
+      >,
+      createdBy: string
+    ): LoyaltyCustomer => {
+      const stationIndex = parseInt(stationId.slice(0, 2), 16) % 100;
+      const customerIndex = stationCustomers.length + 1;
 
-  const updateCustomer = useCallback((id: string, updates: Partial<LoyaltyCustomer>) => {
-    setCustomers(prev => prev.map(c => 
-      c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
-    ));
-  }, []);
+      const newCustomer: LoyaltyCustomer = {
+        ...data,
+        id: `cust_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        stationId,
+        points: 0,
+        lifetimePoints: 0,
+        tier: "Bronze",
+        totalSpent: 0,
+        totalVisits: 0,
+        lastVisit: "-",
+        joinDate: new Date().toISOString().split("T")[0],
+        cardNumber: generateCardNumber(stationId, stationIndex, customerIndex),
+        cardStatus: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy,
+      };
+
+      setCustomers(prev => [newCustomer, ...prev]);
+      return newCustomer;
+    },
+    [stationId, stationCustomers.length]
+  );
+
+  const updateCustomer = useCallback(
+    (id: string, updates: Partial<LoyaltyCustomer>) => {
+      setCustomers(prev =>
+        prev.map(c =>
+          c.id === id
+            ? { ...c, ...updates, updatedAt: new Date().toISOString() }
+            : c
+        )
+      );
+    },
+    []
+  );
 
   const deleteCustomer = useCallback((id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
   }, []);
 
-  const getCustomer = useCallback((id: string): LoyaltyCustomer | undefined => {
-    return customers.find(c => c.id === id);
-  }, [customers]);
+  const getCustomer = useCallback(
+    (id: string): LoyaltyCustomer | undefined => {
+      return customers.find(c => c.id === id);
+    },
+    [customers]
+  );
 
-  const findCustomerByPhone = useCallback((phone: string): LoyaltyCustomer | undefined => {
-    return customers.find(c => c.phone === phone && c.stationId === stationId);
-  }, [customers, stationId]);
+  const findCustomerByPhone = useCallback(
+    (phone: string): LoyaltyCustomer | undefined => {
+      return customers.find(
+        c => c.phone === phone && c.stationId === stationId
+      );
+    },
+    [customers, stationId]
+  );
 
-  const findCustomerByCard = useCallback((cardNumber: string): LoyaltyCustomer | undefined => {
-    return customers.find(c => c.cardNumber === cardNumber);
-  }, [customers]);
+  const findCustomerByCard = useCallback(
+    (cardNumber: string): LoyaltyCustomer | undefined => {
+      return customers.find(c => c.cardNumber === cardNumber);
+    },
+    [customers]
+  );
 
   // ─── Points Operations ───
-  const earnPoints = useCallback((
-    customerId: string,
-    saleId: string,
-    amount: number,
-    liters: number,
-    fuelType: string,
-    processedBy: string
-  ): LoyaltyTransaction | null => {
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer || !config) return null;
+  const earnPoints = useCallback(
+    (
+      customerId: string,
+      saleId: string,
+      amount: number,
+      liters: number,
+      fuelType: string,
+      processedBy: string
+    ): LoyaltyTransaction | null => {
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer || !config) return null;
 
-    const points = calculatePointsEarned(liters, amount / liters, config, customer.tier);
-    if (points === 0) return null;
+      const points = calculatePointsEarned(
+        liters,
+        amount / liters,
+        config,
+        customer.tier
+      );
+      if (points === 0) return null;
 
-    const newPoints = customer.points + points;
-    const newTier = config.autoUpgradeTier ? getTierFromPoints(newPoints, config.tierThresholds) : customer.tier;
-    const tierChanged = newTier !== customer.tier;
+      const newPoints = customer.points + points;
+      const newTier = config.autoUpgradeTier
+        ? getTierFromPoints(newPoints, config.tierThresholds)
+        : customer.tier;
+      const tierChanged = newTier !== customer.tier;
 
-    const transaction: LoyaltyTransaction = {
-      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      customerId,
-      stationId,
-      type: 'earn',
-      points,
-      previousBalance: customer.points,
-      newBalance: newPoints,
-      saleId,
-      amount,
-      liters,
-      fuelType: fuelType as any,
-      description: `Earned ${points} points for ${liters}L of ${fuelType}`,
-      processedBy,
-      processedAt: new Date().toISOString()
-    };
+      const transaction: LoyaltyTransaction = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        customerId,
+        stationId,
+        type: "earn",
+        points,
+        previousBalance: customer.points,
+        newBalance: newPoints,
+        saleId,
+        amount,
+        liters,
+        fuelType: fuelType as any,
+        description: `Earned ${points} points for ${liters}L of ${fuelType}`,
+        processedBy,
+        processedAt: new Date().toISOString(),
+      };
 
-    // Update customer
-    setCustomers(prev => prev.map(c => 
-      c.id === customerId ? {
-        ...c,
-        points: newPoints,
-        lifetimePoints: c.lifetimePoints + points,
-        tier: newTier,
-        totalSpent: c.totalSpent + amount,
-        totalVisits: c.totalVisits + 1,
-        lastVisit: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString()
-      } : c
-    ));
+      // Update customer
+      setCustomers(prev =>
+        prev.map(c =>
+          c.id === customerId
+            ? {
+                ...c,
+                points: newPoints,
+                lifetimePoints: c.lifetimePoints + points,
+                tier: newTier,
+                totalSpent: c.totalSpent + amount,
+                totalVisits: c.totalVisits + 1,
+                lastVisit: new Date().toISOString().split("T")[0],
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
 
-    setTransactions(prev => [transaction, ...prev]);
-    
-    // Trigger notification if tier changed
-    if (tierChanged && config.upgradeNotifications) {
-      // Could trigger a toast/notification here
-      console.log(`[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`);
-    }
+      setTransactions(prev => [transaction, ...prev]);
 
-    return transaction;
-  }, [customers, config, stationId]);
+      // Trigger notification if tier changed
+      if (tierChanged && config.upgradeNotifications) {
+        // Could trigger a toast/notification here
+        console.log(
+          `[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`
+        );
+      }
 
-  const redeemPoints = useCallback((
-    customerId: string,
-    rewardId: string,
-    pointsCost: number,
-    processedBy: string
-  ): LoyaltyTransaction | null => {
-    const customer = customers.find(c => c.id === customerId);
-    const reward = rewards.find(r => r.id === rewardId);
-    
-    if (!customer || !reward || customer.points < pointsCost) return null;
-    if (reward.remainingQuantity !== undefined && reward.remainingQuantity <= 0) return null;
+      return transaction;
+    },
+    [customers, config, stationId]
+  );
 
-    const transaction: LoyaltyTransaction = {
-      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      customerId,
-      stationId,
-      type: 'redeem',
-      points: -pointsCost,
-      previousBalance: customer.points,
-      newBalance: customer.points - pointsCost,
-      description: `Redeemed: ${reward.name}`,
-      reference: `RWD-${rewardId.slice(-4)}`,
-      processedBy,
-      processedAt: new Date().toISOString(),
-      rewardId,
-      rewardName: reward.name
-    };
+  const redeemPoints = useCallback(
+    (
+      customerId: string,
+      rewardId: string,
+      pointsCost: number,
+      processedBy: string
+    ): LoyaltyTransaction | null => {
+      const customer = customers.find(c => c.id === customerId);
+      const reward = rewards.find(r => r.id === rewardId);
 
-    // Update customer
-    setCustomers(prev => prev.map(c => 
-      c.id === customerId ? {
-        ...c,
-        points: c.points - pointsCost,
-        updatedAt: new Date().toISOString()
-      } : c
-    ));
+      if (!customer || !reward || customer.points < pointsCost) return null;
+      if (
+        reward.remainingQuantity !== undefined &&
+        reward.remainingQuantity <= 0
+      )
+        return null;
 
-    // Update reward quantity
-    if (reward.remainingQuantity !== undefined) {
-      setRewards(prev => prev.map(r => 
-        r.id === rewardId ? { ...r, remainingQuantity: r.remainingQuantity! - 1, updatedAt: new Date().toISOString() } : r
-      ));
-    }
+      const transaction: LoyaltyTransaction = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        customerId,
+        stationId,
+        type: "redeem",
+        points: -pointsCost,
+        previousBalance: customer.points,
+        newBalance: customer.points - pointsCost,
+        description: `Redeemed: ${reward.name}`,
+        reference: `RWD-${rewardId.slice(-4)}`,
+        processedBy,
+        processedAt: new Date().toISOString(),
+        rewardId,
+        rewardName: reward.name,
+      };
 
-    setTransactions(prev => [transaction, ...prev]);
-    return transaction;
-  }, [customers, rewards, stationId]);
+      // Update customer
+      setCustomers(prev =>
+        prev.map(c =>
+          c.id === customerId
+            ? {
+                ...c,
+                points: c.points - pointsCost,
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
 
-  const adjustPoints = useCallback((
-    customerId: string,
-    points: number,
-    reason: string,
-    processedBy: string
-  ): LoyaltyTransaction | null => {
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer) return null;
+      // Update reward quantity
+      if (reward.remainingQuantity !== undefined) {
+        setRewards(prev =>
+          prev.map(r =>
+            r.id === rewardId
+              ? {
+                  ...r,
+                  remainingQuantity: r.remainingQuantity! - 1,
+                  updatedAt: new Date().toISOString(),
+                }
+              : r
+          )
+        );
+      }
 
-    const transaction: LoyaltyTransaction = {
-      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      customerId,
-      stationId,
-      type: 'adjustment',
-      points,
-      previousBalance: customer.points,
-      newBalance: Math.max(0, customer.points + points),
-      description: reason,
-      processedBy,
-      processedAt: new Date().toISOString()
-    };
+      setTransactions(prev => [transaction, ...prev]);
+      return transaction;
+    },
+    [customers, rewards, stationId]
+  );
 
-    setCustomers(prev => prev.map(c => 
-      c.id === customerId ? {
-        ...c,
-        points: Math.max(0, c.points + points),
-        lifetimePoints: points > 0 ? c.lifetimePoints + points : c.lifetimePoints,
-        updatedAt: new Date().toISOString()
-      } : c
-    ));
+  const adjustPoints = useCallback(
+    (
+      customerId: string,
+      points: number,
+      reason: string,
+      processedBy: string
+    ): LoyaltyTransaction | null => {
+      const customer = customers.find(c => c.id === customerId);
+      if (!customer) return null;
 
-    setTransactions(prev => [transaction, ...prev]);
-    return transaction;
-  }, [customers, stationId]);
+      const transaction: LoyaltyTransaction = {
+        id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        customerId,
+        stationId,
+        type: "adjustment",
+        points,
+        previousBalance: customer.points,
+        newBalance: Math.max(0, customer.points + points),
+        description: reason,
+        processedBy,
+        processedAt: new Date().toISOString(),
+      };
+
+      setCustomers(prev =>
+        prev.map(c =>
+          c.id === customerId
+            ? {
+                ...c,
+                points: Math.max(0, c.points + points),
+                lifetimePoints:
+                  points > 0 ? c.lifetimePoints + points : c.lifetimePoints,
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+
+      setTransactions(prev => [transaction, ...prev]);
+      return transaction;
+    },
+    [customers, stationId]
+  );
 
   // ─── Reward Operations ───
-  const addReward = useCallback((data: Omit<StationReward, 'id' | 'stationId' | 'createdAt' | 'updatedAt'>): StationReward => {
-    const reward: StationReward = {
-      ...data,
-      id: `${stationId}_r_${Date.now()}`,
-      stationId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setRewards(prev => [reward, ...prev]);
-    return reward;
-  }, [stationId]);
+  const addReward = useCallback(
+    (
+      data: Omit<StationReward, "id" | "stationId" | "createdAt" | "updatedAt">
+    ): StationReward => {
+      const reward: StationReward = {
+        ...data,
+        id: `${stationId}_r_${Date.now()}`,
+        stationId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setRewards(prev => [reward, ...prev]);
+      return reward;
+    },
+    [stationId]
+  );
 
-  const updateReward = useCallback((id: string, updates: Partial<StationReward>) => {
-    setRewards(prev => prev.map(r => 
-      r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r
-    ));
-  }, []);
+  const updateReward = useCallback(
+    (id: string, updates: Partial<StationReward>) => {
+      setRewards(prev =>
+        prev.map(r =>
+          r.id === id
+            ? { ...r, ...updates, updatedAt: new Date().toISOString() }
+            : r
+        )
+      );
+    },
+    []
+  );
 
   const deleteReward = useCallback((id: string) => {
     setRewards(prev => prev.filter(r => r.id !== id));
   }, []);
 
   // ─── Config Operations ───
-  const updateConfig = useCallback((updates: Partial<StationLoyaltyConfig>) => {
-    setConfigs(prev => ({
-      ...prev,
-      [stationId]: { ...prev[stationId], ...updates, updatedAt: new Date().toISOString() }
-    }));
-  }, [stationId]);
+  const updateConfig = useCallback(
+    (updates: Partial<StationLoyaltyConfig>) => {
+      setConfigs(prev => ({
+        ...prev,
+        [stationId]: {
+          ...prev[stationId],
+          ...updates,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+    },
+    [stationId]
+  );
 
   // ─── Export/Import ───
   const exportData = useCallback(() => {
@@ -499,7 +631,7 @@ export function useLoyalty(stationId: string) {
       rewards: stationRewards,
       transactions: stationTransactions,
       config,
-      exportedAt: new Date().toISOString()
+      exportedAt: new Date().toISOString(),
     };
   }, [stationCustomers, stationRewards, stationTransactions, config]);
 
@@ -519,7 +651,7 @@ export function useLoyalty(stationId: string) {
     config,
     stats,
     isLoading,
-    
+
     // Customer operations
     addCustomer,
     updateCustomer,
@@ -527,44 +659,47 @@ export function useLoyalty(stationId: string) {
     getCustomer,
     findCustomerByPhone,
     findCustomerByCard,
-    
+
     // Points operations
     earnPoints,
     redeemPoints,
     adjustPoints,
-    
+
     // Reward operations
     addReward,
     updateReward,
     deleteReward,
-    
+
     // Config
     updateConfig,
-    
+
     // Export/Import
     exportData,
-    importCustomers
+    importCustomers,
   };
 }
 
 // ─── Multi-Station Hook ───
 export function useAllStationLoyalty() {
-  const [allCustomers, setAllCustomers] = useState<LoyaltyCustomer[]>(() => 
+  const [allCustomers, setAllCustomers] = useState<LoyaltyCustomer[]>(() =>
     loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
   );
-  const [allRewards, setAllRewards] = useState<StationReward[]>(() => 
+  const [allRewards, setAllRewards] = useState<StationReward[]>(() =>
     loadFromStorage(LOYALTY_REWARDS_KEY, [])
   );
 
-  const getStationCustomers = useCallback((stationId: string) => 
-    allCustomers.filter(c => c.stationId === stationId),
+  const getStationCustomers = useCallback(
+    (stationId: string) => allCustomers.filter(c => c.stationId === stationId),
     [allCustomers]
   );
 
-  const getCustomerStation = useCallback((customerId: string) => {
-    const customer = allCustomers.find(c => c.id === customerId);
-    return customer?.stationId;
-  }, [allCustomers]);
+  const getCustomerStation = useCallback(
+    (customerId: string) => {
+      const customer = allCustomers.find(c => c.id === customerId);
+      return customer?.stationId;
+    },
+    [allCustomers]
+  );
 
   return {
     allCustomers,
@@ -572,7 +707,7 @@ export function useAllStationLoyalty() {
     getStationCustomers,
     getCustomerStation,
     setAllCustomers,
-    setAllRewards
+    setAllRewards,
   };
 }
 

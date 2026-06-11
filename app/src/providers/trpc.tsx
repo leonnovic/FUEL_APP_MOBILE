@@ -17,18 +17,24 @@ const trpcClient = trpc.createClient({
         // Include founder session token if available (for Founder Access)
         const headers: Record<string, string> = {};
         try {
-          const sessionJson = localStorage.getItem('fuelpro_founder_session');
+          const sessionJson = localStorage.getItem("fuelpro_founder_session");
           if (sessionJson) {
             const session = JSON.parse(sessionJson);
             // Check if session is still valid (8 hours)
-            if (session.active && session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+            if (
+              session.active &&
+              session.loginTime &&
+              Date.now() - session.loginTime < 8 * 60 * 60 * 1000
+            ) {
               // Try to get the token from session, or generate from stored data
               if (session.token) {
-                headers['x-founder-token'] = session.token;
+                headers["x-founder-token"] = session.token;
               }
             }
           }
-        } catch { /* no founder session */ }
+        } catch {
+          /* no founder session */
+        }
         return headers;
       },
       fetch(input, init) {
@@ -44,9 +50,7 @@ const trpcClient = trpc.createClient({
 export function TRPCProvider({ children }: { children: ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
 }

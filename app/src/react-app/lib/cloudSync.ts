@@ -3,8 +3,8 @@
 // Auto-switches between providers for maximum reliability
 
 // Import unified cloud storage (includes R2, Upstash, Seafile, Custom API)
-export * from './cloudStorage';
-import { swr, invalidateSWR, getSWRStats, cloudStorage } from './cloudStorage';
+export * from "./cloudStorage";
+import { swr, invalidateSWR, getSWRStats, cloudStorage } from "./cloudStorage";
 
 // ═══════════════════════════════════════════════════
 // PROVIDER 1: Firebase Realtime Database
@@ -14,7 +14,7 @@ const FIREBASE_CONFIG = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
 };
 
 let firebaseDB: any = null;
@@ -22,8 +22,9 @@ let firebaseDB: any = null;
 async function initFirebase(): Promise<boolean> {
   if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return false;
   try {
-    const { initializeApp } = await import('firebase/app');
-    const { getDatabase, ref, set, get, onValue, off } = await import('firebase/database');
+    const { initializeApp } = await import("firebase/app");
+    const { getDatabase, ref, set, get, onValue, off } =
+      await import("firebase/database");
     const app = initializeApp(FIREBASE_CONFIG);
     firebaseDB = { db: getDatabase(app), ref, set, get, onValue, off };
     return true;
@@ -44,9 +45,9 @@ let supabaseClient: any = null;
 async function initSupabase(): Promise<boolean> {
   if (!SUPABASE_URL || !SUPABASE_KEY) return false;
   try {
-    const { createClient } = await import('@supabase/supabase-js');
+    const { createClient } = await import("@supabase/supabase-js");
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-    const { error } = await supabaseClient.from('health').select('*').limit(1);
+    const { error } = await supabaseClient.from("health").select("*").limit(1);
     return !error;
   } catch {
     return false;
@@ -66,24 +67,24 @@ interface SyncRecord {
   version: number;
 }
 
-const STORAGE_KEY = 'fuelpro_cloud_data';
-const SYNC_QUEUE_KEY = 'fuelpro_sync_queue';
-const LAST_SYNC_KEY = 'fuelpro_last_sync';
-const ACTIVE_PROVIDER_KEY = 'fuelpro_cloud_provider';
+const STORAGE_KEY = "fuelpro_cloud_data";
+const SYNC_QUEUE_KEY = "fuelpro_sync_queue";
+const LAST_SYNC_KEY = "fuelpro_last_sync";
+const ACTIVE_PROVIDER_KEY = "fuelpro_cloud_provider";
 
 // Device ID
 function getDeviceId(): string {
-  let id = localStorage.getItem('fuelpro_device_id');
+  let id = localStorage.getItem("fuelpro_device_id");
   if (!id) {
     id = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    localStorage.setItem('fuelpro_device_id', id);
+    localStorage.setItem("fuelpro_device_id", id);
   }
   return id;
 }
 
 // Get current active provider
 function getActiveProvider(): string {
-  return localStorage.getItem(ACTIVE_PROVIDER_KEY) || 'local';
+  return localStorage.getItem(ACTIVE_PROVIDER_KEY) || "local";
 }
 
 function setActiveProvider(provider: string): void {
@@ -94,7 +95,11 @@ function setActiveProvider(provider: string): void {
 // SAVE: Write to all available providers
 // ═══════════════════════════════════════════════════
 
-export async function cloudSave(collection: string, id: string, data: any): Promise<boolean> {
+export async function cloudSave(
+  collection: string,
+  id: string,
+  data: any
+): Promise<boolean> {
   const record: SyncRecord = {
     id,
     collection,
@@ -118,9 +123,11 @@ export async function cloudSave(collection: string, id: string, data: any): Prom
     try {
       const path = `stations/${getStationId()}/${collection}/${id}`;
       await firebaseDB.set(firebaseDB.ref(firebaseDB.db, path), record);
-      setActiveProvider('firebase');
+      setActiveProvider("firebase");
       return true;
-    } catch { /* fallback */ }
+    } catch {
+      /* fallback */
+    }
   }
 
   // Try Supabase
@@ -133,9 +140,11 @@ export async function cloudSave(collection: string, id: string, data: any): Prom
         device_id: record.deviceId,
         station_id: getStationId(),
       });
-      setActiveProvider('supabase');
+      setActiveProvider("supabase");
       return true;
-    } catch { /* fallback */ }
+    } catch {
+      /* fallback */
+    }
   }
 
   return true; // localStorage always succeeds
@@ -149,24 +158,33 @@ export async function cloudLoad(collection: string, id?: string): Promise<any> {
   const provider = getActiveProvider();
 
   // Try Firebase first
-  if (provider === 'firebase' && await initFirebase()) {
+  if (provider === "firebase" && (await initFirebase())) {
     try {
       const path = id
         ? `stations/${getStationId()}/${collection}/${id}`
         : `stations/${getStationId()}/${collection}`;
-      const snapshot = await firebaseDB.get(firebaseDB.ref(firebaseDB.db, path));
+      const snapshot = await firebaseDB.get(
+        firebaseDB.ref(firebaseDB.db, path)
+      );
       if (snapshot.exists()) return id ? snapshot.val()?.data : snapshot.val();
-    } catch { /* fallback */ }
+    } catch {
+      /* fallback */
+    }
   }
 
   // Try Supabase
-  if (provider === 'supabase' && await initSupabase()) {
+  if (provider === "supabase" && (await initSupabase())) {
     try {
-      const query = supabaseClient.from(collection).select('*').eq('station_id', getStationId());
-      if (id) query.eq('id', id);
+      const query = supabaseClient
+        .from(collection)
+        .select("*")
+        .eq("station_id", getStationId());
+      if (id) query.eq("id", id);
       const { data, error } = await query.limit(100);
       if (!error && data) return id ? data[0]?.data : data;
-    } catch { /* fallback */ }
+    } catch {
+      /* fallback */
+    }
   }
 
   // Fallback: localStorage
@@ -187,7 +205,12 @@ export async function syncAll(): Promise<{
   provider: string;
   errors: string[];
 }> {
-  const result = { uploaded: 0, downloaded: 0, provider: 'local', errors: [] as string[] };
+  const result = {
+    uploaded: 0,
+    downloaded: 0,
+    provider: "local",
+    errors: [] as string[],
+  };
 
   // Get all local data
   const localData = getLocalData();
@@ -212,8 +235,8 @@ export async function syncAll(): Promise<{
         result.downloaded = Object.keys(cloudData).length;
       }
 
-      setActiveProvider('firebase');
-      result.provider = 'firebase';
+      setActiveProvider("firebase");
+      result.provider = "firebase";
       clearSyncQueue();
       return result;
     } catch (e: any) {
@@ -236,13 +259,13 @@ export async function syncAll(): Promise<{
       }
 
       const { data: cloudRows } = await supabaseClient
-        .from('fuel_data')
-        .select('*')
-        .eq('station_id', getStationId());
+        .from("fuel_data")
+        .select("*")
+        .eq("station_id", getStationId());
       if (cloudRows) result.downloaded = cloudRows.length;
 
-      setActiveProvider('supabase');
-      result.provider = 'supabase';
+      setActiveProvider("supabase");
+      result.provider = "supabase";
       clearSyncQueue();
       return result;
     } catch (e: any) {
@@ -261,8 +284,10 @@ export async function syncAll(): Promise<{
 
 function getLocalData(): Record<string, Record<string, SyncRecord>> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-  } catch { return {}; }
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
 }
 
 function saveLocalData(data: Record<string, Record<string, SyncRecord>>): void {
@@ -271,8 +296,10 @@ function saveLocalData(data: Record<string, Record<string, SyncRecord>>): void {
 
 function getSyncQueue(): SyncRecord[] {
   try {
-    return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || '[]');
-  } catch { return []; }
+    return JSON.parse(localStorage.getItem(SYNC_QUEUE_KEY) || "[]");
+  } catch {
+    return [];
+  }
 }
 
 function queueForSync(record: SyncRecord): void {
@@ -283,23 +310,33 @@ function queueForSync(record: SyncRecord): void {
 }
 
 function clearSyncQueue(): void {
-  localStorage.setItem(SYNC_QUEUE_KEY, '[]');
+  localStorage.setItem(SYNC_QUEUE_KEY, "[]");
   localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
 }
 
 function getStationId(): string {
   try {
-    const station = JSON.parse(localStorage.getItem('fuelpro_station') || '{}');
-    return station.id || 'default';
-  } catch { return 'default'; }
+    const station = JSON.parse(localStorage.getItem("fuelpro_station") || "{}");
+    return station.id || "default";
+  } catch {
+    return "default";
+  }
 }
 
-function mergeCloudData(local: Record<string, any>, cloud: Record<string, any>): void {
+function mergeCloudData(
+  local: Record<string, any>,
+  cloud: Record<string, any>
+): void {
   for (const [collection, items] of Object.entries(cloud)) {
     if (!local[collection]) local[collection] = {};
-    for (const [id, record] of Object.entries(items as Record<string, SyncRecord>)) {
+    for (const [id, record] of Object.entries(
+      items as Record<string, SyncRecord>
+    )) {
       const localRecord = local[collection][id] as SyncRecord | undefined;
-      if (!localRecord || (record as SyncRecord).timestamp > localRecord.timestamp) {
+      if (
+        !localRecord ||
+        (record as SyncRecord).timestamp > localRecord.timestamp
+      ) {
         local[collection][id] = record;
       }
     }
@@ -328,7 +365,7 @@ export function getCloudStatus(): {
   return {
     provider: getActiveProvider(),
     deviceId: getDeviceId(),
-    lastSync: Number(localStorage.getItem(LAST_SYNC_KEY) || '0'),
+    lastSync: Number(localStorage.getItem(LAST_SYNC_KEY) || "0"),
     pendingSync: getSyncQueue().length,
     collections: Object.keys(data).length,
     totalRecords,
@@ -341,4 +378,4 @@ export function getCloudStatus(): {
 
 // Re-export for convenience
 export { swr, invalidateSWR, getSWRStats, cloudStorage };
-export type { FuelProCloudSync, SyncStatus, CloudConfig } from './cloudStorage';
+export type { FuelProCloudSync, SyncStatus, CloudConfig } from "./cloudStorage";

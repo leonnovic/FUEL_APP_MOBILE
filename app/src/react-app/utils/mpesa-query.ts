@@ -24,13 +24,16 @@ export async function queryMpesaTransactionStatus(
 ): Promise<QueryResponse> {
   // Get access token
   const auth = btoa(`${mpesaConsumerKey}:${mpesaConsumerSecret}`);
-  
-  const tokenResponse = await fetch('https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', {
-    method: 'GET',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-    },
-  });
+
+  const tokenResponse = await fetch(
+    "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Basic ${auth}`,
+      },
+    }
+  );
 
   if (!tokenResponse.ok) {
     throw new Error(`M-PESA auth failed: ${tokenResponse.statusText}`);
@@ -40,7 +43,10 @@ export async function queryMpesaTransactionStatus(
   const accessToken = tokenData.access_token;
 
   // Generate timestamp and password
-  const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:T.]/g, "")
+    .slice(0, 14);
   const password = btoa(`${mpesaShortcode}${mpesaPasskey}${timestamp}`);
 
   // Query transaction status
@@ -48,17 +54,20 @@ export async function queryMpesaTransactionStatus(
     BusinessShortCode: mpesaShortcode,
     Password: password,
     Timestamp: timestamp,
-    CheckoutRequestID: checkoutRequestId
+    CheckoutRequestID: checkoutRequestId,
   };
 
-  const queryResponse = await fetch('https://api.safaricom.co.ke/mpesa/stkpushquery/v1/query', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(queryPayload),
-  });
+  const queryResponse = await fetch(
+    "https://api.safaricom.co.ke/mpesa/stkpushquery/v1/query",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(queryPayload),
+    }
+  );
 
   if (!queryResponse.ok) {
     throw new Error(`M-PESA query failed: ${queryResponse.statusText}`);

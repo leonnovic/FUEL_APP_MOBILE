@@ -4,7 +4,10 @@
 // ============================================================
 
 /** Debounce: delay execution until ms after last call */
-export function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+export function debounce<T extends (...args: any[]) => void>(
+  fn: T,
+  ms: number
+): T {
   let timer: ReturnType<typeof setTimeout>;
   return ((...args: any[]) => {
     clearTimeout(timer);
@@ -13,7 +16,10 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, ms: number):
 }
 
 /** Throttle: execute at most once per ms */
-export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+export function throttle<T extends (...args: any[]) => void>(
+  fn: T,
+  ms: number
+): T {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   return ((...args: any[]) => {
@@ -22,7 +28,14 @@ export function throttle<T extends (...args: any[]) => void>(fn: T, ms: number):
       last = now;
       fn(...args);
     } else if (!timer) {
-      timer = setTimeout(() => { last = Date.now(); timer = null; fn(...args); }, ms - (now - last));
+      timer = setTimeout(
+        () => {
+          last = Date.now();
+          timer = null;
+          fn(...args);
+        },
+        ms - (now - last)
+      );
     }
   }) as T;
 }
@@ -32,18 +45,26 @@ export function rafThrottle<T extends (...args: any[]) => void>(fn: T): T {
   let rafId: number | null = null;
   return ((...args: any[]) => {
     if (rafId !== null) return;
-    rafId = requestAnimationFrame(() => { rafId = null; fn(...args); });
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      fn(...args);
+    });
   }) as T;
 }
 
 /** Measure function execution time */
-export function measurePerformance<T extends (...args: any[]) => any>(fn: T, label: string): T {
+export function measurePerformance<T extends (...args: any[]) => any>(
+  fn: T,
+  label: string
+): T {
   return ((...args: any[]) => {
     const start = performance.now();
     const result = fn(...args);
     const duration = performance.now() - start;
     if (duration > 16) {
-      console.warn(`[Performance] ${label} took ${duration.toFixed(1)}ms (>16ms frame budget)`);
+      console.warn(
+        `[Performance] ${label} took ${duration.toFixed(1)}ms (>16ms frame budget)`
+      );
     }
     return result;
   }) as T;
@@ -67,15 +88,18 @@ export function lazyLoadElement(
   callback: () => void,
   options?: IntersectionObserverInit
 ) {
-  if ('IntersectionObserver' in window) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          callback();
-          observer.unobserve(el);
-        }
-      });
-    }, { rootMargin: '200px', ...options });
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            callback();
+            observer.unobserve(el);
+          }
+        });
+      },
+      { rootMargin: "200px", ...options }
+    );
     observer.observe(el);
   } else {
     callback(); // Fallback
@@ -83,23 +107,26 @@ export function lazyLoadElement(
 }
 
 /** Preload critical resources */
-export function preloadResource(href: string, as: 'script' | 'style' | 'font' | 'image') {
-  const link = document.createElement('link');
-  link.rel = as === 'font' ? 'preload' : 'preload';
+export function preloadResource(
+  href: string,
+  as: "script" | "style" | "font" | "image"
+) {
+  const link = document.createElement("link");
+  link.rel = as === "font" ? "preload" : "preload";
   link.href = href;
   link.as = as;
-  if (as === 'font') link.crossOrigin = 'anonymous';
+  if (as === "font") link.crossOrigin = "anonymous";
   document.head.appendChild(link);
 }
 
 /** Report Core Web Vitals */
 export interface WebVitals {
-  lcp?: number;   // Largest Contentful Paint
-  fid?: number;   // First Input Delay
-  cls?: number;   // Cumulative Layout Shift
-  inp?: number;   // Interaction to Next Paint
-  ttfb?: number;  // Time to First Byte
-  fcp?: number;   // First Contentful Paint
+  lcp?: number; // Largest Contentful Paint
+  fid?: number; // First Input Delay
+  cls?: number; // Cumulative Layout Shift
+  inp?: number; // Interaction to Next Paint
+  ttfb?: number; // Time to First Byte
+  fcp?: number; // First Contentful Paint
 }
 
 let vitalsSnapshot: WebVitals = {};
@@ -110,23 +137,23 @@ export function getVitalsSnapshot(): WebVitals {
 
 export function initVitalsTracking(callback?: (v: WebVitals) => void) {
   // FCP
-  new PerformanceObserver((list) => {
+  new PerformanceObserver(list => {
     const entry = list.getEntries()[0] as PerformanceEntry;
     vitalsSnapshot.fcp = entry.startTime;
     callback?.({ ...vitalsSnapshot });
-  }).observe({ type: 'paint', buffered: true });
+  }).observe({ type: "paint", buffered: true });
 
   // LCP
-  new PerformanceObserver((list) => {
+  new PerformanceObserver(list => {
     const entries = list.getEntries();
     const last = entries[entries.length - 1] as PerformanceEntry;
     vitalsSnapshot.lcp = last.startTime;
     callback?.({ ...vitalsSnapshot });
-  }).observe({ type: 'largest-contentful-paint', buffered: true });
+  }).observe({ type: "largest-contentful-paint", buffered: true });
 
   // CLS
   let clsValue = 0;
-  new PerformanceObserver((list) => {
+  new PerformanceObserver(list => {
     for (const entry of list.getEntries()) {
       if (!(entry as any).hadRecentInput) {
         clsValue += (entry as any).value;
@@ -134,18 +161,20 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
     }
     vitalsSnapshot.cls = clsValue;
     callback?.({ ...vitalsSnapshot });
-  }).observe({ type: 'layout-shift', buffered: true });
+  }).observe({ type: "layout-shift", buffered: true });
 
   // TTFB
-  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+  const nav = performance.getEntriesByType(
+    "navigation"
+  )[0] as PerformanceNavigationTiming;
   if (nav) {
     vitalsSnapshot.ttfb = nav.responseStart;
   }
 
   // INP (using Event Timing API)
-  if ('PerformanceEventTiming' in window) {
+  if ("PerformanceEventTiming" in window) {
     let maxInp = 0;
-    new PerformanceObserver((list) => {
+    new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
         if ((entry as any).interactionId && entry.duration > maxInp) {
           maxInp = entry.duration;
@@ -153,23 +182,54 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
         }
       }
       callback?.({ ...vitalsSnapshot });
-    }).observe({ type: 'event', buffered: true } as PerformanceObserverInit);
+    }).observe({ type: "event", buffered: true } as PerformanceObserverInit);
   }
 }
 
 /** Check if performance targets are met */
-export function checkPerformanceTargets(vitals: WebVitals): { metric: string; value: number; target: number; pass: boolean }[] {
+export function checkPerformanceTargets(
+  vitals: WebVitals
+): { metric: string; value: number; target: number; pass: boolean }[] {
   return [
-    { metric: 'LCP', value: vitals.lcp ?? 0, target: 1500, pass: (vitals.lcp ?? Infinity) < 1500 },
-    { metric: 'INP', value: vitals.inp ?? 0, target: 100, pass: (vitals.inp ?? Infinity) < 100 },
-    { metric: 'CLS', value: vitals.cls ?? 0, target: 0.05, pass: (vitals.cls ?? Infinity) < 0.05 },
-    { metric: 'TTFB', value: vitals.ttfb ?? 0, target: 200, pass: (vitals.ttfb ?? Infinity) < 200 },
-    { metric: 'FCP', value: vitals.fcp ?? 0, target: 1000, pass: (vitals.fcp ?? Infinity) < 1000 },
+    {
+      metric: "LCP",
+      value: vitals.lcp ?? 0,
+      target: 1500,
+      pass: (vitals.lcp ?? Infinity) < 1500,
+    },
+    {
+      metric: "INP",
+      value: vitals.inp ?? 0,
+      target: 100,
+      pass: (vitals.inp ?? Infinity) < 100,
+    },
+    {
+      metric: "CLS",
+      value: vitals.cls ?? 0,
+      target: 0.05,
+      pass: (vitals.cls ?? Infinity) < 0.05,
+    },
+    {
+      metric: "TTFB",
+      value: vitals.ttfb ?? 0,
+      target: 200,
+      pass: (vitals.ttfb ?? Infinity) < 200,
+    },
+    {
+      metric: "FCP",
+      value: vitals.fcp ?? 0,
+      target: 1000,
+      pass: (vitals.fcp ?? Infinity) < 1000,
+    },
   ];
 }
 
 /** Memory usage snapshot */
-export function getMemoryUsage(): { used: number; total: number; limit: number } | null {
+export function getMemoryUsage(): {
+  used: number;
+  total: number;
+  limit: number;
+} | null {
   const perf = performance as any;
   if (perf.memory) {
     return {
@@ -184,22 +244,25 @@ export function getMemoryUsage(): { used: number; total: number; limit: number }
 /** Cache API helpers for Service Worker communication */
 export const CacheAPI = {
   async put(key: string, data: any) {
-    const cache = await caches.open('fuelpro-v1');
-    await cache.put(key, new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json' }
-    }));
+    const cache = await caches.open("fuelpro-v1");
+    await cache.put(
+      key,
+      new Response(JSON.stringify(data), {
+        headers: { "Content-Type": "application/json" },
+      })
+    );
   },
   async get(key: string): Promise<any | null> {
-    const cache = await caches.open('fuelpro-v1');
+    const cache = await caches.open("fuelpro-v1");
     const res = await cache.match(key);
     if (res) return res.json();
     return null;
   },
   async delete(key: string) {
-    const cache = await caches.open('fuelpro-v1');
+    const cache = await caches.open("fuelpro-v1");
     await cache.delete(key);
   },
   async clear() {
-    await caches.delete('fuelpro-v1');
-  }
+    await caches.delete("fuelpro-v1");
+  },
 };

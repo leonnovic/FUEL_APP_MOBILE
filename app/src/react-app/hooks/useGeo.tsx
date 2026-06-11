@@ -1,10 +1,19 @@
 // packages/store/src/useGeo.ts
 // Global Location Context — all 250+ countries, auto-detect, GPS
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { WORLD_PAYMENT_CONFIGS } from '@/react-app/config/worldPaymentConfigs';
-import { ALL_COUNTRIES, getCountryPaymentMethods } from '@/react-app/lib/world-country-utils';
-import { getEventBus, Events } from '@/react-app/lib/event-bus';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { WORLD_PAYMENT_CONFIGS } from "@/react-app/config/worldPaymentConfigs";
+import {
+  ALL_COUNTRIES,
+  getCountryPaymentMethods,
+} from "@/react-app/lib/world-country-utils";
+import { getEventBus, Events } from "@/react-app/lib/event-bus";
 
 export interface GeoState {
   countryCode: string;
@@ -24,10 +33,10 @@ export interface GeoState {
 // Dynamic default — resolves from saved location or browser, never hardcodes a specific country
 function resolveDefaultGeo(): GeoState {
   try {
-    const saved = localStorage.getItem('fuelpro_location_country');
+    const saved = localStorage.getItem("fuelpro_location_country");
     if (saved) {
       const parsed = JSON.parse(saved);
-      const cc = (parsed.currentCountry || parsed.country || '').toUpperCase();
+      const cc = (parsed.currentCountry || parsed.country || "").toUpperCase();
       if (cc) {
         const config = WORLD_PAYMENT_CONFIGS[cc];
         if (config) {
@@ -37,33 +46,35 @@ function resolveDefaultGeo(): GeoState {
             currency: config.defaultCurrency,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             locale: `en-${cc}`,
-            flag: config.flag || '🌍',
+            flag: config.flag || "🌍",
             lat: parsed.latitude || null,
             lon: parsed.longitude || null,
             city: parsed.city || null,
             address: parsed.address || null,
             isLoading: true,
-            detectedAt: parsed.detectedAt || '',
+            detectedAt: parsed.detectedAt || "",
           };
         }
       }
     }
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   // Universal fallback — uses browser timezone, not any specific country
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return {
-    countryCode: 'US',
-    countryName: 'United States',
-    currency: 'USD',
+    countryCode: "US",
+    countryName: "United States",
+    currency: "USD",
     timezone: browserTz,
-    locale: 'en-US',
-    flag: '🇺🇸',
+    locale: "en-US",
+    flag: "🇺🇸",
     lat: null,
     lon: null,
     city: null,
     address: null,
     isLoading: true,
-    detectedAt: '',
+    detectedAt: "",
   };
 }
 
@@ -73,7 +84,12 @@ interface GeoContextType {
   geo: GeoState;
   setCountry: (code: string) => void;
   refreshLocation: () => void;
-  getPaymentMethods: () => { banks: string[]; digitalWallets: string[]; cards: string[]; methods: any[] };
+  getPaymentMethods: () => {
+    banks: string[];
+    digitalWallets: string[];
+    cards: string[];
+    methods: any[];
+  };
   getTaxRate: () => number;
   isLocationReady: boolean;
 }
@@ -82,7 +98,12 @@ const GeoContext = createContext<GeoContextType>({
   geo: DEFAULT_GEO,
   setCountry: () => {},
   refreshLocation: () => {},
-  getPaymentMethods: () => ({ banks: [], digitalWallets: [], cards: [], methods: [] }),
+  getPaymentMethods: () => ({
+    banks: [],
+    digitalWallets: [],
+    cards: [],
+    methods: [],
+  }),
   getTaxRate: () => 0.16,
   isLocationReady: false,
 });
@@ -94,10 +115,14 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
   // ─── Load saved location ───
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('fuelpro_location_country');
+      const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
         const parsed = JSON.parse(saved);
-        const cc = (parsed.currentCountry || parsed.country || 'US').toUpperCase();
+        const cc = (
+          parsed.currentCountry ||
+          parsed.country ||
+          "US"
+        ).toUpperCase();
         const config = WORLD_PAYMENT_CONFIGS[cc];
         if (config) {
           setGeo(prev => ({
@@ -114,50 +139,69 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
           updateTimezoneLocale(cc, config.defaultCurrency);
         }
       }
-    } catch { /* */ }
+    } catch {
+      /* */
+    }
     setIsReady(true);
   }, []);
 
-  const updateTimezoneLocale = useCallback((countryCode: string, currency: string) => {
-    // Dynamic timezone/locale resolution — no hardcoded country maps
-    const getLocale = (cc: string, curr: string): string => {
-      try { return Intl.NumberFormat.supportedLocalesOf([`${navigator.language.slice(0, 2)}-${cc}`])[0] || `en-${cc}`; } catch { return `en-${cc}`; }
-    };
-    setGeo(prev => ({
-      ...prev,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      locale: getLocale(countryCode, currency),
-    }));
-  }, []);
+  const updateTimezoneLocale = useCallback(
+    (countryCode: string, currency: string) => {
+      // Dynamic timezone/locale resolution — no hardcoded country maps
+      const getLocale = (cc: string, curr: string): string => {
+        try {
+          return (
+            Intl.NumberFormat.supportedLocalesOf([
+              `${navigator.language.slice(0, 2)}-${cc}`,
+            ])[0] || `en-${cc}`
+          );
+        } catch {
+          return `en-${cc}`;
+        }
+      };
+      setGeo(prev => ({
+        ...prev,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        locale: getLocale(countryCode, currency),
+      }));
+    },
+    []
+  );
 
-  const setCountry = useCallback((code: string) => {
-    const upper = code.toUpperCase();
-    const config = WORLD_PAYMENT_CONFIGS[upper];
-    if (!config) return;
+  const setCountry = useCallback(
+    (code: string) => {
+      const upper = code.toUpperCase();
+      const config = WORLD_PAYMENT_CONFIGS[upper];
+      if (!config) return;
 
-    const newGeo: GeoState = {
-      ...geo,
-      countryCode: upper,
-      countryName: config.countryName,
-      currency: config.defaultCurrency,
-      isLoading: false,
-    };
-    setGeo(newGeo);
-    updateTimezoneLocale(upper, config.defaultCurrency);
+      const newGeo: GeoState = {
+        ...geo,
+        countryCode: upper,
+        countryName: config.countryName,
+        currency: config.defaultCurrency,
+        isLoading: false,
+      };
+      setGeo(newGeo);
+      updateTimezoneLocale(upper, config.defaultCurrency);
 
-    // Persist
-    localStorage.setItem('fuelpro_location_country', JSON.stringify({
-      currentCountry: upper,
-      countryName: config.countryName,
-      currency: config.defaultCurrency,
-      latitude: newGeo.lat,
-      longitude: newGeo.lon,
-      detectedAt: new Date().toISOString(),
-    }));
+      // Persist
+      localStorage.setItem(
+        "fuelpro_location_country",
+        JSON.stringify({
+          currentCountry: upper,
+          countryName: config.countryName,
+          currency: config.defaultCurrency,
+          latitude: newGeo.lat,
+          longitude: newGeo.lon,
+          detectedAt: new Date().toISOString(),
+        })
+      );
 
-    // Notify
-    getEventBus().emit(Events.LOCATION_UPDATED, newGeo);
-  }, [geo, updateTimezoneLocale]);
+      // Notify
+      getEventBus().emit(Events.LOCATION_UPDATED, newGeo);
+    },
+    [geo, updateTimezoneLocale]
+  );
 
   const refreshLocation = useCallback(() => {
     setGeo(prev => ({ ...prev, isLoading: true }));
@@ -168,11 +212,11 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
     }
 
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+      async pos => {
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
-            { headers: { 'Accept-Language': 'en' } }
+            { headers: { "Accept-Language": "en" } }
           );
           const data = await res.json();
           const cc = data.address?.country_code?.toUpperCase();
@@ -194,23 +238,36 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
             setGeo(newGeo);
             updateTimezoneLocale(cc, config.defaultCurrency);
 
-            localStorage.setItem('fuelpro_location_country', JSON.stringify({
-              currentCountry: cc,
-              countryName: config.countryName,
-              currency: config.defaultCurrency,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              city: newGeo.city,
-              address: newGeo.address,
-              detectedAt: newGeo.detectedAt,
-            }));
+            localStorage.setItem(
+              "fuelpro_location_country",
+              JSON.stringify({
+                currentCountry: cc,
+                countryName: config.countryName,
+                currency: config.defaultCurrency,
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                city: newGeo.city,
+                address: newGeo.address,
+                detectedAt: newGeo.detectedAt,
+              })
+            );
 
             getEventBus().emit(Events.LOCATION_UPDATED, newGeo);
           } else {
-            setGeo(prev => ({ ...prev, isLoading: false, lat: pos.coords.latitude, lon: pos.coords.longitude }));
+            setGeo(prev => ({
+              ...prev,
+              isLoading: false,
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+            }));
           }
         } catch {
-          setGeo(prev => ({ ...prev, isLoading: false, lat: pos.coords.latitude, lon: pos.coords.longitude }));
+          setGeo(prev => ({
+            ...prev,
+            isLoading: false,
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+          }));
         }
       },
       () => setGeo(prev => ({ ...prev, isLoading: false })),
@@ -224,21 +281,29 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
 
   const getTaxRate = useCallback(() => {
     const rates: Record<string, number> = {
-      KE: 0.16, UG: 0.18, TZ: 0.18, NG: 0.075, ZA: 0.15,
-      GH: 0.15, RW: 0.18, ET: 0.15,
+      KE: 0.16,
+      UG: 0.18,
+      TZ: 0.18,
+      NG: 0.075,
+      ZA: 0.15,
+      GH: 0.15,
+      RW: 0.18,
+      ET: 0.15,
     };
     return rates[geo.countryCode] || 0;
   }, [geo.countryCode]);
 
   return (
-    <GeoContext.Provider value={{
-      geo,
-      setCountry,
-      refreshLocation,
-      getPaymentMethods,
-      getTaxRate,
-      isLocationReady: isReady,
-    }}>
+    <GeoContext.Provider
+      value={{
+        geo,
+        setCountry,
+        refreshLocation,
+        getPaymentMethods,
+        getTaxRate,
+        isLocationReady: isReady,
+      }}
+    >
       {children}
     </GeoContext.Provider>
   );

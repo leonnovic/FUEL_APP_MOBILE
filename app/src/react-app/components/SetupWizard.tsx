@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  Building2, MapPin, Phone, Mail, Fuel, Gauge,
-  DollarSign, FileCheck, ChevronRight, ChevronLeft,
-  Check, Sparkles, Plus, Minus
-} from 'lucide-react';
-import { useFuel } from '../context/FuelContext';
-import { useStations } from '../context/StationContext';
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
+  Fuel,
+  Gauge,
+  DollarSign,
+  FileCheck,
+  ChevronRight,
+  ChevronLeft,
+  Check,
+  Sparkles,
+  Plus,
+  Minus,
+} from "lucide-react";
+import { useFuel } from "../context/FuelContext";
+import { useStations } from "../context/StationContext";
 
-const DEFAULT_CURRENCY = 'KSh ';
+const DEFAULT_CURRENCY = "KSh ";
 
 interface WizardData {
   // Step 1: Station Info
@@ -34,11 +45,11 @@ interface WizardData {
 }
 
 const STEPS = [
-  { id: 1, title: 'Station Info', icon: Building2 },
-  { id: 2, title: 'Fuel Tanks', icon: Fuel },
-  { id: 3, title: 'Pumps', icon: Gauge },
-  { id: 4, title: 'Pricing', icon: DollarSign },
-  { id: 5, title: 'KRA Setup', icon: FileCheck },
+  { id: 1, title: "Station Info", icon: Building2 },
+  { id: 2, title: "Fuel Tanks", icon: Fuel },
+  { id: 3, title: "Pumps", icon: Gauge },
+  { id: 4, title: "Pricing", icon: DollarSign },
+  { id: 5, title: "KRA Setup", icon: FileCheck },
 ];
 
 interface SetupWizardProps {
@@ -50,22 +61,22 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const { createStation, switchStation } = useStations();
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<WizardData>({
-    stationName: '',
-    location: 'Auto-detected',
-    contacts: '',
-    email: '',
+    stationName: "",
+    location: "Auto-detected",
+    contacts: "",
+    email: "",
     pmsTankCapacity: 20000,
     agoTankCapacity: 20000,
     pmsTankOpening: 0,
     agoTankOpening: 0,
     pmsCount: 2,
     agoCount: 2,
-    pmsPrice: 220.30,  // EPRA Lodwar Super Petrol price (AI confirmed May 2026)
-    agoPrice: 250.01,  // EPRA Lodwar Diesel price (AI confirmed May 2026)
-    kraPin: '',
-    vatRegNo: '',
-    physicalAddress: 'Auto-detected location',
-    etrSerialNo: '',
+    pmsPrice: 220.3, // EPRA Lodwar Super Petrol price (AI confirmed May 2026)
+    agoPrice: 250.01, // EPRA Lodwar Diesel price (AI confirmed May 2026)
+    kraPin: "",
+    vatRegNo: "",
+    physicalAddress: "Auto-detected location",
+    etrSerialNo: "",
   });
 
   const updateField = (field: keyof WizardData, value: string | number) => {
@@ -75,7 +86,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return data.stationName.trim() !== '';
+        return data.stationName.trim() !== "";
       case 2:
         return data.pmsTankCapacity > 0 || data.agoTankCapacity > 0;
       case 3:
@@ -113,7 +124,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
 
     // Update company data
     dispatch({
-      type: 'SET_COMPANY_DATA',
+      type: "SET_COMPANY_DATA",
       payload: {
         ...state.companyData,
         name: data.stationName,
@@ -123,42 +134,42 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         vatRegNo: data.vatRegNo,
         physicalAddress: data.physicalAddress || data.location,
         etrSerialNo: data.etrSerialNo,
-      }
+      },
     });
 
     // Update pumps
-    dispatch({ type: 'SET_PMS_PUMPS', payload: pmsPumps });
-    dispatch({ type: 'SET_AGO_PUMPS', payload: agoPumps });
+    dispatch({ type: "SET_PMS_PUMPS", payload: pmsPumps });
+    dispatch({ type: "SET_AGO_PUMPS", payload: agoPumps });
 
     // Update tank levels
-    dispatch({ 
-      type: 'SET_TANK_VALUES', 
-      payload: { 
+    dispatch({
+      type: "SET_TANK_VALUES",
+      payload: {
         pmsTankOpening: data.pmsTankOpening,
         agoTankOpening: data.agoTankOpening,
         pmsTankClosing: data.pmsTankOpening,
-        agoTankClosing: data.agoTankOpening 
-      }
+        agoTankClosing: data.agoTankOpening,
+      },
     });
 
     // Update prices
-    dispatch({ 
-      type: 'SET_PRICES', 
-      payload: { 
-        pmsPrice: data.pmsPrice, 
-        agoPrice: data.agoPrice 
-      }
+    dispatch({
+      type: "SET_PRICES",
+      payload: {
+        pmsPrice: data.pmsPrice,
+        agoPrice: data.agoPrice,
+      },
     });
 
     // Mark setup as complete
-    localStorage.setItem('fuelpro_setup_complete', 'true');
+    localStorage.setItem("fuelpro_setup_complete", "true");
 
     // Create the station in StationContext so it's registered and loaded
-    let newStationId = '';
+    let newStationId = "";
     try {
       const newStation = createStation({
-        name: data.stationName || 'My Fuel Station',
-        location: data.location || 'Auto-detected',
+        name: data.stationName || "My Fuel Station",
+        location: data.location || "Auto-detected",
         description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
       });
       if (newStation && newStation.id) {
@@ -167,7 +178,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         switchStation(newStation.id);
       }
     } catch (err) {
-      console.error('Station creation failed:', err);
+      console.error("Station creation failed:", err);
     }
 
     // Also write directly to localStorage as fallback
@@ -175,73 +186,87 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     try {
       const fallbackStation = {
         id: newStationId || `st_${Date.now()}`,
-        name: data.stationName || 'My Fuel Station',
-        location: data.location || 'Auto-detected',
+        name: data.stationName || "My Fuel Station",
+        location: data.location || "Auto-detected",
         description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
-        status: 'active',
+        status: "active",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        fuelTypes: ['PMS', 'AGO'],
+        fuelTypes: ["PMS", "AGO"],
         pumpCount: (data.pmsCount || 0) + (data.agoCount || 0),
         tankCount: 2,
-        managerName: '',
-        operatingHours: '24/7',
-        kraPin: data.kraPin || '',
-        phone: data.contacts || '',
-        email: data.email || '',
+        managerName: "",
+        operatingHours: "24/7",
+        kraPin: data.kraPin || "",
+        phone: data.contacts || "",
+        email: data.email || "",
         data: {},
-        theme: 'dark',
-        logo: '',
-        licenseNumber: '',
-        city: '',
-        countryCode: 'KE',
-        timezone: 'Africa/Nairobi',
+        theme: "dark",
+        logo: "",
+        licenseNumber: "",
+        city: "",
+        countryCode: "KE",
+        timezone: "Africa/Nairobi",
         coordinates: null,
-        managerPhone: '',
-        etrSerial: '',
+        managerPhone: "",
+        etrSerial: "",
         taxRate: 16,
-        access: [{
-          username: (data.stationName || 'station').toLowerCase().replace(/\s+/g, '_'),
-          passwordHash: '',
-          role: 'owner' as const,
-          permissions: ['all'],
-          grantedAt: new Date().toISOString(),
-          grantedBy: 'system',
-        }],
+        access: [
+          {
+            username: (data.stationName || "station")
+              .toLowerCase()
+              .replace(/\s+/g, "_"),
+            passwordHash: "",
+            role: "owner" as const,
+            permissions: ["all"],
+            grantedAt: new Date().toISOString(),
+            grantedBy: "system",
+          },
+        ],
         sharedUsers: [],
       };
-      
+
       // Read existing stations
-      const existingData = localStorage.getItem('fuelpro_stations_v3');
-      let existing = existingData ? JSON.parse(existingData) : { stations: [], version: '3.0' };
-      
+      const existingData = localStorage.getItem("fuelpro_stations_v3");
+      let existing = existingData
+        ? JSON.parse(existingData)
+        : { stations: [], version: "3.0" };
+
       // Add new station if not exists
       if (!existing.stations.some((s: any) => s.id === fallbackStation.id)) {
         existing.stations = [...(existing.stations || []), fallbackStation];
-        localStorage.setItem('fuelpro_stations_v3', JSON.stringify(existing));
+        localStorage.setItem("fuelpro_stations_v3", JSON.stringify(existing));
       }
-      
+
       // Set current station
-      localStorage.setItem('fuelpro_current_station_v3', fallbackStation.id);
+      localStorage.setItem("fuelpro_current_station_v3", fallbackStation.id);
       newStationId = fallbackStation.id;
     } catch (e) {
-      console.error('Fallback station save failed:', e);
+      console.error("Fallback station save failed:", e);
     }
 
     // Save wizard data to station-specific storage
     // Use detected location as fallback instead of hardcoded text
     const detectedLocation = (() => {
       try {
-        const saved = localStorage.getItem('fuelpro_location_country');
+        const saved = localStorage.getItem("fuelpro_location_country");
         if (saved) {
           const p = JSON.parse(saved);
           return p.address || p.city || p.countryName;
         }
-      } catch { /* */ }
+      } catch {
+        /* */
+      }
       return null;
     })();
-    localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_name`, data.stationName || 'My Fuel Station');
-    localStorage.setItem(`fuelpro_station_${newStationId || 'default'}_location`, data.location || detectedLocation || 'Main Station Location');
+    localStorage.setItem(
+      `fuelpro_station_${newStationId || "default"}_name`,
+      data.stationName || "My Fuel Station"
+    );
+    localStorage.setItem(
+      `fuelpro_station_${newStationId || "default"}_location`,
+      data.location || detectedLocation || "Main Station Location"
+    );
 
     // Mark setup complete and signal completion
     // Home.tsx will handle the reload
@@ -273,8 +298,12 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl mb-4 shadow-lg">
             <Fuel className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome to FuelPro</h1>
-          <p className="text-blue-200">Let's set up your fuel station in a few easy steps</p>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Welcome to FuelPro
+          </h1>
+          <p className="text-blue-200">
+            Let's set up your fuel station in a few easy steps
+          </p>
         </div>
 
         {/* Progress Steps */}
@@ -283,24 +312,34 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
             const StepIcon = step.icon;
             const isActive = step.id === currentStep;
             const isCompleted = step.id < currentStep;
-            
+
             return (
               <React.Fragment key={step.id}>
                 <div className="flex flex-col items-center">
-                  <div className={`
+                  <div
+                    className={`
                     w-10 h-10 rounded-full flex items-center justify-center transition-all
-                    ${isCompleted ? 'bg-green-500 text-white' : 
-                      isActive ? 'bg-amber-500 text-white ring-4 ring-amber-500/30' : 
-                      'bg-slate-700 text-slate-400'}
-                  `}>
+                    ${
+                      isCompleted
+                        ? "bg-green-500 text-white"
+                        : isActive
+                          ? "bg-amber-500 text-white ring-4 ring-amber-500/30"
+                          : "bg-slate-700 text-slate-400"
+                    }
+                  `}
+                  >
                     {isCompleted ? <Check size={18} /> : <StepIcon size={18} />}
                   </div>
-                  <span className={`text-xs mt-1 hidden md:block ${isActive ? 'text-amber-400' : 'text-slate-500'}`}>
+                  <span
+                    className={`text-xs mt-1 hidden md:block ${isActive ? "text-amber-400" : "text-slate-500"}`}
+                  >
                     {step.title}
                   </span>
                 </div>
                 {index < STEPS.length - 1 && (
-                  <div className={`w-8 h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-slate-700'}`} />
+                  <div
+                    className={`w-8 h-0.5 ${isCompleted ? "bg-green-500" : "bg-slate-700"}`}
+                  />
                 )}
               </React.Fragment>
             );
@@ -312,7 +351,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
             {STEPS[currentStep - 1].title}
           </h2>
-          
+
           {renderStepContent()}
 
           {/* Navigation */}
@@ -325,7 +364,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
               <ChevronLeft size={18} />
               Back
             </button>
-            
+
             {currentStep < 5 ? (
               <button
                 onClick={() => setCurrentStep(s => s + 1)}
@@ -351,7 +390,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         {currentStep === 1 && (
           <button
             onClick={() => {
-              localStorage.setItem('fuelpro_setup_complete', 'true');
+              localStorage.setItem("fuelpro_setup_complete", "true");
               onComplete();
             }}
             className="w-full mt-4 text-center text-sm text-slate-400 hover:text-white transition-colors"
@@ -382,7 +421,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.stationName}
-            onChange={(e) => updateField('stationName', e.target.value)}
+            onChange={e => updateField("stationName", e.target.value)}
             placeholder="e.g., Sunrise Petrol Station"
             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -398,7 +437,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.location}
-            onChange={(e) => updateField('location', e.target.value)}
+            onChange={e => updateField("location", e.target.value)}
             placeholder="e.g., Mombasa Road, Nairobi"
             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -415,7 +454,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
             <input
               type="tel"
               value={data.contacts}
-              onChange={(e) => updateField('contacts', e.target.value)}
+              onChange={e => updateField("contacts", e.target.value)}
               placeholder="e.g., 0712 345 678"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
@@ -430,7 +469,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
             <input
               type="email"
               value={data.email}
-              onChange={(e) => updateField('email', e.target.value)}
+              onChange={e => updateField("email", e.target.value)}
               placeholder="e.g., info@station.co.ke"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
@@ -445,31 +484,42 @@ function TanksStep({ data, updateField }: StepProps) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Configure your fuel storage tanks. You can adjust capacities and current stock levels.
+        Configure your fuel storage tanks. You can adjust capacities and current
+        stock levels.
       </p>
 
       {/* PMS Tank */}
       <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-5 border border-green-200 dark:border-green-800">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <h3 className="font-semibold text-green-800 dark:text-green-300">PMS (Petrol) Tank</h3>
+          <h3 className="font-semibold text-green-800 dark:text-green-300">
+            PMS (Petrol) Tank
+          </h3>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-green-700 dark:text-green-400 mb-1">Capacity (Litres)</label>
+            <label className="block text-xs text-green-700 dark:text-green-400 mb-1">
+              Capacity (Litres)
+            </label>
             <input
               type="number"
               value={data.pmsTankCapacity}
-              onChange={(e) => updateField('pmsTankCapacity', Number(e.target.value))}
+              onChange={e =>
+                updateField("pmsTankCapacity", Number(e.target.value))
+              }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-xs text-green-700 dark:text-green-400 mb-1">Current Stock (Litres)</label>
+            <label className="block text-xs text-green-700 dark:text-green-400 mb-1">
+              Current Stock (Litres)
+            </label>
             <input
               type="number"
               value={data.pmsTankOpening}
-              onChange={(e) => updateField('pmsTankOpening', Number(e.target.value))}
+              onChange={e =>
+                updateField("pmsTankOpening", Number(e.target.value))
+              }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white"
             />
           </div>
@@ -480,24 +530,34 @@ function TanksStep({ data, updateField }: StepProps) {
       <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl p-5 border border-amber-200 dark:border-amber-800">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-          <h3 className="font-semibold text-amber-800 dark:text-amber-300">AGO (Diesel) Tank</h3>
+          <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+            AGO (Diesel) Tank
+          </h3>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-amber-700 dark:text-amber-400 mb-1">Capacity (Litres)</label>
+            <label className="block text-xs text-amber-700 dark:text-amber-400 mb-1">
+              Capacity (Litres)
+            </label>
             <input
               type="number"
               value={data.agoTankCapacity}
-              onChange={(e) => updateField('agoTankCapacity', Number(e.target.value))}
+              onChange={e =>
+                updateField("agoTankCapacity", Number(e.target.value))
+              }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="block text-xs text-amber-700 dark:text-amber-400 mb-1">Current Stock (Litres)</label>
+            <label className="block text-xs text-amber-700 dark:text-amber-400 mb-1">
+              Current Stock (Litres)
+            </label>
             <input
               type="number"
               value={data.agoTankOpening}
-              onChange={(e) => updateField('agoTankOpening', Number(e.target.value))}
+              onChange={e =>
+                updateField("agoTankOpening", Number(e.target.value))
+              }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white"
             />
           </div>
@@ -508,7 +568,17 @@ function TanksStep({ data, updateField }: StepProps) {
 }
 
 function PumpsStep({ data, updateField }: StepProps) {
-  const PumpCounter = ({ label, value, onChange, color }: { label: string; value: number; onChange: (n: number) => void; color: string }) => (
+  const PumpCounter = ({
+    label,
+    value,
+    onChange,
+    color,
+  }: {
+    label: string;
+    value: number;
+    onChange: (n: number) => void;
+    color: string;
+  }) => (
     <div className={`p-5 rounded-xl border ${color}`}>
       <h3 className="font-medium mb-4">{label}</h3>
       <div className="flex items-center justify-center gap-4">
@@ -527,7 +597,7 @@ function PumpsStep({ data, updateField }: StepProps) {
         </button>
       </div>
       <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-2">
-        {value === 1 ? '1 pump' : `${value} pumps`}
+        {value === 1 ? "1 pump" : `${value} pumps`}
       </p>
     </div>
   );
@@ -537,25 +607,26 @@ function PumpsStep({ data, updateField }: StepProps) {
       <p className="text-sm text-slate-500 dark:text-slate-400">
         How many dispensing pumps does your station have for each fuel type?
       </p>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <PumpCounter
           label="PMS Pumps"
           value={data.pmsCount}
-          onChange={(n) => updateField('pmsCount', n)}
+          onChange={n => updateField("pmsCount", n)}
           color="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
         />
         <PumpCounter
           label="AGO Pumps"
           value={data.agoCount}
-          onChange={(n) => updateField('agoCount', n)}
+          onChange={n => updateField("agoCount", n)}
           color="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
         />
       </div>
 
       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
         <p className="text-sm text-blue-700 dark:text-blue-300">
-          You can add more pumps or rename them later from the Sales Tracking section.
+          You can add more pumps or rename them later from the Sales Tracking
+          section.
         </p>
       </div>
     </div>
@@ -566,7 +637,8 @@ function PricingStep({ data, updateField }: StepProps) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Set your current fuel prices. These are used for sales calculations and receipts.
+        Set your current fuel prices. These are used for sales calculations and
+        receipts.
       </p>
 
       <div className="grid grid-cols-2 gap-6">
@@ -574,42 +646,55 @@ function PricingStep({ data, updateField }: StepProps) {
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-5 border border-green-200 dark:border-green-800">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-sm font-medium text-green-800 dark:text-green-300">PMS (Petrol)</span>
+            <span className="text-sm font-medium text-green-800 dark:text-green-300">
+              PMS (Petrol)
+            </span>
           </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-green-600">{DEFAULT_CURRENCY}</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-green-600">
+              {DEFAULT_CURRENCY}
+            </span>
             <input
               type="number"
               value={data.pmsPrice}
-              onChange={(e) => updateField('pmsPrice', Number(e.target.value))}
+              onChange={e => updateField("pmsPrice", Number(e.target.value))}
               className="w-full pl-14 pr-4 py-4 text-2xl font-bold bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white text-center"
             />
           </div>
-          <p className="text-xs text-center text-green-600 dark:text-green-400 mt-2">per litre</p>
+          <p className="text-xs text-center text-green-600 dark:text-green-400 mt-2">
+            per litre
+          </p>
         </div>
 
         {/* AGO Price */}
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl p-5 border border-amber-200 dark:border-amber-800">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">AGO (Diesel)</span>
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              AGO (Diesel)
+            </span>
           </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-amber-600">{DEFAULT_CURRENCY}</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-amber-600">
+              {DEFAULT_CURRENCY}
+            </span>
             <input
               type="number"
               value={data.agoPrice}
-              onChange={(e) => updateField('agoPrice', Number(e.target.value))}
+              onChange={e => updateField("agoPrice", Number(e.target.value))}
               className="w-full pl-14 pr-4 py-4 text-2xl font-bold bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white text-center"
             />
           </div>
-          <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-2">per litre</p>
+          <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-2">
+            per litre
+          </p>
         </div>
       </div>
 
       <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
         <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-          Prices can be updated anytime from the Sales Tracking or Point of Sale tabs
+          Prices can be updated anytime from the Sales Tracking or Point of Sale
+          tabs
         </p>
       </div>
     </div>
@@ -621,7 +706,8 @@ function KRAStep({ data, updateField }: StepProps) {
     <div className="space-y-5">
       <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-6">
         <p className="text-sm text-amber-700 dark:text-amber-300">
-          This section is optional. You can configure KRA eTIMS compliance later from Settings.
+          This section is optional. You can configure KRA eTIMS compliance later
+          from Settings.
         </p>
       </div>
 
@@ -633,7 +719,7 @@ function KRAStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.kraPin}
-            onChange={(e) => updateField('kraPin', e.target.value.toUpperCase())}
+            onChange={e => updateField("kraPin", e.target.value.toUpperCase())}
             placeholder="e.g., P001234567X"
             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -645,7 +731,7 @@ function KRAStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.vatRegNo}
-            onChange={(e) => updateField('vatRegNo', e.target.value)}
+            onChange={e => updateField("vatRegNo", e.target.value)}
             placeholder="Optional"
             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -659,7 +745,7 @@ function KRAStep({ data, updateField }: StepProps) {
         <input
           type="text"
           value={data.physicalAddress}
-          onChange={(e) => updateField('physicalAddress', e.target.value)}
+          onChange={e => updateField("physicalAddress", e.target.value)}
           placeholder="e.g., Plot 123, Mombasa Road, Nairobi"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
@@ -672,7 +758,7 @@ function KRAStep({ data, updateField }: StepProps) {
         <input
           type="text"
           value={data.etrSerialNo}
-          onChange={(e) => updateField('etrSerialNo', e.target.value)}
+          onChange={e => updateField("etrSerialNo", e.target.value)}
           placeholder="Optional - from your ETR device"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />

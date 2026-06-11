@@ -32,13 +32,15 @@ export function triggerSoftReload(delayMs = 0): void {
 /** Event-based reload — broadcasts to all app components */
 export function broadcastReload(): void {
   try {
-    window.dispatchEvent(new CustomEvent('fuelpro:app-reload'));
-  } catch { /* */ }
+    window.dispatchEvent(new CustomEvent("fuelpro:app-reload"));
+  } catch {
+    /* */
+  }
 }
 
 /** Listen for reload broadcasts */
 export function listenForReload(cb: () => void): () => void {
   const handler = () => cb();
-  window.addEventListener('fuelpro:app-reload', handler);
-  return () => window.removeEventListener('fuelpro:app-reload', handler);
+  window.addEventListener("fuelpro:app-reload", handler);
+  return () => window.removeEventListener("fuelpro:app-reload", handler);
 }

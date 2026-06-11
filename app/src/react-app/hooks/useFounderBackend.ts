@@ -53,10 +53,17 @@ export function useFounderBackend() {
           severity,
           timestamp: new Date().toISOString(),
         };
-        const existing = JSON.parse(localStorage.getItem("fuelpro_founder_audit") || "[]");
+        const existing = JSON.parse(
+          localStorage.getItem("fuelpro_founder_audit") || "[]"
+        );
         existing.unshift(entry);
-        localStorage.setItem("fuelpro_founder_audit", JSON.stringify(existing.slice(0, 1000)));
-      } catch { /* ignore */ }
+        localStorage.setItem(
+          "fuelpro_founder_audit",
+          JSON.stringify(existing.slice(0, 1000))
+        );
+      } catch {
+        /* ignore */
+      }
 
       // Also persist to backend (non-blocking)
       logMutation.mutate({ event, detail, severity });
@@ -65,13 +72,11 @@ export function useFounderBackend() {
   );
 
   /* ─── Audit Log List ─── */
-  const {
-    data: dbAuditLogs,
-    isLoading: auditLoading,
-  } = trpc.audit.listAll.useQuery(undefined, {
-    staleTime: 1000 * 60 * 2, // 2 min cache
-    retry: 1,
-  });
+  const { data: dbAuditLogs, isLoading: auditLoading } =
+    trpc.audit.listAll.useQuery(undefined, {
+      staleTime: 1000 * 60 * 2, // 2 min cache
+      retry: 1,
+    });
 
   // Merge DB logs with localStorage fallback
   const auditLog: AuditEntry[] = useMemo(() => {
@@ -82,16 +87,27 @@ export function useFounderBackend() {
         detail: log.detail || "",
         user: "FOUNDER",
         severity: (log.severity as AuditSeverity) || "info",
-        timestamp: log.createdAt ? new Date(log.createdAt).toISOString() : new Date().toISOString(),
+        timestamp: log.createdAt
+          ? new Date(log.createdAt).toISOString()
+          : new Date().toISOString(),
       }));
     }
     // Fallback to localStorage
     try {
       const stored = localStorage.getItem("fuelpro_founder_audit");
       if (stored) return JSON.parse(stored);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return [
-      { id: "1", event: "System Initialized", detail: "FuelPro admin panel created", user: "SYSTEM", severity: "info" as const, timestamp: new Date().toISOString() },
+      {
+        id: "1",
+        event: "System Initialized",
+        detail: "FuelPro admin panel created",
+        user: "SYSTEM",
+        severity: "info" as const,
+        timestamp: new Date().toISOString(),
+      },
     ];
   }, [dbAuditLogs]);
 
@@ -102,10 +118,13 @@ export function useFounderBackend() {
   });
 
   /* ─── Founder Session (2FA / Password / Contact) ─── */
-  const { data: dbFounderSession } = trpc.audit.getFounderSession.useQuery(undefined, {
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  const { data: dbFounderSession } = trpc.audit.getFounderSession.useQuery(
+    undefined,
+    {
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    }
+  );
 
   const upsertSessionMutation = trpc.audit.upsertFounderSession.useMutation({
     onSuccess: () => {
@@ -136,7 +155,9 @@ export function useFounderBackend() {
           passwordHash: null,
         };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return {
       twoFactorEnabled: false,
       twoFactorSecret: null,
@@ -160,46 +181,60 @@ export function useFounderBackend() {
       // Also persist to localStorage for offline fallback
       if (data.twoFactorEnabled !== undefined) {
         try {
-          const existing = JSON.parse(localStorage.getItem("fuelpro_founder_2fa") || "{}");
+          const existing = JSON.parse(
+            localStorage.getItem("fuelpro_founder_2fa") || "{}"
+          );
           existing.enabled = data.twoFactorEnabled;
           if (data.twoFactorSecret) existing.secret = data.twoFactorSecret;
           localStorage.setItem("fuelpro_founder_2fa", JSON.stringify(existing));
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       if (data.contactEmail || data.contactPhone) {
         try {
-          const existing = JSON.parse(localStorage.getItem("fuelpro_founder_contact") || "{}");
+          const existing = JSON.parse(
+            localStorage.getItem("fuelpro_founder_contact") || "{}"
+          );
           if (data.contactEmail) existing.email = data.contactEmail;
           if (data.contactPhone) existing.phone = data.contactPhone;
-          localStorage.setItem("fuelpro_founder_contact", JSON.stringify(existing));
-        } catch { /* ignore */ }
+          localStorage.setItem(
+            "fuelpro_founder_contact",
+            JSON.stringify(existing)
+          );
+        } catch {
+          /* ignore */
+        }
       }
       if (data.passwordHash) {
         try {
-          const existing = JSON.parse(localStorage.getItem("fuelpro_founder_password") || "{}");
+          const existing = JSON.parse(
+            localStorage.getItem("fuelpro_founder_password") || "{}"
+          );
           existing.password = data.passwordHash;
-          localStorage.setItem("fuelpro_founder_password", JSON.stringify(existing));
-        } catch { /* ignore */ }
+          localStorage.setItem(
+            "fuelpro_founder_password",
+            JSON.stringify(existing)
+          );
+        } catch {
+          /* ignore */
+        }
       }
     },
     [upsertSessionMutation]
   );
 
   /* ─── Stations (from backend) ─── */
-  const {
-    data: stationsData,
-    isLoading: stationsLoading,
-  } = trpc.station.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 2,
-    retry: 1,
-  });
+  const { data: stationsData, isLoading: stationsLoading } =
+    trpc.station.list.useQuery(undefined, {
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    });
 
   const stationCount = stationsData?.length || 0;
 
   /* ─── Sales Analytics (from backend) ─── */
-  const {
-    data: salesAnalytics,
-  } = trpc.sale.analytics.useQuery(undefined, {
+  const { data: salesAnalytics } = trpc.sale.analytics.useQuery(undefined, {
     staleTime: 1000 * 60 * 2,
     retry: 1,
   });

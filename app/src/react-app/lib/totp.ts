@@ -3,11 +3,11 @@
 // Uses HMAC-SHA1 simulation for client-side 2FA
 // ============================================================
 
-const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 /** Generate a random Base32 secret (32 chars) */
 export function genSecret(): string {
-  let secret = '';
+  let secret = "";
   const arr = new Uint8Array(20);
   crypto.getRandomValues(arr);
   for (let i = 0; i < arr.length; i++) {
@@ -20,10 +20,10 @@ export function genSecret(): string {
 function base32Decode(secret: string): Uint8Array {
   const bits = secret
     .toUpperCase()
-    .replace(/[^A-Z2-7]/g, '')
-    .split('')
-    .map(c => BASE32_CHARS.indexOf(c).toString(2).padStart(5, '0'))
-    .join('');
+    .replace(/[^A-Z2-7]/g, "")
+    .split("")
+    .map(c => BASE32_CHARS.indexOf(c).toString(2).padStart(5, "0"))
+    .join("");
   const bytes: number[] = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) {
     bytes.push(parseInt(bits.substring(i, i + 8), 2));
@@ -32,16 +32,26 @@ function base32Decode(secret: string): Uint8Array {
 }
 
 /** Generate HMAC-SHA1 (simplified for client-side use) */
-async function hmacSha1(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
+async function hmacSha1(
+  key: Uint8Array,
+  data: Uint8Array
+): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey(
-    'raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+    "raw",
+    key,
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
   );
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, data);
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, data);
   return new Uint8Array(sig);
 }
 
 /** Generate TOTP code from secret at given time step */
-export async function genCode(secret: string, timestamp?: number): Promise<string> {
+export async function genCode(
+  secret: string,
+  timestamp?: number
+): Promise<string> {
   const step = Math.floor((timestamp || Date.now()) / 30000);
   const key = base32Decode(secret);
 
@@ -56,15 +66,19 @@ export async function genCode(secret: string, timestamp?: number): Promise<strin
   const hmac = await hmacSha1(key, counter);
   const offset = hmac[hmac.length - 1] & 0x0f;
   const code =
-    ((hmac[offset] & 0x7f) << 24 |
-      (hmac[offset + 1] & 0xff) << 16 |
-      (hmac[offset + 2] & 0xff) << 8 |
-      (hmac[offset + 3] & 0xff)) % 1000000;
-  return code.toString().padStart(6, '0');
+    (((hmac[offset] & 0x7f) << 24) |
+      ((hmac[offset + 1] & 0xff) << 16) |
+      ((hmac[offset + 2] & 0xff) << 8) |
+      (hmac[offset + 3] & 0xff)) %
+    1000000;
+  return code.toString().padStart(6, "0");
 }
 
 /** Verify a TOTP code with window of +/- 1 step */
-export async function verifyCode(secret: string, code: string): Promise<boolean> {
+export async function verifyCode(
+  secret: string,
+  code: string
+): Promise<boolean> {
   const now = Date.now();
   for (let i = -1; i <= 1; i++) {
     const expected = await genCode(secret, now + i * 30000);
@@ -81,5 +95,5 @@ export function qrData(secret: string, label: string): string {
 
 /** Generate a setup key display (grouped by 4) */
 export function formatSecret(secret: string): string {
-  return secret.replace(/(.{4})/g, '$1 ').trim();
+  return secret.replace(/(.{4})/g, "$1 ").trim();
 }

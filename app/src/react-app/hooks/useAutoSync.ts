@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   runFullSync,
   isSyncDue,
@@ -11,7 +11,7 @@ import {
   type TaxRateData,
   type ExchangeRateData,
   type RegulatoryUpdate,
-} from '@/react-app/services/DataSyncService';
+} from "@/react-app/services/DataSyncService";
 
 interface UseAutoSyncReturn {
   // Status
@@ -33,12 +33,22 @@ interface UseAutoSyncReturn {
 
 export function useAutoSync(countryCode: string): UseAutoSyncReturn {
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(localStorage.getItem('fuelpro_last_full_sync'));
+  const [lastSync, setLastSync] = useState<string | null>(
+    localStorage.getItem("fuelpro_last_full_sync")
+  );
   const [error, setError] = useState<string | null>(null);
-  const [fuelPrice, setFuelPrice] = useState<FuelPriceData | null>(() => getSyncedFuelPrice(countryCode));
-  const [taxRates, setTaxRates] = useState<TaxRateData | null>(() => getSyncedTaxRates(countryCode));
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRateData | null>(() => getSyncedExchangeRates());
-  const [regulatoryUpdates, setRegulatoryUpdates] = useState<RegulatoryUpdate[]>(() => getRegulatoryUpdates(countryCode));
+  const [fuelPrice, setFuelPrice] = useState<FuelPriceData | null>(() =>
+    getSyncedFuelPrice(countryCode)
+  );
+  const [taxRates, setTaxRates] = useState<TaxRateData | null>(() =>
+    getSyncedTaxRates(countryCode)
+  );
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateData | null>(
+    () => getSyncedExchangeRates()
+  );
+  const [regulatoryUpdates, setRegulatoryUpdates] = useState<
+    RegulatoryUpdate[]
+  >(() => getRegulatoryUpdates(countryCode));
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const doSync = useCallback(async () => {
@@ -80,11 +90,14 @@ export function useAutoSync(countryCode: string): UseAutoSyncReturn {
     }
 
     // Periodic check every 15 minutes
-    intervalRef.current = setInterval(() => {
-      if (isSyncDue(countryCode)) {
-        doSync();
-      }
-    }, 1000 * 60 * 15);
+    intervalRef.current = setInterval(
+      () => {
+        if (isSyncDue(countryCode)) {
+          doSync();
+        }
+      },
+      1000 * 60 * 15
+    );
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -101,31 +114,48 @@ export function useAutoSync(countryCode: string): UseAutoSyncReturn {
         setTaxRates(getSyncedTaxRates(countryCode));
         setExchangeRates(getSyncedExchangeRates());
         setRegulatoryUpdates(getRegulatoryUpdates(countryCode));
-        setLastSync(localStorage.getItem('fuelpro_last_full_sync'));
+        setLastSync(localStorage.getItem("fuelpro_last_full_sync"));
       }
     };
 
-    window.addEventListener('fuelpro-sync-complete', handleSyncEvent);
-    return () => window.removeEventListener('fuelpro-sync-complete', handleSyncEvent);
+    window.addEventListener("fuelpro-sync-complete", handleSyncEvent);
+    return () =>
+      window.removeEventListener("fuelpro-sync-complete", handleSyncEvent);
   }, [countryCode]);
 
-  const dismissUpdate = useCallback((id: string) => {
-    setRegulatoryUpdates(prev => prev.filter(u => u.id !== id));
-    // Also update localStorage
-    const updated = regulatoryUpdates.filter(u => u.id !== id);
-    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(updated));
-  }, [countryCode, regulatoryUpdates]);
+  const dismissUpdate = useCallback(
+    (id: string) => {
+      setRegulatoryUpdates(prev => prev.filter(u => u.id !== id));
+      // Also update localStorage
+      const updated = regulatoryUpdates.filter(u => u.id !== id);
+      localStorage.setItem(
+        `fuelpro_regulatory_${countryCode}`,
+        JSON.stringify(updated)
+      );
+    },
+    [countryCode, regulatoryUpdates]
+  );
 
-  const markUpdateRead = useCallback((id: string) => {
-    setRegulatoryUpdates(prev =>
-      prev.map(u => u.id === id ? { ...u, read: true } : u)
-    );
-    const updated = regulatoryUpdates.map(u => u.id === id ? { ...u, read: true } : u);
-    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(updated));
-  }, [countryCode, regulatoryUpdates]);
+  const markUpdateRead = useCallback(
+    (id: string) => {
+      setRegulatoryUpdates(prev =>
+        prev.map(u => (u.id === id ? { ...u, read: true } : u))
+      );
+      const updated = regulatoryUpdates.map(u =>
+        u.id === id ? { ...u, read: true } : u
+      );
+      localStorage.setItem(
+        `fuelpro_regulatory_${countryCode}`,
+        JSON.stringify(updated)
+      );
+    },
+    [countryCode, regulatoryUpdates]
+  );
 
   const unreadCount = regulatoryUpdates.filter(u => !u.read).length;
-  const highPriorityCount = regulatoryUpdates.filter(u => !u.read && u.priority === 'high').length;
+  const highPriorityCount = regulatoryUpdates.filter(
+    u => !u.read && u.priority === "high"
+  ).length;
 
   return {
     isSyncing,

@@ -1,10 +1,10 @@
 import { HashRouter as Router, Routes, Route, Navigate } from "react-router";
-import { AuthProvider, useAuth } from '@/react-app/context/AuthContext';
-import { StationProvider } from '@/react-app/context/StationContext';
-import { TenantProvider } from '@/react-app/context/TenantContext';
-import { ThemeProvider } from '@/react-app/context/ThemeContext';
-import { LocalizationProvider } from '@/react-app/context/LocalizationContext';
-import { PermissionProvider } from '@/react-app/context/PermissionContext';
+import { AuthProvider, useAuth } from "@/react-app/context/AuthContext";
+import { StationProvider } from "@/react-app/context/StationContext";
+import { TenantProvider } from "@/react-app/context/TenantContext";
+import { ThemeProvider } from "@/react-app/context/ThemeContext";
+import { LocalizationProvider } from "@/react-app/context/LocalizationContext";
+import { PermissionProvider } from "@/react-app/context/PermissionContext";
 import { FuelProvider } from "@/react-app/context/FuelContext";
 import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
@@ -29,13 +29,13 @@ function RouteFallback() {
 }
 
 // Lazy-load heavy components to reduce initial bundle
-const FounderAccessV2 = lazy(() => import('@/react-app/pages/FounderSimple'));
+const FounderAccessV2 = lazy(() => import("@/react-app/pages/FounderSimple"));
 
 /** Detect country from localStorage or timezone */
 function useDetectedCountry(): string {
   return useMemo(() => {
     try {
-      const saved = localStorage.getItem('fuelpro_location_country');
+      const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
         const parsed = JSON.parse(saved);
         const cc = parsed.currentCountry || parsed.country;
@@ -43,13 +43,14 @@ function useDetectedCountry(): string {
       }
     } catch {}
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz.includes('Nairobi')) return 'KE';
-    if (tz.includes('Lagos')) return 'NG';
-    if (tz.includes('Johannesburg')) return 'ZA';
-    if (tz.includes('Dar_es_Salaam') || tz.includes('Dar es Salaam')) return 'TZ';
-    if (tz.includes('Kampala')) return 'UG';
-    if (tz.includes('Accra')) return 'GH';
-    return 'US';
+    if (tz.includes("Nairobi")) return "KE";
+    if (tz.includes("Lagos")) return "NG";
+    if (tz.includes("Johannesburg")) return "ZA";
+    if (tz.includes("Dar_es_Salaam") || tz.includes("Dar es Salaam"))
+      return "TZ";
+    if (tz.includes("Kampala")) return "UG";
+    if (tz.includes("Accra")) return "GH";
+    return "US";
   }, []);
 }
 
@@ -63,11 +64,17 @@ function MainAppLoader() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 text-center">
           <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-amber-400 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-white font-serif">FuelPro</h2>
-          <p className="text-gray-300 mt-2 text-sm">Initializing multi-tenant systems...</p>
+          <h2 className="text-xl font-semibold text-white font-serif">
+            FuelPro
+          </h2>
+          <p className="text-gray-300 mt-2 text-sm">
+            Initializing multi-tenant systems...
+          </p>
           <div className="mt-4 flex items-center gap-2 justify-center">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-xs text-gray-400">Region: {detectedCountry}</span>
+            <span className="text-xs text-gray-400">
+              Region: {detectedCountry}
+            </span>
           </div>
         </div>
       </div>
@@ -101,13 +108,22 @@ export default function App() {
               <Router>
                 <Routes>
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                  <Route path="/founder" element={
-                    <Suspense fallback={<RouteFallback />}>
-                      <FounderAccessV2 />
-                    </Suspense>
-                  } />
-                  <Route path="/founder-v1" element={<Navigate to="/founder" replace />} />
-                  <Route path="/admin" element={<Navigate to="/founder" replace />} />
+                  <Route
+                    path="/founder"
+                    element={
+                      <Suspense fallback={<RouteFallback />}>
+                        <FounderAccessV2 />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/founder-v1"
+                    element={<Navigate to="/founder" replace />}
+                  />
+                  <Route
+                    path="/admin"
+                    element={<Navigate to="/founder" replace />}
+                  />
 
                   {/* Password Reset - public */}
                   <Route path="/reset-password" element={<PasswordReset />} />

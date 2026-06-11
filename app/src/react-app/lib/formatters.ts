@@ -1,14 +1,18 @@
 // packages/utils/src/formatters.ts
 // Dynamic Formatting & Compliance Adapter for all 250+ countries
 
-import { WORLD_PAYMENT_CONFIGS } from '@/react-app/config/worldPaymentConfigs';
+import { WORLD_PAYMENT_CONFIGS } from "@/react-app/config/worldPaymentConfigs";
 
 // ─── Currency formatter with Intl.NumberFormat ───
-export function formatCurrency(amount: number, currency: string, locale?: string): string {
+export function formatCurrency(
+  amount: number,
+  currency: string,
+  locale?: string
+): string {
   const resolvedLocale = resolveLocale(currency, locale);
   try {
     return new Intl.NumberFormat(resolvedLocale, {
-      style: 'currency',
+      style: "currency",
       currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -24,7 +28,7 @@ export function formatCurrencyShort(amount: number, currency: string): string {
   const locale = resolveLocale(currency);
   try {
     return new Intl.NumberFormat(locale, {
-      style: 'currency',
+      style: "currency",
       currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
@@ -38,7 +42,10 @@ export function formatCurrencyShort(amount: number, currency: string): string {
 export function formatCompactNumber(num: number, locale?: string): string {
   const l = locale || getCurrentLocale();
   try {
-    return new Intl.NumberFormat(l, { notation: 'compact', compactDisplay: 'short' }).format(num);
+    return new Intl.NumberFormat(l, {
+      notation: "compact",
+      compactDisplay: "short",
+    }).format(num);
   } catch {
     if (num >= 1e9) return `${(num / 1e9).toFixed(1)}B`;
     if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`;
@@ -48,55 +55,80 @@ export function formatCompactNumber(num: number, locale?: string): string {
 }
 
 // ─── Date formatting with timezone ───
-export function formatLocalDate(date: Date | string, timezone?: string, locale?: string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatLocalDate(
+  date: Date | string,
+  timezone?: string,
+  locale?: string
+): string {
+  const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
   const l = locale || getCurrentLocale();
   try {
-    return new Intl.DateTimeFormat(l, { timeZone: tz, dateStyle: 'medium' }).format(d);
+    return new Intl.DateTimeFormat(l, {
+      timeZone: tz,
+      dateStyle: "medium",
+    }).format(d);
   } catch {
     return d.toLocaleDateString(l);
   }
 }
 
 // ─── Date + time formatting ───
-export function formatLocalDateTime(date: Date | string, timezone?: string, locale?: string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatLocalDateTime(
+  date: Date | string,
+  timezone?: string,
+  locale?: string
+): string {
+  const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
   const l = locale || getCurrentLocale();
   try {
-    return new Intl.DateTimeFormat(l, { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' }).format(d);
+    return new Intl.DateTimeFormat(l, {
+      timeZone: tz,
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(d);
   } catch {
     return d.toLocaleString(l);
   }
 }
 
 // ─── Time formatting ───
-export function formatLocalTime(date: Date | string, timezone?: string, locale?: string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatLocalTime(
+  date: Date | string,
+  timezone?: string,
+  locale?: string
+): string {
+  const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
   const l = locale || getCurrentLocale();
   try {
-    return new Intl.DateTimeFormat(l, { timeZone: tz, timeStyle: 'short' }).format(d);
+    return new Intl.DateTimeFormat(l, {
+      timeZone: tz,
+      timeStyle: "short",
+    }).format(d);
   } catch {
     return d.toLocaleTimeString(l);
   }
 }
 
 // ─── Relative time (e.g. "2 hours ago") ───
-export function formatRelativeTime(date: Date | string, locale?: string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatRelativeTime(
+  date: Date | string,
+  locale?: string
+): string {
+  const d = typeof date === "string" ? new Date(date) : date;
   const l = locale || getCurrentLocale();
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return 'just now';
+  if (diffSec < 60) return "just now";
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin} min ago`;
   const diffHour = Math.floor(diffMin / 60);
   if (diffHour < 24) return `${diffHour} hr ago`;
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
+  if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? "s" : ""} ago`;
   return formatLocalDate(d, undefined, l);
 }
 
@@ -114,7 +146,11 @@ export function formatNumber(num: number, locale?: string): string {
 export function formatPercent(value: number, locale?: string): string {
   const l = locale || getCurrentLocale();
   try {
-    return new Intl.NumberFormat(l, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
+    return new Intl.NumberFormat(l, {
+      style: "percent",
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value);
   } catch {
     return `${(value * 100).toFixed(1)}%`;
   }
@@ -123,16 +159,42 @@ export function formatPercent(value: number, locale?: string): string {
 // ─── Tax rate lookup ───
 export function getTaxRate(country: string): number {
   const rates: Record<string, number> = {
-    KE: 0.16, UG: 0.18, TZ: 0.18, NG: 0.075, ZA: 0.15, GH: 0.15, RW: 0.18, ET: 0.15,
-    US: 0, GB: 0.2, DE: 0.19, FR: 0.2, IT: 0.22, ES: 0.21, NL: 0.21,
-    BR: 0.17, MX: 0.16, AR: 0.21, CA: 0.13, AU: 0.1, IN: 0.18, CN: 0.13,
-    JP: 0.1, KR: 0.1, SG: 0.09, AE: 0.05, SA: 0.15,
+    KE: 0.16,
+    UG: 0.18,
+    TZ: 0.18,
+    NG: 0.075,
+    ZA: 0.15,
+    GH: 0.15,
+    RW: 0.18,
+    ET: 0.15,
+    US: 0,
+    GB: 0.2,
+    DE: 0.19,
+    FR: 0.2,
+    IT: 0.22,
+    ES: 0.21,
+    NL: 0.21,
+    BR: 0.17,
+    MX: 0.16,
+    AR: 0.21,
+    CA: 0.13,
+    AU: 0.1,
+    IN: 0.18,
+    CN: 0.13,
+    JP: 0.1,
+    KR: 0.1,
+    SG: 0.09,
+    AE: 0.05,
+    SA: 0.15,
   };
   return rates[country.toUpperCase()] ?? 0;
 }
 
 // ─── Calculate price with tax ───
-export function calculateWithTax(amount: number, country: string): { subtotal: number; tax: number; total: number } {
+export function calculateWithTax(
+  amount: number,
+  country: string
+): { subtotal: number; tax: number; total: number } {
   const rate = getTaxRate(country);
   const tax = amount * rate;
   return { subtotal: amount, tax, total: amount + tax };
@@ -142,18 +204,32 @@ export function calculateWithTax(amount: number, country: string): { subtotal: n
 function resolveLocale(currency: string, override?: string): string {
   if (override) return override;
   const map: Record<string, string> = {
-    KES: 'en-KE', UGX: 'en-UG', TZS: 'en-TZ', NGN: 'en-NG', ZAR: 'en-ZA',
-    GHS: 'en-GH', RWF: 'en-RW', ETB: 'en-ET', USD: 'en-US', EUR: 'en-DE',
-    GBP: 'en-GB', CAD: 'en-CA', AUD: 'en-AU', JPY: 'ja-JP', CNY: 'zh-CN',
-    INR: 'en-IN', BRL: 'pt-BR', MXN: 'es-MX',
+    KES: "en-KE",
+    UGX: "en-UG",
+    TZS: "en-TZ",
+    NGN: "en-NG",
+    ZAR: "en-ZA",
+    GHS: "en-GH",
+    RWF: "en-RW",
+    ETB: "en-ET",
+    USD: "en-US",
+    EUR: "en-DE",
+    GBP: "en-GB",
+    CAD: "en-CA",
+    AUD: "en-AU",
+    JPY: "ja-JP",
+    CNY: "zh-CN",
+    INR: "en-IN",
+    BRL: "pt-BR",
+    MXN: "es-MX",
   };
-  return map[currency] || 'en-US';
+  return map[currency] || "en-US";
 }
 
 // ─── Get current locale from localStorage or default ───
 function getCurrentLocale(): string {
   try {
-    const saved = localStorage.getItem('fuelpro_location_country');
+    const saved = localStorage.getItem("fuelpro_location_country");
     if (saved) {
       const parsed = JSON.parse(saved);
       const cc = parsed.currentCountry || parsed.country;
@@ -162,15 +238,19 @@ function getCurrentLocale(): string {
         if (config) return resolveLocale(config.defaultCurrency);
       }
     }
-  } catch { /* ignore */ }
-  return 'en-US';
+  } catch {
+    /* ignore */
+  }
+  return "en-US";
 }
 
 // ─── Get current timezone ───
 function getCurrentTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch { return 'UTC'; }
+  } catch {
+    return "UTC";
+  }
 }
 
 // ─── Format liters (fuel volume) ───

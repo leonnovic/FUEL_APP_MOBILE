@@ -1,12 +1,12 @@
 /**
  * FuelPro Error Monitoring & Analytics
- * 
+ *
  * Integrates Sentry for real-time error tracking
  * and privacy-friendly analytics (Plausible-style)
  */
 
 // Sentry Configuration
-const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN || '';
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN || "";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -22,40 +22,48 @@ interface ErrorBoundaryState {
 // Global Error Handler
 export function initErrorMonitoring() {
   if (!SENTRY_DSN) {
-    console.log('[FuelPro] Sentry not configured - error monitoring disabled');
+    console.log("[FuelPro] Sentry not configured - error monitoring disabled");
     return;
   }
 
   // Dynamic import Sentry
-  import('@sentry/react').then((Sentry) => {
-    Sentry.init({
-      dsn: SENTRY_DSN,
-      integrations: (integrations: any[]) => {
-        return integrations.filter(i => !['BrowserTracing'].includes(i.name));
-      },
-      tracesSampleRate: 0.1,
-      replaysSessionSampleRate: 0.1,
-      replaysOnErrorSampleRate: 1.0,
-      environment: import.meta.env.MODE,
-      release: 'fuelpro@1.0.0',
-      beforeSend(event) {
-        // Filter out non-actionable errors
-        if (event.exception?.values?.some((e: any) => 
-          e.type === 'ResizeObserver loop' ||
-          e.type === 'Non-Error promise rejection'
-        )) {
-          return null;
-        }
-        return event;
-      },
+  import("@sentry/react")
+    .then(Sentry => {
+      Sentry.init({
+        dsn: SENTRY_DSN,
+        integrations: (integrations: any[]) => {
+          return integrations.filter(i => !["BrowserTracing"].includes(i.name));
+        },
+        tracesSampleRate: 0.1,
+        replaysSessionSampleRate: 0.1,
+        replaysOnErrorSampleRate: 1.0,
+        environment: import.meta.env.MODE,
+        release: "fuelpro@1.0.0",
+        beforeSend(event) {
+          // Filter out non-actionable errors
+          if (
+            event.exception?.values?.some(
+              (e: any) =>
+                e.type === "ResizeObserver loop" ||
+                e.type === "Non-Error promise rejection"
+            )
+          ) {
+            return null;
+          }
+          return event;
+        },
+      });
+    })
+    .catch(() => {
+      console.log("[FuelPro] Failed to load Sentry");
     });
-  }).catch(() => {
-    console.log('[FuelPro] Failed to load Sentry');
-  });
 }
 
 // Error Boundary Component
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -66,56 +74,69 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[FuelPro Error]', error, errorInfo);
+    console.error("[FuelPro Error]", error, errorInfo);
     this.props.onError?.(error, errorInfo);
 
     // Report to Sentry
     if (SENTRY_DSN) {
-      import('@sentry/react').then((Sentry) => {
-        Sentry.captureException(error, { extra: errorInfo as any });
-      }).catch(() => {});
+      import("@sentry/react")
+        .then(Sentry => {
+          Sentry.captureException(error, { extra: errorInfo as any });
+        })
+        .catch(() => {});
     }
   }
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#0a0a0f',
-          color: '#fff',
-          padding: 20
-        }}>
-          <div style={{ textAlign: 'center', maxWidth: 400 }}>
-            <div style={{
-              fontSize: 64,
-              marginBottom: 16,
-              color: '#ef4444'
-            }}>⚠️</div>
-            <h1 style={{ fontSize: 24, marginBottom: 12 }}>Something went wrong</h1>
-            <p style={{ color: '#9ca3af', marginBottom: 24 }}>
-              We're sorry for the inconvenience. Please refresh the page or contact support.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                padding: '12px 24px',
-                background: '#f59e0b',
-                color: '#000',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              Refresh Page
-            </button>
+      return (
+        this.props.fallback || (
+          <div
+            style={{
+              minHeight: "100vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#0a0a0f",
+              color: "#fff",
+              padding: 20,
+            }}
+          >
+            <div style={{ textAlign: "center", maxWidth: 400 }}>
+              <div
+                style={{
+                  fontSize: 64,
+                  marginBottom: 16,
+                  color: "#ef4444",
+                }}
+              >
+                ⚠️
+              </div>
+              <h1 style={{ fontSize: 24, marginBottom: 12 }}>
+                Something went wrong
+              </h1>
+              <p style={{ color: "#9ca3af", marginBottom: 24 }}>
+                We're sorry for the inconvenience. Please refresh the page or
+                contact support.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: "12px 24px",
+                  background: "#f59e0b",
+                  color: "#000",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Refresh Page
+              </button>
+            </div>
           </div>
-        </div>
+        )
       );
     }
     return this.props.children;
@@ -126,72 +147,72 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 export const analytics = {
   // Track page views
   page(path: string, title?: string) {
-    if (import.meta.env.VITE_ANALYTICS_ENABLED !== 'true') return;
-    
+    if (import.meta.env.VITE_ANALYTICS_ENABLED !== "true") return;
+
     // Send to analytics endpoint (GDPR compliant)
-    fetch('/api/analytics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("/api/analytics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: 'pageview',
+        type: "pageview",
         path,
         title,
         timestamp: Date.now(),
-        referrer: document.referrer
-      })
+        referrer: document.referrer,
+      }),
     }).catch(() => {});
 
     // Also log in development
     if (import.meta.env.DEV) {
-      console.log('[Analytics] Page:', path, title);
+      console.log("[Analytics] Page:", path, title);
     }
   },
 
   // Track events
   event(name: string, properties?: Record<string, any>) {
-    if (import.meta.env.VITE_ANALYTICS_ENABLED !== 'true') return;
-    
-    fetch('/api/analytics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    if (import.meta.env.VITE_ANALYTICS_ENABLED !== "true") return;
+
+    fetch("/api/analytics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: 'event',
+        type: "event",
         name,
         properties,
-        timestamp: Date.now()
-      })
+        timestamp: Date.now(),
+      }),
     }).catch(() => {});
 
     if (import.meta.env.DEV) {
-      console.log('[Analytics] Event:', name, properties);
+      console.log("[Analytics] Event:", name, properties);
     }
   },
 
   // Track errors
   error(message: string, stack?: string) {
-    fetch('/api/analytics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    fetch("/api/analytics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: 'error',
+        type: "error",
         message,
         stack,
-        timestamp: Date.now()
-      })
+        timestamp: Date.now(),
+      }),
     }).catch(() => {});
-  }
+  },
 };
 
 // Performance monitoring
 export const perfMonitor = {
   mark(name: string) {
-    if (typeof window !== 'undefined' && window.performance) {
+    if (typeof window !== "undefined" && window.performance) {
       window.performance.mark(name);
     }
   },
 
   measure(name: string, startMark: string, endMark?: string) {
-    if (typeof window !== 'undefined' && window.performance) {
+    if (typeof window !== "undefined" && window.performance) {
       if (endMark) {
         window.performance.measure(name, startMark, endMark);
       } else {
@@ -201,9 +222,11 @@ export const perfMonitor = {
   },
 
   getMetrics() {
-    if (typeof window === 'undefined' || !window.performance) return null;
-    
-    const entries = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+    if (typeof window === "undefined" || !window.performance) return null;
+
+    const entries = window.performance.getEntriesByType(
+      "navigation"
+    )[0] as PerformanceNavigationTiming;
     if (!entries) return null;
 
     return {
@@ -213,9 +236,9 @@ export const perfMonitor = {
       download: entries.responseEnd - entries.responseStart,
       domInteractive: entries.domInteractive,
       domComplete: entries.domComplete,
-      total: entries.loadEventEnd - entries.startTime
+      total: entries.loadEventEnd - entries.startTime,
     };
-  }
+  },
 };
 
 // React hook for analytics
@@ -223,4 +246,4 @@ export function useAnalytics() {
   return { analytics, perfMonitor };
 }
 
-import React from 'react';
+import React from "react";

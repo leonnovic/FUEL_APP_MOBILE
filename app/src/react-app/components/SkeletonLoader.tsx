@@ -1,25 +1,49 @@
-import { Activity } from 'lucide-react';
+import { Activity } from "lucide-react";
 
 /** Skeleton pulse animation wrapper */
-export function SkeletonPulse({ className = '', style, children }: { className?: string; style?: React.CSSProperties; children?: React.ReactNode }) {
+export function SkeletonPulse({
+  className = "",
+  style,
+  children,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className={`animate-pulse bg-white/[0.06] rounded-lg ${className}`} style={style}>
+    <div
+      className={`animate-pulse bg-white/[0.06] rounded-lg ${className}`}
+      style={style}
+    >
       {children}
     </div>
   );
 }
 
 /** Text line skeleton */
-export function SkeletonText({ width = '100%', height = '0.75rem', className = '' }: { width?: string; height?: string; className?: string }) {
+export function SkeletonText({
+  width = "100%",
+  height = "0.75rem",
+  className = "",
+}: {
+  width?: string;
+  height?: string;
+  className?: string;
+}) {
   return (
-    <div className={`animate-pulse bg-white/[0.06] rounded ${className}`} style={{ width, height }} />
+    <div
+      className={`animate-pulse bg-white/[0.06] rounded ${className}`}
+      style={{ width, height }}
+    />
   );
 }
 
 /** Card skeleton for dashboard/grid items */
-export function SkeletonCard({ className = '' }: { className?: string }) {
+export function SkeletonCard({ className = "" }: { className?: string }) {
   return (
-    <div className={`bg-[#161618] border border-white/[0.06] rounded-xl p-5 ${className}`}>
+    <div
+      className={`bg-[#161618] border border-white/[0.06] rounded-xl p-5 ${className}`}
+    >
       <div className="flex items-center gap-2 mb-3">
         <SkeletonPulse className="w-8 h-8 rounded-lg" />
         <SkeletonText width="40%" />
@@ -35,7 +59,11 @@ export function SkeletonTableRow({ cols = 4 }: { cols?: number }) {
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-white/[0.04]">
       {Array.from({ length: cols }, (_, i) => (
-        <SkeletonText key={i} width={`${30 + Math.random() * 40}%`} className="flex-1" />
+        <SkeletonText
+          key={i}
+          width={`${30 + Math.random() * 40}%`}
+          className="flex-1"
+        />
       ))}
     </div>
   );
@@ -66,7 +94,11 @@ export function SkeletonDashboard() {
         <SkeletonText width="150px" height="1rem" className="mb-4" />
         <div className="h-40 flex items-end gap-2">
           {Array.from({ length: 12 }, (_, i) => (
-            <SkeletonPulse key={i} className="flex-1 rounded-t-sm" style={{ height: `${30 + Math.random() * 60}%` } as any} />
+            <SkeletonPulse
+              key={i}
+              className="flex-1 rounded-t-sm"
+              style={{ height: `${30 + Math.random() * 60}%` } as any}
+            />
           ))}
         </div>
       </div>
@@ -107,7 +139,11 @@ export function SkeletonFounder() {
       <div className="w-60 bg-[#111113] border-r border-white/[0.06] p-5 space-y-4">
         <SkeletonPulse className="w-32 h-8 rounded-lg" />
         {Array.from({ length: 8 }, (_, i) => (
-          <SkeletonText key={i} width={`${60 + Math.random() * 30}%`} className="py-1" />
+          <SkeletonText
+            key={i}
+            width={`${60 + Math.random() * 30}%`}
+            className="py-1"
+          />
         ))}
       </div>
       {/* Main content skeleton */}
@@ -119,15 +155,23 @@ export function SkeletonFounder() {
 }
 
 /** Compact loading spinner (used when skeleton isn't appropriate) */
-export function LoadingSpinner({ size = 'md', className = '' }: { size?: 'sm' | 'md' | 'lg'; className?: string }) {
-  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
+export function LoadingSpinner({
+  size = "md",
+  className = "",
+}: {
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}) {
+  const sizes = { sm: "w-4 h-4", md: "w-8 h-8", lg: "w-12 h-12" };
   return (
-    <div className={`${sizes[size]} border-2 border-amber-500 border-t-transparent rounded-full animate-spin ${className}`} />
+    <div
+      className={`${sizes[size]} border-2 border-amber-500 border-t-transparent rounded-full animate-spin ${className}`}
+    />
   );
 }
 
 /** Inline loading indicator */
-export function InlineLoading({ text = 'Loading...' }: { text?: string }) {
+export function InlineLoading({ text = "Loading..." }: { text?: string }) {
   return (
     <div className="flex items-center gap-2 text-xs text-gray-500">
       <Activity size={12} className="animate-spin" />

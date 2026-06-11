@@ -1,21 +1,37 @@
-import { useAutoSync } from '@/react-app/hooks/useAutoSync';
-import { RefreshCw, CheckCircle2, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
-import { useState } from 'react';
+import { useAutoSync } from "@/react-app/hooks/useAutoSync";
+import {
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
+import { useState } from "react";
 
 interface SyncStatusIndicatorProps {
   countryCode: string;
   compact?: boolean;
 }
 
-export default function SyncStatusIndicator({ countryCode, compact = false }: SyncStatusIndicatorProps) {
-  const { isSyncing, lastSync, error, syncNow, unreadCount, highPriorityCount } = useAutoSync(countryCode);
+export default function SyncStatusIndicator({
+  countryCode,
+  compact = false,
+}: SyncStatusIndicatorProps) {
+  const {
+    isSyncing,
+    lastSync,
+    error,
+    syncNow,
+    unreadCount,
+    highPriorityCount,
+  } = useAutoSync(countryCode);
   const [showDetails, setShowDetails] = useState(false);
 
   const getLastSyncText = () => {
-    if (!lastSync) return 'Never synced';
+    if (!lastSync) return "Never synced";
     const diff = Date.now() - new Date(lastSync).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
+    if (mins < 1) return "Just now";
     if (mins < 60) return `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h ago`;
@@ -68,10 +84,12 @@ export default function SyncStatusIndicator({ countryCode, compact = false }: Sy
           <Wifi size={14} className="text-green-400" />
         )}
         <span className="text-xs text-gray-400">
-          {isSyncing ? 'Syncing...' : error ? 'Sync error' : getLastSyncText()}
+          {isSyncing ? "Syncing..." : error ? "Sync error" : getLastSyncText()}
         </span>
         {unreadCount > 0 && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${highPriorityCount > 0 ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded-full ${highPriorityCount > 0 ? "bg-red-500 text-white" : "bg-amber-500 text-white"}`}
+          >
             {unreadCount}
           </span>
         )}
@@ -80,15 +98,28 @@ export default function SyncStatusIndicator({ countryCode, compact = false }: Sy
       {showDetails && (
         <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 p-4">
           <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-            <RefreshCw size={14} className={isSyncing ? 'animate-spin text-blue-400' : 'text-green-400'} />
+            <RefreshCw
+              size={14}
+              className={
+                isSyncing ? "animate-spin text-blue-400" : "text-green-400"
+              }
+            />
             Auto-Sync Status
           </h4>
 
           <div className="space-y-2 text-xs">
             <div className="flex justify-between text-gray-400">
               <span>Status:</span>
-              <span className={isSyncing ? 'text-blue-400' : error ? 'text-red-400' : 'text-green-400'}>
-                {isSyncing ? 'Syncing...' : error ? 'Error' : 'Up to date'}
+              <span
+                className={
+                  isSyncing
+                    ? "text-blue-400"
+                    : error
+                      ? "text-red-400"
+                      : "text-green-400"
+                }
+              >
+                {isSyncing ? "Syncing..." : error ? "Error" : "Up to date"}
               </span>
             </div>
             <div className="flex justify-between text-gray-400">
@@ -97,7 +128,9 @@ export default function SyncStatusIndicator({ countryCode, compact = false }: Sy
             </div>
             <div className="flex justify-between text-gray-400">
               <span>Alerts:</span>
-              <span className={unreadCount > 0 ? 'text-amber-400' : 'text-gray-500'}>
+              <span
+                className={unreadCount > 0 ? "text-amber-400" : "text-gray-500"}
+              >
                 {unreadCount} unread
               </span>
             </div>
@@ -110,12 +143,14 @@ export default function SyncStatusIndicator({ countryCode, compact = false }: Sy
           </div>
 
           <button
-            onClick={() => { syncNow(); }}
+            onClick={() => {
+              syncNow();
+            }}
             disabled={isSyncing}
             className="w-full mt-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
+            <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+            {isSyncing ? "Syncing..." : "Sync Now"}
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Home, RefreshCw, Mail, AlertTriangle } from 'lucide-react';
+import { useState } from "react";
+import { Home, RefreshCw, Mail, AlertTriangle } from "lucide-react";
 
 interface ErrorPageProps {
   code: number;
@@ -18,24 +18,28 @@ export default function ErrorPage({ code, title, message }: ErrorPageProps) {
   };
 
   const handleGoHome = () => {
-    window.location.hash = '';
+    window.location.hash = "";
     window.location.reload();
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%)',
-      padding: 20
-    }}>
-      <div style={{
-        maxWidth: 500,
-        textAlign: 'center',
-        animation: 'fadeIn 0.5s ease-out'
-      }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%)",
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 500,
+          textAlign: "center",
+          animation: "fadeIn 0.5s ease-out",
+        }}
+      >
         <style>{`
           @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
@@ -52,126 +56,146 @@ export default function ErrorPage({ code, title, message }: ErrorPageProps) {
         `}</style>
 
         {/* Error Code */}
-        <div style={{
-          fontSize: 120,
-          fontWeight: 'bold',
-          background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          marginBottom: 16,
-          animation: 'pulse 2s ease-in-out infinite'
-        }}>
+        <div
+          style={{
+            fontSize: 120,
+            fontWeight: "bold",
+            background: "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            marginBottom: 16,
+            animation: "pulse 2s ease-in-out infinite",
+          }}
+        >
           {code}
         </div>
 
         {/* Warning Icon */}
-        <div style={{
-          width: 80,
-          height: 80,
-          borderRadius: '50%',
-          background: 'rgba(245,158,11,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 24px',
-          animation: 'float 3s ease-in-out infinite'
-        }}>
-          <AlertTriangle size={40} style={{ color: '#f59e0b' }} />
+        <div
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            background: "rgba(245,158,11,0.15)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 24px",
+            animation: "float 3s ease-in-out infinite",
+          }}
+        >
+          <AlertTriangle size={40} style={{ color: "#f59e0b" }} />
         </div>
 
         {/* Title & Message */}
-        <h1 style={{
-          fontSize: 28,
-          fontWeight: 'bold',
-          color: '#fff',
-          marginBottom: 12
-        }}>
+        <h1
+          style={{
+            fontSize: 28,
+            fontWeight: "bold",
+            color: "#fff",
+            marginBottom: 12,
+          }}
+        >
           {title}
         </h1>
-        <p style={{
-          fontSize: 16,
-          color: '#9ca3af',
-          lineHeight: 1.6,
-          marginBottom: 32
-        }}>
+        <p
+          style={{
+            fontSize: 16,
+            color: "#9ca3af",
+            lineHeight: 1.6,
+            marginBottom: 32,
+          }}
+        >
           {message}
         </p>
 
         {/* Action Buttons */}
-        <div style={{
-          display: 'flex',
-          gap: 12,
-          justifyContent: 'center',
-          flexWrap: 'wrap'
-        }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             onClick={handleGoHome}
             style={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 8,
-              padding: '14px 28px',
-              background: '#f59e0b',
-              color: '#000',
-              border: 'none',
+              padding: "14px 28px",
+              background: "#f59e0b",
+              color: "#000",
+              border: "none",
               borderRadius: 12,
               fontSize: 15,
               fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s'
+              cursor: "pointer",
+              transition: "all 0.2s",
             }}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            onMouseOver={e =>
+              (e.currentTarget.style.transform = "translateY(-2px)")
+            }
+            onMouseOut={e =>
+              (e.currentTarget.style.transform = "translateY(0)")
+            }
           >
             <Home size={18} /> Go Home
           </button>
-          
+
           <button
             onClick={handleReload}
             disabled={isReloading}
             style={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 8,
-              padding: '14px 28px',
-              background: 'transparent',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.2)',
+              padding: "14px 28px",
+              background: "transparent",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.2)",
               borderRadius: 12,
               fontSize: 15,
               fontWeight: 500,
-              cursor: isReloading ? 'wait' : 'pointer',
-              transition: 'all 0.2s',
-              opacity: isReloading ? 0.7 : 1
+              cursor: isReloading ? "wait" : "pointer",
+              transition: "all 0.2s",
+              opacity: isReloading ? 0.7 : 1,
             }}
           >
-            <RefreshCw size={18} className={isReloading ? 'spin' : ''} style={{
-              animation: isReloading ? 'spin 1s linear infinite' : 'none'
-            }} />
-            {isReloading ? 'Reloading...' : 'Try Again'}
+            <RefreshCw
+              size={18}
+              className={isReloading ? "spin" : ""}
+              style={{
+                animation: isReloading ? "spin 1s linear infinite" : "none",
+              }}
+            />
+            {isReloading ? "Reloading..." : "Try Again"}
           </button>
         </div>
 
         {/* Contact Support */}
-        <div style={{
-          marginTop: 48,
-          padding: 20,
-          background: 'rgba(255,255,255,0.03)',
-          borderRadius: 12,
-          border: '1px solid rgba(255,255,255,0.05)'
-        }}>
-          <p style={{ fontSize: 14, color: '#9ca3af', marginBottom: 12 }}>
+        <div
+          style={{
+            marginTop: 48,
+            padding: 20,
+            background: "rgba(255,255,255,0.03)",
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.05)",
+          }}
+        >
+          <p style={{ fontSize: 14, color: "#9ca3af", marginBottom: 12 }}>
             If this problem persists, please contact support:
           </p>
           <a
             href="mailto:support@fuelpro.app"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
+              display: "inline-flex",
+              alignItems: "center",
               gap: 8,
-              color: '#f59e0b',
-              textDecoration: 'none',
-              fontSize: 14
+              color: "#f59e0b",
+              textDecoration: "none",
+              fontSize: 14,
             }}
           >
             <Mail size={16} /> support@fuelpro.app
@@ -179,23 +203,42 @@ export default function ErrorPage({ code, title, message }: ErrorPageProps) {
         </div>
 
         {/* Quick Links */}
-        <div style={{
-          marginTop: 32,
-          display: 'flex',
-          justifyContent: 'center',
-          gap: 24
-        }}>
-          <a href="#/" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Home</a>
-          <a href="#/privacy" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Privacy</a>
-          <a href="#/terms" style={{ fontSize: 13, color: '#6b7280', textDecoration: 'none' }}>Terms</a>
+        <div
+          style={{
+            marginTop: 32,
+            display: "flex",
+            justifyContent: "center",
+            gap: 24,
+          }}
+        >
+          <a
+            href="#/"
+            style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}
+          >
+            Home
+          </a>
+          <a
+            href="#/privacy"
+            style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}
+          >
+            Privacy
+          </a>
+          <a
+            href="#/terms"
+            style={{ fontSize: 13, color: "#6b7280", textDecoration: "none" }}
+          >
+            Terms
+          </a>
         </div>
 
         {/* Error ID for debugging */}
-        <p style={{
-          marginTop: 32,
-          fontSize: 11,
-          color: '#4b5563'
-        }}>
+        <p
+          style={{
+            marginTop: 32,
+            fontSize: 11,
+            color: "#4b5563",
+          }}
+        >
           Error ID: {code}-{Date.now().toString(36).toUpperCase()}
         </p>
       </div>

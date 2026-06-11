@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { FileText, Printer, TrendingUp, Download } from 'lucide-react';
-import { useFuel } from '@/react-app/context/FuelContext';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { useState, useEffect } from "react";
+import { FileText, Printer, TrendingUp, Download } from "lucide-react";
+import { useFuel } from "@/react-app/context/FuelContext";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface SalesEntry {
   date: string;
-  shift: 'DAY' | 'NIGHT';
+  shift: "DAY" | "NIGHT";
   petrolSales: number;
   dieselSales: number;
   totalSales: number;
@@ -21,12 +21,22 @@ export default function FuelSalesReport() {
   const [totals, setTotals] = useState({
     petrol: 0,
     diesel: 0,
-    total: 0
+    total: 0,
   });
 
   const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   // Generate year options for unlimited range (100+ years in each direction)
@@ -35,11 +45,11 @@ export default function FuelSalesReport() {
     const startYear = currentYear - 100;
     const endYear = currentYear + 100;
     const years = [];
-    
+
     for (let year = startYear; year <= endYear; year++) {
       years.push(year);
     }
-    
+
     return years;
   };
 
@@ -52,77 +62,99 @@ export default function FuelSalesReport() {
   const generateReport = () => {
     // Get real sales data EXCLUSIVELY from saved Sales Tracking records
     const entries: SalesEntry[] = [];
-    
-    if (state.salesHistory && typeof state.salesHistory === 'object') {
-      Object.entries(state.salesHistory).forEach(([dateKey, salesData]: [string, any]) => {
-        // Parse the dateKey which is in format YYYY-MM-DD_Shift or similar
-        const [datePart] = dateKey.split('_');
-        const salesDate = new Date(datePart);
-        
-        // Ensure valid date and check if it matches selected month/year
-        if (!isNaN(salesDate.getTime()) && 
-            salesDate.getMonth() + 1 === selectedMonth && 
-            salesDate.getFullYear() === selectedYear) {
-          
-          // Only process if we have actual sales data
-          if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
-            // Calculate petrol sales from all PMS pumps
-            const petrolSales = (salesData.pmsPumps || []).reduce((sum: number, pump: any) => {
-              return sum + (pump.salesKsh || 0);
-            }, 0);
-            
-            // Calculate diesel sales from all AGO pumps
-            const dieselSales = (salesData.agoPumps || []).reduce((sum: number, pump: any) => {
-              return sum + (pump.salesKsh || 0);
-            }, 0);
-            
-            // Format date as DD/MM/YYYY(SHIFT)
-            const day = salesDate.getDate().toString().padStart(2, '0');
-            const month = selectedMonth.toString().padStart(2, '0');
-            const year = selectedYear.toString();
-            const shift = (salesData.shift === 'Night' || salesData.shift === 'NIGHT') ? 'NIGHT' : 'DAY';
-            const formattedDate = `${day}/${month}/${year}(${shift})`;
-            
-            // Only add entry if there are actual sales (petrol or diesel)
-            if (petrolSales > 0 || dieselSales > 0) {
-              entries.push({
-                date: formattedDate,
-                shift: shift as 'DAY' | 'NIGHT',
-                petrolSales: petrolSales,
-                dieselSales: dieselSales,
-                totalSales: petrolSales + dieselSales
-              });
+
+    if (state.salesHistory && typeof state.salesHistory === "object") {
+      Object.entries(state.salesHistory).forEach(
+        ([dateKey, salesData]: [string, any]) => {
+          // Parse the dateKey which is in format YYYY-MM-DD_Shift or similar
+          const [datePart] = dateKey.split("_");
+          const salesDate = new Date(datePart);
+
+          // Ensure valid date and check if it matches selected month/year
+          if (
+            !isNaN(salesDate.getTime()) &&
+            salesDate.getMonth() + 1 === selectedMonth &&
+            salesDate.getFullYear() === selectedYear
+          ) {
+            // Only process if we have actual sales data
+            if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
+              // Calculate petrol sales from all PMS pumps
+              const petrolSales = (salesData.pmsPumps || []).reduce(
+                (sum: number, pump: any) => {
+                  return sum + (pump.salesKsh || 0);
+                },
+                0
+              );
+
+              // Calculate diesel sales from all AGO pumps
+              const dieselSales = (salesData.agoPumps || []).reduce(
+                (sum: number, pump: any) => {
+                  return sum + (pump.salesKsh || 0);
+                },
+                0
+              );
+
+              // Format date as DD/MM/YYYY(SHIFT)
+              const day = salesDate.getDate().toString().padStart(2, "0");
+              const month = selectedMonth.toString().padStart(2, "0");
+              const year = selectedYear.toString();
+              const shift =
+                salesData.shift === "Night" || salesData.shift === "NIGHT"
+                  ? "NIGHT"
+                  : "DAY";
+              const formattedDate = `${day}/${month}/${year}(${shift})`;
+
+              // Only add entry if there are actual sales (petrol or diesel)
+              if (petrolSales > 0 || dieselSales > 0) {
+                entries.push({
+                  date: formattedDate,
+                  shift: shift as "DAY" | "NIGHT",
+                  petrolSales: petrolSales,
+                  dieselSales: dieselSales,
+                  totalSales: petrolSales + dieselSales,
+                });
+              }
             }
           }
         }
-      });
+      );
     }
 
     // Sort entries by date for better presentation
     entries.sort((a, b) => {
-      const dateA = new Date(a.date.split('(')[0].split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('(')[0].split('/').reverse().join('-'));
+      const dateA = new Date(
+        a.date.split("(")[0].split("/").reverse().join("-")
+      );
+      const dateB = new Date(
+        b.date.split("(")[0].split("/").reverse().join("-")
+      );
       return dateA.getTime() - dateB.getTime();
     });
 
     setReportData(entries);
 
     // Calculate totals from real data only
-    const petrolTotal = entries.reduce((sum, entry) => sum + entry.petrolSales, 0);
-    const dieselTotal = entries.reduce((sum, entry) => sum + entry.dieselSales, 0);
-    
+    const petrolTotal = entries.reduce(
+      (sum, entry) => sum + entry.petrolSales,
+      0
+    );
+    const dieselTotal = entries.reduce(
+      (sum, entry) => sum + entry.dieselSales,
+      0
+    );
+
     setTotals({
       petrol: petrolTotal,
       diesel: dieselTotal,
-      total: petrolTotal + dieselTotal
+      total: petrolTotal + dieselTotal,
     });
   };
 
   const handlePrint = () => {
-    const printContent = document.getElementById('report-content');
+    const printContent = document.getElementById("report-content");
     if (!printContent) return;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
     printWindow.document.write(`
@@ -207,15 +239,15 @@ export default function FuelSalesReport() {
   const handleSaveReport = async () => {
     try {
       setIsSaving(true);
-      
-      const reportContent = document.getElementById('report-content');
+
+      const reportContent = document.getElementById("report-content");
       if (!reportContent) return;
 
       // Create a clean version for PDF generation
       const clonedContent = reportContent.cloneNode(true) as HTMLElement;
-      
+
       // Apply PDF-specific styles to the cloned content
-      const style = document.createElement('style');
+      const style = document.createElement("style");
       style.textContent = `
         .report-logo {
           max-width: 150px !important;
@@ -254,39 +286,39 @@ export default function FuelSalesReport() {
           color: #000 !important;
         }
       `;
-      
+
       document.head.appendChild(style);
-      
+
       // Temporarily add the cloned content to the body for rendering
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '-9999px';
-      tempContainer.style.top = '0';
-      tempContainer.style.background = 'white';
-      tempContainer.style.color = 'black';
-      tempContainer.style.width = '210mm'; // A4 width
-      tempContainer.style.padding = '20px';
+      const tempContainer = document.createElement("div");
+      tempContainer.style.position = "absolute";
+      tempContainer.style.left = "-9999px";
+      tempContainer.style.top = "0";
+      tempContainer.style.background = "white";
+      tempContainer.style.color = "black";
+      tempContainer.style.width = "210mm"; // A4 width
+      tempContainer.style.padding = "20px";
       tempContainer.appendChild(clonedContent);
       document.body.appendChild(tempContainer);
 
       // Generate canvas from the content
       const canvas = await html2canvas(tempContainer, {
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         scale: 2,
         useCORS: true,
         allowTaint: true,
         width: 794, // A4 width in pixels at 96 DPI
-        height: 1123 // A4 height in pixels at 96 DPI
+        height: 1123, // A4 height in pixels at 96 DPI
       });
 
       // Create PDF
       const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL("image/png");
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 295; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -295,36 +327,37 @@ export default function FuelSalesReport() {
       let position = 0;
 
       // Add image to PDF
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
 
       // Add new pages if content is longer than one page
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
 
       // Generate filename
       const filename = `Fuel_Sales_Report_${months[selectedMonth - 1]}_${selectedYear}.pdf`;
-      
+
       // Save the PDF
       pdf.save(filename);
 
       // Cleanup
       document.body.removeChild(tempContainer);
       document.head.removeChild(style);
-      
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      import('@/react-app/lib/toast').then(({toastError}) => toastError('Error generating PDF. Please try again.'));
+      console.error("Error generating PDF:", error);
+      import("@/react-app/lib/toast").then(({ toastError }) =>
+        toastError("Error generating PDF. Please try again.")
+      );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const currency = state.companyData.currency || 'Ksh';
+  const currency = state.companyData.currency || "Ksh";
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">
@@ -334,29 +367,33 @@ export default function FuelSalesReport() {
           <FileText className="text-blue-400" />
           Fuel Sales Report
         </h2>
-        
+
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
           <div className="flex gap-2">
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              onChange={e => setSelectedMonth(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
               {months.map((month, index) => (
-                <option key={month} value={index + 1}>{month}</option>
+                <option key={month} value={index + 1}>
+                  {month}
+                </option>
               ))}
             </select>
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              onChange={e => setSelectedYear(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
               {yearOptions.map(year => (
-                <option key={year} value={year}>{year}</option>
+                <option key={year} value={year}>
+                  {year}
+                </option>
               ))}
             </select>
           </div>
-          
+
           <div className="flex gap-2">
             <button
               onClick={handleSaveReport}
@@ -364,9 +401,9 @@ export default function FuelSalesReport() {
               className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
             >
               <Download size={16} />
-              {isSaving ? 'Saving...' : 'Save Report'}
+              {isSaving ? "Saving..." : "Save Report"}
             </button>
-            
+
             <button
               onClick={handlePrint}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
@@ -385,21 +422,27 @@ export default function FuelSalesReport() {
             <TrendingUp className="text-green-400" size={20} />
             <span className="text-sm text-green-300">Petrol Sales</span>
           </div>
-          <div className="text-xl font-bold text-white">{currency} {totals.petrol.toFixed(2)}</div>
+          <div className="text-xl font-bold text-white">
+            {currency} {totals.petrol.toFixed(2)}
+          </div>
         </div>
         <div className="bg-blue-900/30 border border-blue-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="text-blue-400" size={20} />
             <span className="text-sm text-blue-300">Diesel Sales</span>
           </div>
-          <div className="text-xl font-bold text-white">{currency} {totals.diesel.toFixed(2)}</div>
+          <div className="text-xl font-bold text-white">
+            {currency} {totals.diesel.toFixed(2)}
+          </div>
         </div>
         <div className="bg-purple-900/30 border border-purple-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="text-purple-400" size={20} />
             <span className="text-sm text-purple-300">Total Revenue</span>
           </div>
-          <div className="text-xl font-bold text-white">{currency} {totals.total.toFixed(2)}</div>
+          <div className="text-xl font-bold text-white">
+            {currency} {totals.total.toFixed(2)}
+          </div>
         </div>
       </div>
 
@@ -410,14 +453,14 @@ export default function FuelSalesReport() {
           <div className="text-center mb-6">
             {state.companyData.logo && (
               <div className="logo mb-4">
-                <img 
-                  src={state.companyData.logo} 
-                  alt="Company Logo" 
-                  className="report-logo h-16 mx-auto max-w-[150px] max-h-[60px] object-contain" 
+                <img
+                  src={state.companyData.logo}
+                  alt="Company Logo"
+                  className="report-logo h-16 mx-auto max-w-[150px] max-h-[60px] object-contain"
                 />
               </div>
             )}
-            {state.companyData.name && state.companyData.name.trim() !== '' ? (
+            {state.companyData.name && state.companyData.name.trim() !== "" ? (
               <div className="company-name text-lg font-bold text-white mb-2">
                 {state.companyData.name}
               </div>
@@ -440,28 +483,50 @@ export default function FuelSalesReport() {
             {reportData.length === 0 ? (
               <div className="text-center py-8">
                 <FileText size={48} className="mx-auto text-gray-500 mb-4" />
-                <div className="text-lg font-semibold text-gray-300 mb-2">No sales recorded for this period</div>
+                <div className="text-lg font-semibold text-gray-300 mb-2">
+                  No sales recorded for this period
+                </div>
                 <div className="text-gray-400">
-                  Sales data for {months[selectedMonth - 1]} {selectedYear} will appear here once you save sales tracking records.
+                  Sales data for {months[selectedMonth - 1]} {selectedYear} will
+                  appear here once you save sales tracking records.
                 </div>
               </div>
             ) : (
               <table className="w-full border-collapse bg-white text-black">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th className="border border-gray-400 p-3 text-left">DD/MM/YYYY(SHIFT)</th>
-                    <th className="border border-gray-400 p-3 text-right">Total Petrol Sales ({currency})</th>
-                    <th className="border border-gray-400 p-3 text-right">Total Diesel Sales ({currency})</th>
-                    <th className="border border-gray-400 p-3 text-right">Total Sales/Revenue ({currency})</th>
+                    <th className="border border-gray-400 p-3 text-left">
+                      DD/MM/YYYY(SHIFT)
+                    </th>
+                    <th className="border border-gray-400 p-3 text-right">
+                      Total Petrol Sales ({currency})
+                    </th>
+                    <th className="border border-gray-400 p-3 text-right">
+                      Total Diesel Sales ({currency})
+                    </th>
+                    <th className="border border-gray-400 p-3 text-right">
+                      Total Sales/Revenue ({currency})
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {reportData.map((entry, index) => (
-                    <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="border border-gray-400 p-3">{entry.date}</td>
-                      <td className="border border-gray-400 p-3 text-right">{entry.petrolSales.toFixed(2)}</td>
-                      <td className="border border-gray-400 p-3 text-right">{entry.dieselSales.toFixed(2)}</td>
-                      <td className="border border-gray-400 p-3 text-right">{entry.totalSales.toFixed(2)}</td>
+                    <tr
+                      key={index}
+                      className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                    >
+                      <td className="border border-gray-400 p-3">
+                        {entry.date}
+                      </td>
+                      <td className="border border-gray-400 p-3 text-right">
+                        {entry.petrolSales.toFixed(2)}
+                      </td>
+                      <td className="border border-gray-400 p-3 text-right">
+                        {entry.dieselSales.toFixed(2)}
+                      </td>
+                      <td className="border border-gray-400 p-3 text-right">
+                        {entry.totalSales.toFixed(2)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -473,33 +538,44 @@ export default function FuelSalesReport() {
           {reportData.length > 0 && (
             <div className="totals mt-6 space-y-2">
               <div className="text-white">
-                <span className="font-semibold">Monthly Total Petrol Sales:</span> {currency} {totals.petrol.toFixed(2)}
+                <span className="font-semibold">
+                  Monthly Total Petrol Sales:
+                </span>{" "}
+                {currency} {totals.petrol.toFixed(2)}
               </div>
               <div className="text-white">
-                <span className="font-semibold">Monthly Total Diesel Sales:</span> {currency} {totals.diesel.toFixed(2)}
+                <span className="font-semibold">
+                  Monthly Total Diesel Sales:
+                </span>{" "}
+                {currency} {totals.diesel.toFixed(2)}
               </div>
               <div className="text-white text-lg">
-                <span className="font-bold">Total Monthly Sales/Revenue:</span> {currency} {totals.total.toFixed(2)}
+                <span className="font-bold">Total Monthly Sales/Revenue:</span>{" "}
+                {currency} {totals.total.toFixed(2)}
               </div>
             </div>
           )}
 
           {/* Contact Info - Only show if actual data exists */}
-          {(
-            (state.companyData.poBox && state.companyData.poBox.trim() !== '') || 
-            (state.companyData.contacts && state.companyData.contacts.trim() !== '') || 
-            (state.companyData.email && state.companyData.email.trim() !== '')
-          ) && (
+          {((state.companyData.poBox &&
+            state.companyData.poBox.trim() !== "") ||
+            (state.companyData.contacts &&
+              state.companyData.contacts.trim() !== "") ||
+            (state.companyData.email &&
+              state.companyData.email.trim() !== "")) && (
             <div className="contact-info mt-8 text-gray-300 space-y-1">
-              {state.companyData.poBox && state.companyData.poBox.trim() !== '' && (
-                <div>P.O. Box: {state.companyData.poBox}</div>
-              )}
-              {state.companyData.contacts && state.companyData.contacts.trim() !== '' && (
-                <div>Contacts: {state.companyData.contacts}</div>
-              )}
-              {state.companyData.email && state.companyData.email.trim() !== '' && (
-                <div>Email: {state.companyData.email}</div>
-              )}
+              {state.companyData.poBox &&
+                state.companyData.poBox.trim() !== "" && (
+                  <div>P.O. Box: {state.companyData.poBox}</div>
+                )}
+              {state.companyData.contacts &&
+                state.companyData.contacts.trim() !== "" && (
+                  <div>Contacts: {state.companyData.contacts}</div>
+                )}
+              {state.companyData.email &&
+                state.companyData.email.trim() !== "" && (
+                  <div>Email: {state.companyData.email}</div>
+                )}
             </div>
           )}
         </div>

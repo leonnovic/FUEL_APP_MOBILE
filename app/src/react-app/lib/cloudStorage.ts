@@ -1,6 +1,6 @@
 /**
  * FuelPro Cloud Storage - Unified Multi-Provider Cloud Storage
- * 
+ *
  * Integrates:
  * - Cloudflare R2 (primary file storage - zero egress)
  * - Supabase Storage (backup file storage)
@@ -9,7 +9,7 @@
  * - Supabase (database + realtime)
  * - Seafile (self-hosted sync)
  * - Custom REST API (fallback)
- * 
+ *
  * Features:
  * - SWR (Stale-While-Revalidate) caching
  * - Pre-signed URLs for direct uploads
@@ -23,7 +23,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 export interface CloudConfig {
-  provider: 'supabase' | 'firebase' | 'seafile' | 'custom';
+  provider: "supabase" | "firebase" | "seafile" | "custom";
   apiEndpoint?: string;
   apiKey?: string;
   seafileConfig?: {
@@ -43,21 +43,21 @@ export interface SyncStatus {
   provider?: string;
 }
 
-const CLOUD_CONFIG_KEY = 'fuelpro_cloud_config';
+const CLOUD_CONFIG_KEY = "fuelpro_cloud_config";
 
 // R2/S3 compatible config
 const R2_CONFIG = {
-  accountId: import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID || '',
-  accessKeyId: import.meta.env.VITE_R2_ACCESS_KEY_ID || '',
-  secretAccessKey: import.meta.env.VITE_R2_SECRET_ACCESS_KEY || '',
-  bucket: import.meta.env.VITE_R2_BUCKET_NAME || 'fuelpro-files',
-  publicUrl: import.meta.env.VITE_R2_PUBLIC_URL || '', // e.g., https://files.yourdomain.com
+  accountId: import.meta.env.VITE_CLOUDFLARE_ACCOUNT_ID || "",
+  accessKeyId: import.meta.env.VITE_R2_ACCESS_KEY_ID || "",
+  secretAccessKey: import.meta.env.VITE_R2_SECRET_ACCESS_KEY || "",
+  bucket: import.meta.env.VITE_R2_BUCKET_NAME || "fuelpro-files",
+  publicUrl: import.meta.env.VITE_R2_PUBLIC_URL || "", // e.g., https://files.yourdomain.com
 };
 
 // Upstash Redis config
 const UPSTASH_CONFIG = {
-  url: import.meta.env.VITE_UPSTASH_REDIS_REST_URL || '',
-  token: import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN || '',
+  url: import.meta.env.VITE_UPSTASH_REDIS_REST_URL || "",
+  token: import.meta.env.VITE_UPSTASH_REDIS_REST_TOKEN || "",
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -77,46 +77,49 @@ export const S3Storage = {
     } = {}
   ): Promise<string | null> {
     const {
-      bucket = import.meta.env.VITE_S3_BUCKET || 'fuelpro-files',
+      bucket = import.meta.env.VITE_S3_BUCKET || "fuelpro-files",
       accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID,
-      secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY
+      secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY,
     } = options;
 
     if (!accessKeyId || !secretAccessKey) {
-      console.warn('S3 credentials not configured');
+      console.warn("S3 credentials not configured");
       return null;
     }
 
     try {
-      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${path.split('/').pop()}`;
-      const key = `uploads/${new Date().toISOString().split('T')[0]}/${filename}`;
+      const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${path.split("/").pop()}`;
+      const key = `uploads/${new Date().toISOString().split("T")[0]}/${filename}`;
 
       // In browser, we'd use pre-signed URL from backend
       // For now, store metadata locally
       const url = `https://${bucket}.s3.amazonaws.com/${key}`;
-      
+
       await storeFileMetadata(key, {
-        name: file instanceof File ? file.name : 'unknown',
+        name: file instanceof File ? file.name : "unknown",
         size: file.size,
         type: file.type,
         uploadedAt: Date.now(),
         bucket,
-        url
+        url,
       });
 
       return url;
     } catch (e) {
-      console.error('S3 upload failed:', e);
+      console.error("S3 upload failed:", e);
       return null;
     }
   },
 
-  async getSignedUploadUrl(filename: string, contentType: string): Promise<string | null> {
+  async getSignedUploadUrl(
+    filename: string,
+    contentType: string
+  ): Promise<string | null> {
     try {
-      const res = await fetch('/api/s3/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, contentType })
+      const res = await fetch("/api/s3/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, contentType }),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -128,10 +131,10 @@ export const S3Storage = {
 
   async getSignedDownloadUrl(key: string): Promise<string | null> {
     try {
-      const res = await fetch('/api/s3/download-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key })
+      const res = await fetch("/api/s3/download-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -143,39 +146,39 @@ export const S3Storage = {
 
   async deleteFile(key: string): Promise<boolean> {
     try {
-      await fetch('/api/s3/delete', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key })
+      await fetch("/api/s3/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
       });
       return true;
     } catch {
       return false;
     }
-  }
+  },
 };
 
 // ─── Cloudflare R2 / S3-Compatible Storage ───
 export const R2Storage = {
   async uploadFile(file: File | Blob, path: string): Promise<string | null> {
     if (!R2_CONFIG.accountId || !R2_CONFIG.accessKeyId) {
-      console.warn('R2 not configured, falling back to Supabase Storage');
+      console.warn("R2 not configured, falling back to Supabase Storage");
       return SupabaseStorage.uploadFile(file, path);
     }
 
     try {
       // Generate unique filename
-      const ext = path.split('.').pop() || '';
+      const ext = path.split(".").pop() || "";
       const key = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const fullPath = `uploads/${new Date().toISOString().split('T')[0]}/${key}`;
+      const fullPath = `uploads/${new Date().toISOString().split("T")[0]}/${key}`;
 
       // For R2, we use the public URL directly since R2 doesn't charge egress
       // In production, you'd use a Vercel Edge Function to generate pre-signed URLs
       const url = `${R2_CONFIG.publicUrl}/${fullPath}`;
-      
+
       // Store metadata in IndexedDB for tracking
       await storeFileMetadata(fullPath, {
-        name: file instanceof File ? file.name : 'unknown',
+        name: file instanceof File ? file.name : "unknown",
         size: file.size,
         type: file.type,
         uploadedAt: Date.now(),
@@ -184,7 +187,7 @@ export const R2Storage = {
 
       return url;
     } catch (e) {
-      console.error('R2 upload failed:', e);
+      console.error("R2 upload failed:", e);
       return SupabaseStorage.uploadFile(file, path);
     }
   },
@@ -199,7 +202,7 @@ export const R2Storage = {
     }
   },
 
-  async listFiles(prefix: string = ''): Promise<string[]> {
+  async listFiles(prefix: string = ""): Promise<string[]> {
     const metadata = getFileMetadata();
     return Object.keys(metadata).filter(k => k.startsWith(prefix));
   },
@@ -212,36 +215,36 @@ export const R2Storage = {
 };
 
 // ─── Supabase Storage ───
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 export const SupabaseStorage = {
   async uploadFile(file: File | Blob, path: string): Promise<string | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
 
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      
-      const ext = path.split('.').pop() || '';
+
+      const ext = path.split(".").pop() || "";
       const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const fullPath = `uploads/${new Date().toISOString().split('T')[0]}/${filename}`;
+      const fullPath = `uploads/${new Date().toISOString().split("T")[0]}/${filename}`;
 
       const { data, error } = await supabase.storage
-        .from('fuelpro-files')
+        .from("fuelpro-files")
         .upload(fullPath, file, {
-          cacheControl: '3600',
+          cacheControl: "3600",
           upsert: false,
         });
 
       if (error) throw error;
 
       const { data: urlData } = supabase.storage
-        .from('fuelpro-files')
+        .from("fuelpro-files")
         .getPublicUrl(fullPath);
 
       await storeFileMetadata(fullPath, {
-        name: file instanceof File ? file.name : 'unknown',
+        name: file instanceof File ? file.name : "unknown",
         size: file.size,
         type: file.type,
         uploadedAt: Date.now(),
@@ -250,7 +253,7 @@ export const SupabaseStorage = {
 
       return urlData.publicUrl;
     } catch (e) {
-      console.error('Supabase Storage upload failed:', e);
+      console.error("Supabase Storage upload failed:", e);
       return null;
     }
   },
@@ -258,22 +261,27 @@ export const SupabaseStorage = {
   async deleteFile(path: string): Promise<boolean> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return false;
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      const { error } = await supabase.storage.from('fuelpro-files').remove([path]);
+      const { error } = await supabase.storage
+        .from("fuelpro-files")
+        .remove([path]);
       return !error;
     } catch {
       return false;
     }
   },
 
-  async getSignedUrl(path: string, expiresIn: number = 3600): Promise<string | null> {
+  async getSignedUrl(
+    path: string,
+    expiresIn: number = 3600
+  ): Promise<string | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
       const { data, error } = await supabase.storage
-        .from('fuelpro-files')
+        .from("fuelpro-files")
         .createSignedUrl(path, expiresIn);
       return error ? null : data.signedUrl;
     } catch {
@@ -287,9 +295,12 @@ export const UpstashCache = {
   async get<T>(key: string): Promise<T | null> {
     if (!UPSTASH_CONFIG.url || !UPSTASH_CONFIG.token) return null;
     try {
-      const res = await fetch(`${UPSTASH_CONFIG.url}/get/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${UPSTASH_CONFIG.token}` },
-      });
+      const res = await fetch(
+        `${UPSTASH_CONFIG.url}/get/${encodeURIComponent(key)}`,
+        {
+          headers: { Authorization: `Bearer ${UPSTASH_CONFIG.token}` },
+        }
+      );
       const data = await res.json();
       return data.result ? JSON.parse(data.result) : null;
     } catch {
@@ -297,16 +308,23 @@ export const UpstashCache = {
     }
   },
 
-  async set<T>(key: string, value: T, ttlSeconds: number = 300): Promise<boolean> {
+  async set<T>(
+    key: string,
+    value: T,
+    ttlSeconds: number = 300
+  ): Promise<boolean> {
     if (!UPSTASH_CONFIG.url || !UPSTASH_CONFIG.token) return false;
     try {
       await fetch(`${UPSTASH_CONFIG.url}/set/${encodeURIComponent(key)}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${UPSTASH_CONFIG.token}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ value: JSON.stringify(value), exat: Math.floor(Date.now() / 1000) + ttlSeconds }),
+        body: JSON.stringify({
+          value: JSON.stringify(value),
+          exat: Math.floor(Date.now() / 1000) + ttlSeconds,
+        }),
       });
       return true;
     } catch {
@@ -327,7 +345,11 @@ export const UpstashCache = {
   },
 
   // Session management
-  async setSession(userId: string, sessionData: Record<string, any>, ttlSeconds: number = 2592000): Promise<boolean> {
+  async setSession(
+    userId: string,
+    sessionData: Record<string, any>,
+    ttlSeconds: number = 2592000
+  ): Promise<boolean> {
     const key = `session:${userId}`;
     return this.set(key, { ...sessionData, createdAt: Date.now() }, ttlSeconds);
   },
@@ -343,21 +365,29 @@ export const UpstashCache = {
   },
 
   // Cache fuel prices (frequently accessed)
-  async cacheFuelPrices(prices: Record<string, number>, ttlSeconds: number = 300): Promise<boolean> {
-    return this.set('fuel_prices:v1', prices, ttlSeconds);
+  async cacheFuelPrices(
+    prices: Record<string, number>,
+    ttlSeconds: number = 300
+  ): Promise<boolean> {
+    return this.set("fuel_prices:v1", prices, ttlSeconds);
   },
 
   async getCachedFuelPrices(): Promise<Record<string, number> | null> {
-    return (this as typeof UpstashCache).get<Record<string, number>>('fuel_prices:v1');
+    return (this as typeof UpstashCache).get<Record<string, number>>(
+      "fuel_prices:v1"
+    );
   },
 
   // Cache station data
-  async cacheStations(stations: any[], ttlSeconds: number = 600): Promise<boolean> {
-    return this.set('stations:v1', stations, ttlSeconds);
+  async cacheStations(
+    stations: any[],
+    ttlSeconds: number = 600
+  ): Promise<boolean> {
+    return this.set("stations:v1", stations, ttlSeconds);
   },
 
   async getCachedStations(): Promise<any[] | null> {
-    return (this as typeof UpstashCache).get<any[]>('stations:v1');
+    return (this as typeof UpstashCache).get<any[]>("stations:v1");
   },
 };
 
@@ -435,43 +465,46 @@ export function getSWRStats(): { size: number; keys: string[] } {
 // FILE METADATA STORAGE (IndexedDB)
 // ═══════════════════════════════════════════════════════════════════
 
-const FILE_META_DB = 'fuelpro-file-meta';
-const FILE_META_STORE = 'files';
+const FILE_META_DB = "fuelpro-file-meta";
+const FILE_META_STORE = "files";
 
 async function openFileMetaDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(FILE_META_DB, 1);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = (e) => {
+    req.onupgradeneeded = e => {
       const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(FILE_META_STORE)) {
-        db.createObjectStore(FILE_META_STORE, { keyPath: 'path' });
+        db.createObjectStore(FILE_META_STORE, { keyPath: "path" });
       }
     };
   });
 }
 
-async function storeFileMetadata(path: string, meta: Record<string, any>): Promise<void> {
+async function storeFileMetadata(
+  path: string,
+  meta: Record<string, any>
+): Promise<void> {
   try {
     const db = await openFileMetaDB();
-    const tx = db.transaction(FILE_META_STORE, 'readwrite');
+    const tx = db.transaction(FILE_META_STORE, "readwrite");
     tx.objectStore(FILE_META_STORE).put({ path, ...meta });
   } catch (e) {
-    console.error('Failed to store file metadata:', e);
+    console.error("Failed to store file metadata:", e);
   }
 }
 
 function getFileMetadata(): Record<string, Record<string, any>> {
   try {
-    return JSON.parse(localStorage.getItem('fuelpro_file_meta') || '{}');
+    return JSON.parse(localStorage.getItem("fuelpro_file_meta") || "{}");
   } catch {
     return {};
   }
 }
 
 function saveFileMetadata(meta: Record<string, Record<string, any>>): void {
-  localStorage.setItem('fuelpro_file_meta', JSON.stringify(meta));
+  localStorage.setItem("fuelpro_file_meta", JSON.stringify(meta));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -485,22 +518,26 @@ interface RealtimeChannel {
 export const RealtimeSync = {
   async subscribeToCollection(
     collection: string,
-    callback: (payload: { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new: any; old: any }) => void
+    callback: (payload: {
+      eventType: "INSERT" | "UPDATE" | "DELETE";
+      new: any;
+      old: any;
+    }) => void
   ): Promise<RealtimeChannel | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
 
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
       const channel = supabase
         .channel(`${collection}-changes`)
         .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: collection },
-          (payload) => {
+          "postgres_changes",
+          { event: "*", schema: "public", table: collection },
+          payload => {
             callback({
-              eventType: payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE',
+              eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
               new: payload.new,
               old: payload.old,
             });
@@ -512,7 +549,7 @@ export const RealtimeSync = {
         unsubscribe: () => supabase.removeChannel(channel),
       };
     } catch (e) {
-      console.error('Realtime subscription failed:', e);
+      console.error("Realtime subscription failed:", e);
       return null;
     }
   },
@@ -521,7 +558,7 @@ export const RealtimeSync = {
   async subscribeToFuelPrices(
     callback: (prices: Record<string, number>) => void
   ): Promise<RealtimeChannel | null> {
-    return this.subscribeToCollection('fuel_prices', ({ new: data }) => {
+    return this.subscribeToCollection("fuel_prices", ({ new: data }) => {
       if (data) {
         callback(data);
         // Update cache
@@ -534,7 +571,7 @@ export const RealtimeSync = {
   async subscribeToStations(
     callback: (stations: any[]) => void
   ): Promise<RealtimeChannel | null> {
-    return this.subscribeToCollection('stations', ({ new: data }) => {
+    return this.subscribeToCollection("stations", ({ new: data }) => {
       if (data) callback(data);
     });
   },
@@ -545,13 +582,20 @@ export const RealtimeSync = {
 // ═══════════════════════════════════════════════════════════════════
 
 export const SeafileSync = {
-  async getAuthToken(endpoint: string, username: string, password: string): Promise<string | null> {
+  async getAuthToken(
+    endpoint: string,
+    username: string,
+    password: string
+  ): Promise<string | null> {
     try {
-      const res = await fetch(`${endpoint.replace(/\/$/, '')}/api2/auth-token/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+      const res = await fetch(
+        `${endpoint.replace(/\/$/, "")}/api2/auth-token/`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        }
+      );
       if (!res.ok) return null;
       const data = await res.json();
       return data.token;
@@ -560,9 +604,12 @@ export const SeafileSync = {
     }
   },
 
-  async listLibraries(endpoint: string, token: string): Promise<{ id: string; name: string }[]> {
+  async listLibraries(
+    endpoint: string,
+    token: string
+  ): Promise<{ id: string; name: string }[]> {
     try {
-      const res = await fetch(`${endpoint.replace(/\/$/, '')}/api2/repos/`, {
+      const res = await fetch(`${endpoint.replace(/\/$/, "")}/api2/repos/`, {
         headers: { Authorization: `Token ${token}` },
       });
       if (!res.ok) return [];
@@ -578,38 +625,38 @@ export const SeafileSync = {
     token: string,
     libId: string,
     file: File | Blob,
-    path: string = '/'
+    path: string = "/"
   ): Promise<string | null> {
     try {
-      const dirUrl = `${endpoint.replace(/\/$/, '')}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`;
-      
+      const dirUrl = `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`;
+
       // Create directory if needed
       await fetch(dirUrl, {
-        method: 'POST',
+        method: "POST",
         headers: { Authorization: `Token ${token}` },
-        body: JSON.stringify({ operation: 'mkdir', dirname: '' }),
+        body: JSON.stringify({ operation: "mkdir", dirname: "" }),
       }).catch(() => {});
 
       // Upload file
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('parent_dir', path);
+      formData.append("file", file);
+      formData.append("parent_dir", path);
 
       const uploadRes = await fetch(
-        `${endpoint.replace(/\/$/, '')}/api2/repos/${libId}/upload-link/`,
+        `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/upload-link/`,
         { headers: { Authorization: `Token ${token}` } }
       );
       if (!uploadRes.ok) return null;
-      
+
       const uploadUrl = await uploadRes.text();
       const fileRes = await fetch(uploadUrl, {
-        method: 'POST',
+        method: "POST",
         headers: { Authorization: `Token ${token}` },
         body: formData,
       });
 
       if (!fileRes.ok) return null;
-      return `${endpoint}/seafile/find-file/?repo=${libId}&p=${encodeURIComponent(path + '/' + (file as File).name)}`;
+      return `${endpoint}/seafile/find-file/?repo=${libId}&p=${encodeURIComponent(path + "/" + (file as File).name)}`;
     } catch {
       return null;
     }
@@ -623,8 +670,8 @@ export const SeafileSync = {
   ): Promise<Blob | null> {
     try {
       const downloadRes = await fetch(
-        `${endpoint.replace(/\/$/, '')}/api2/repos/${libId}/file/?p=${encodeURIComponent(path)}`,
-        { headers: { Authorization: `Token ${token}`, Accept: '*/*' } }
+        `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/file/?p=${encodeURIComponent(path)}`,
+        { headers: { Authorization: `Token ${token}`, Accept: "*/*" } }
       );
       if (!downloadRes.ok) return null;
       return await downloadRes.blob();
@@ -637,11 +684,13 @@ export const SeafileSync = {
     endpoint: string,
     token: string,
     libId: string,
-    path: string = '/'
-  ): Promise<{ name: string; type: 'file' | 'dir'; size: number; mtime: number }[]> {
+    path: string = "/"
+  ): Promise<
+    { name: string; type: "file" | "dir"; size: number; mtime: number }[]
+  > {
     try {
       const res = await fetch(
-        `${endpoint.replace(/\/$/, '')}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`,
+        `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`,
         { headers: { Authorization: `Token ${token}` } }
       );
       if (!res.ok) return [];
@@ -657,12 +706,16 @@ export const SeafileSync = {
 // ═══════════════════════════════════════════════════════════════════
 
 export const CustomAPISync = {
-  async push(endpoint: string, apiKey: string, data: Record<string, any>): Promise<boolean> {
+  async push(
+    endpoint: string,
+    apiKey: string,
+    data: Record<string, any>
+  ): Promise<boolean> {
     try {
-      const res = await fetch(`${endpoint.replace(/\/$/, '')}/sync`, {
-        method: 'POST',
+      const res = await fetch(`${endpoint.replace(/\/$/, "")}/sync`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
@@ -677,9 +730,12 @@ export const CustomAPISync = {
     }
   },
 
-  async pull(endpoint: string, apiKey: string): Promise<Record<string, any> | null> {
+  async pull(
+    endpoint: string,
+    apiKey: string
+  ): Promise<Record<string, any> | null> {
     try {
-      const res = await fetch(`${endpoint.replace(/\/$/, '')}/sync`, {
+      const res = await fetch(`${endpoint.replace(/\/$/, "")}/sync`, {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!res.ok) return null;
@@ -689,12 +745,16 @@ export const CustomAPISync = {
     }
   },
 
-  async getSignedUploadUrl(endpoint: string, apiKey: string, filename: string): Promise<string | null> {
+  async getSignedUploadUrl(
+    endpoint: string,
+    apiKey: string,
+    filename: string
+  ): Promise<string | null> {
     try {
-      const res = await fetch(`${endpoint.replace(/\/$/, '')}/upload-url`, {
-        method: 'POST',
+      const res = await fetch(`${endpoint.replace(/\/$/, "")}/upload-url`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({ filename }),
@@ -721,15 +781,23 @@ export class FuelProCloudSync {
 
   constructor() {
     this.loadConfig();
-    window.addEventListener('online', () => { this.isOnline = true; this.notifyListeners(); });
-    window.addEventListener('offline', () => { this.isOnline = false; this.notifyListeners(); });
+    window.addEventListener("online", () => {
+      this.isOnline = true;
+      this.notifyListeners();
+    });
+    window.addEventListener("offline", () => {
+      this.isOnline = false;
+      this.notifyListeners();
+    });
   }
 
   loadConfig(): void {
     try {
       const saved = localStorage.getItem(CLOUD_CONFIG_KEY);
       if (saved) this.config = JSON.parse(saved);
-    } catch { this.config = null; }
+    } catch {
+      this.config = null;
+    }
   }
 
   configure(config: CloudConfig): void {
@@ -750,13 +818,13 @@ export class FuelProCloudSync {
     if (!this.config || !this.isOnline) return false;
 
     switch (this.config.provider) {
-      case 'supabase':
+      case "supabase":
         return this.pushToSupabase(data);
-      case 'firebase':
+      case "firebase":
         return this.pushToFirebase(data);
-      case 'seafile':
+      case "seafile":
         return this.pushToSeafile(data);
-      case 'custom':
+      case "custom":
         return this.pushToCustomAPI(data);
       default:
         return false;
@@ -767,13 +835,13 @@ export class FuelProCloudSync {
     if (!this.config || !this.isOnline) return null;
 
     switch (this.config.provider) {
-      case 'supabase':
+      case "supabase":
         return this.pullFromSupabase();
-      case 'firebase':
+      case "firebase":
         return this.pullFromFirebase();
-      case 'seafile':
+      case "seafile":
         return this.pullFromSeafile();
-      case 'custom':
+      case "custom":
         return this.pullFromCustomAPI();
       default:
         return null;
@@ -792,18 +860,20 @@ export class FuelProCloudSync {
   private async pushToSupabase(data?: Record<string, any>): Promise<boolean> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return false;
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      
+
       const payload = data || this.getAllLocalData();
       for (const [table, records] of Object.entries(payload)) {
         if (Array.isArray(records)) {
-          await supabase.from(table).upsert(records.map((r: any) => ({
-            ...r,
-            device_id: getDeviceId(),
-            station_id: this.getStationId(),
-            synced_at: new Date().toISOString(),
-          })));
+          await supabase.from(table).upsert(
+            records.map((r: any) => ({
+              ...r,
+              device_id: getDeviceId(),
+              station_id: this.getStationId(),
+              synced_at: new Date().toISOString(),
+            }))
+          );
         }
       }
       return true;
@@ -815,20 +885,27 @@ export class FuelProCloudSync {
   private async pullFromSupabase(): Promise<Record<string, any> | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
     try {
-      const { createClient } = await import('@supabase/supabase-js');
+      const { createClient } = await import("@supabase/supabase-js");
       const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-      
+
       const result: Record<string, any> = {};
-      const tables = ['users', 'stations', 'fuel_prices', 'sales', 'inventory', 'expenses'];
-      
+      const tables = [
+        "users",
+        "stations",
+        "fuel_prices",
+        "sales",
+        "inventory",
+        "expenses",
+      ];
+
       for (const table of tables) {
         const { data, error } = await supabase
           .from(table)
-          .select('*')
-          .eq('station_id', this.getStationId())
-          .order('synced_at', { ascending: false })
+          .select("*")
+          .eq("station_id", this.getStationId())
+          .order("synced_at", { ascending: false })
           .limit(100);
-        
+
         if (!error && data) result[table] = data;
       }
       return result;
@@ -841,16 +918,16 @@ export class FuelProCloudSync {
   private async pushToFirebase(data?: Record<string, any>): Promise<boolean> {
     if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return false;
     try {
-      const { initializeApp } = await import('firebase/app');
-      const { getDatabase, ref, set } = await import('firebase/database');
+      const { initializeApp } = await import("firebase/app");
+      const { getDatabase, ref, set } = await import("firebase/database");
       const app = initializeApp(FIREBASE_CONFIG);
       const db = getDatabase(app);
-      
+
       const payload = data || this.getAllLocalData();
       const stationPath = `stations/${this.getStationId()}`;
-      
+
       for (const [collection, records] of Object.entries(payload)) {
-        if (typeof records === 'object' && records !== null) {
+        if (typeof records === "object" && records !== null) {
           await set(ref(db, `${stationPath}/${collection}`), records);
         }
       }
@@ -863,11 +940,11 @@ export class FuelProCloudSync {
   private async pullFromFirebase(): Promise<Record<string, any> | null> {
     if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return null;
     try {
-      const { initializeApp } = await import('firebase/app');
-      const { getDatabase, ref, get } = await import('firebase/database');
+      const { initializeApp } = await import("firebase/app");
+      const { getDatabase, ref, get } = await import("firebase/database");
       const app = initializeApp(FIREBASE_CONFIG);
       const db = getDatabase(app);
-      
+
       const snapshot = await get(ref(db, `stations/${this.getStationId()}`));
       return snapshot.exists() ? snapshot.val() : null;
     } catch {
@@ -877,24 +954,32 @@ export class FuelProCloudSync {
 
   // Seafile methods
   private async pushToSeafile(data?: Record<string, any>): Promise<boolean> {
-    if (!this.config?.apiEndpoint || !this.config?.seafileConfig?.libId) return false;
+    if (!this.config?.apiEndpoint || !this.config?.seafileConfig?.libId)
+      return false;
     try {
-      let token = this.config.apiKey || '';
-      
-      if (!token && this.config.seafileConfig.username && this.config.seafileConfig.password) {
-        token = await SeafileSync.getAuthToken(
-          this.config.apiEndpoint,
-          this.config.seafileConfig.username,
-          this.config.seafileConfig.password
-        ) || '';
+      let token = this.config.apiKey || "";
+
+      if (
+        !token &&
+        this.config.seafileConfig.username &&
+        this.config.seafileConfig.password
+      ) {
+        token =
+          (await SeafileSync.getAuthToken(
+            this.config.apiEndpoint,
+            this.config.seafileConfig.username,
+            this.config.seafileConfig.password
+          )) || "";
       }
-      
+
       if (!token) return false;
-      
+
       const payload = data || this.getAllLocalData();
-      const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-      const filename = `fuelpro_backup_${new Date().toISOString().split('T')[0]}.json`;
-      
+      const jsonBlob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const filename = `fuelpro_backup_${new Date().toISOString().split("T")[0]}.json`;
+
       const url = await SeafileSync.uploadFile(
         this.config.apiEndpoint,
         token,
@@ -902,7 +987,7 @@ export class FuelProCloudSync {
         jsonBlob,
         `/fuelpro`
       );
-      
+
       return !!url;
     } catch {
       return false;
@@ -910,41 +995,47 @@ export class FuelProCloudSync {
   }
 
   private async pullFromSeafile(): Promise<Record<string, any> | null> {
-    if (!this.config?.apiEndpoint || !this.config?.seafileConfig?.libId) return null;
+    if (!this.config?.apiEndpoint || !this.config?.seafileConfig?.libId)
+      return null;
     try {
-      let token = this.config.apiKey || '';
-      
-      if (!token && this.config.seafileConfig?.username && this.config.seafileConfig?.password) {
-        token = await SeafileSync.getAuthToken(
-          this.config.apiEndpoint,
-          this.config.seafileConfig.username,
-          this.config.seafileConfig.password
-        ) || '';
+      let token = this.config.apiKey || "";
+
+      if (
+        !token &&
+        this.config.seafileConfig?.username &&
+        this.config.seafileConfig?.password
+      ) {
+        token =
+          (await SeafileSync.getAuthToken(
+            this.config.apiEndpoint,
+            this.config.seafileConfig.username,
+            this.config.seafileConfig.password
+          )) || "";
       }
-      
+
       if (!token) return null;
-      
+
       // Find latest backup file
       const files = await SeafileSync.listFiles(
         this.config.apiEndpoint,
         token,
         this.config.seafileConfig.libId,
-        '/fuelpro'
+        "/fuelpro"
       );
-      
+
       const backupFile = files
-        .filter(f => f.type === 'file' && f.name.endsWith('.json'))
+        .filter(f => f.type === "file" && f.name.endsWith(".json"))
         .sort((a, b) => b.mtime - a.mtime)[0];
-      
+
       if (!backupFile) return null;
-      
+
       const blob = await SeafileSync.downloadFile(
         this.config.apiEndpoint,
         token,
         this.config.seafileConfig.libId,
         `/fuelpro/${backupFile.name}`
       );
-      
+
       if (!blob) return null;
       const text = await blob.text();
       return JSON.parse(text);
@@ -956,7 +1047,11 @@ export class FuelProCloudSync {
   // Custom API methods
   private async pushToCustomAPI(data?: Record<string, any>): Promise<boolean> {
     if (!this.config?.apiEndpoint || !this.config?.apiKey) return false;
-    return CustomAPISync.push(this.config.apiEndpoint, this.config.apiKey, data || this.getAllLocalData());
+    return CustomAPISync.push(
+      this.config.apiEndpoint,
+      this.config.apiKey,
+      data || this.getAllLocalData()
+    );
   }
 
   private async pullFromCustomAPI(): Promise<Record<string, any> | null> {
@@ -967,16 +1062,16 @@ export class FuelProCloudSync {
   // Real-time sync
   startRealtime(): void {
     this.stopRealtime();
-    if (!this.config || this.config.provider !== 'supabase') return;
+    if (!this.config || this.config.provider !== "supabase") return;
 
-    RealtimeSync.subscribeToFuelPrices((prices) => {
+    RealtimeSync.subscribeToFuelPrices(prices => {
       UpstashCache.cacheFuelPrices(prices);
-      invalidateSWR('fuel_prices');
+      invalidateSWR("fuel_prices");
     });
 
-    RealtimeSync.subscribeToStations((stations) => {
+    RealtimeSync.subscribeToStations(stations => {
       UpstashCache.cacheStations(stations);
-      invalidateSWR('stations');
+      invalidateSWR("stations");
     });
   }
 
@@ -1007,15 +1102,17 @@ export class FuelProCloudSync {
     return {
       enabled: this.isEnabled(),
       isOnline: this.isOnline,
-      lastSync: Number(localStorage.getItem('fuelpro_last_sync') || '0'),
+      lastSync: Number(localStorage.getItem("fuelpro_last_sync") || "0"),
       pendingChanges: this.getPendingCount(),
-      provider: this.config?.provider || 'local',
+      provider: this.config?.provider || "local",
     };
   }
 
   private getPendingCount(): number {
     try {
-      const queue = JSON.parse(localStorage.getItem('fuelpro_sync_queue') || '[]');
+      const queue = JSON.parse(
+        localStorage.getItem("fuelpro_sync_queue") || "[]"
+      );
       return queue.length;
     } catch {
       return 0;
@@ -1026,7 +1123,7 @@ export class FuelProCloudSync {
     const data: Record<string, any> = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith('fuelpro_') && key !== CLOUD_CONFIG_KEY) {
+      if (key && key.startsWith("fuelpro_") && key !== CLOUD_CONFIG_KEY) {
         try {
           data[key] = JSON.parse(localStorage.getItem(key)!);
         } catch {
@@ -1039,10 +1136,12 @@ export class FuelProCloudSync {
 
   private getStationId(): string {
     try {
-      const station = JSON.parse(localStorage.getItem('fuelpro_station') || '{}');
-      return station.id || 'default';
+      const station = JSON.parse(
+        localStorage.getItem("fuelpro_station") || "{}"
+      );
+      return station.id || "default";
     } catch {
-      return 'default';
+      return "default";
     }
   }
 
@@ -1060,20 +1159,20 @@ export class FuelProCloudSync {
 
 // Device ID helper
 function getDeviceId(): string {
-  let id = localStorage.getItem('fuelpro_device_id');
+  let id = localStorage.getItem("fuelpro_device_id");
   if (!id) {
     id = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    localStorage.setItem('fuelpro_device_id', id);
+    localStorage.setItem("fuelpro_device_id", id);
   }
   return id;
 }
 
 // Firebase config (reused from cloudSync.ts)
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
 };
 
 // ─── Legacy compatibility exports ───
