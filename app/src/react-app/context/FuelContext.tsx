@@ -764,31 +764,14 @@ const initialState: FuelState = {
 };
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-  // Always preserve logo during LOAD_FROM_STORAGE - this is critical for user experience
+  // CRITICAL: Always load logo from storage during LOAD_FROM_STORAGE
   if (action.type === "LOAD_FROM_STORAGE" && action.payload) {
-    // Check if the incoming payload has companyData with a logo
-    const incomingLogo = action.payload.companyData?.logo;
-    
-    // If we have an existing logo in state but the payload doesn't have one, preserve it
-    if (state.companyData.logo && !incomingLogo) {
-      action.payload = {
-        ...action.payload,
-        companyData: {
-          ...action.payload.companyData,
-          logo: state.companyData.logo
-        }
-      };
-    }
-    
-    // If both have logos, prefer the existing one (user might have updated it)
-    if (state.companyData.logo && incomingLogo && state.companyData.logo !== incomingLogo) {
-      action.payload = {
-        ...action.payload,
-        companyData: {
-          ...action.payload.companyData,
-          logo: state.companyData.logo
-        }
-      };
+    // The logo is now loaded from both compact and individual companyData keys
+    // Just ensure companyData is properly merged
+    const incomingCompanyData = action.payload.companyData;
+    if (incomingCompanyData?.logo) {
+      // Logo is available - use it
+      console.log("Loading logo from storage:", incomingCompanyData.logo.substring(0, 50) + "...");
     }
   }
 

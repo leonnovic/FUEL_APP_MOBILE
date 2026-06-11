@@ -70,6 +70,15 @@ export default function Header({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // CRITICAL: Sync logoPreview with state after loading from storage
+  // This fixes logo disappearing after refresh
+  useEffect(() => {
+    if (state.companyData.logo && !logoPreview) {
+      setLogoPreview(state.companyData.logo);
+      setEditData(prev => ({ ...prev, logo: state.companyData.logo }));
+    }
+  }, [state.companyData.logo]);
+
   const handleToggleTheme = () => {
     toggleTheme();
   };
