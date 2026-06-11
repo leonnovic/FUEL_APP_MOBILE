@@ -10,8 +10,6 @@ import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
-import SubscriptionChecker from "@/react-app/components/SubscriptionChecker";
-import TrialGate from "@/react-app/components/TrialGate";
 import { lazy, Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 
@@ -83,15 +81,11 @@ function MainAppLoader() {
 
   return user ? (
     <TenantProvider detectedCountry={detectedCountry}>
-      <SubscriptionChecker>
-        <StationProvider>
-          <FuelProvider>
-            <TrialGate>
-              <HomePage />
-            </TrialGate>
-          </FuelProvider>
-        </StationProvider>
-      </SubscriptionChecker>
+      <StationProvider>
+        <FuelProvider>
+          <HomePage />
+        </FuelProvider>
+      </StationProvider>
     </TenantProvider>
   ) : (
     <AuthLogin />

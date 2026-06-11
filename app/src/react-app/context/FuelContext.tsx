@@ -1007,7 +1007,8 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       };
 
       // Only include non-empty data to minimize storage
-      if (state.companyData?.name) compactData.companyData = state.companyData;
+      // Always save companyData if it exists (even without name, for logo persistence)
+      if (state.companyData) compactData.companyData = state.companyData;
       if (state.signatures?.manager || state.signatures?.director)
         compactData.signatures = state.signatures;
       if (state.invoiceCounter > 1)
@@ -1116,7 +1117,8 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       };
 
       // Only include non-default/non-empty values for maximum compression
-      if (state.companyData?.name) compactData.companyData = state.companyData;
+      // Always save companyData if it exists (even without name, for logo persistence)
+      if (state.companyData) compactData.companyData = state.companyData;
       if (state.signatures?.manager || state.signatures?.director)
         compactData.signatures = state.signatures;
       if (state.invoiceCounter > 1)

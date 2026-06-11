@@ -1,90 +1,20 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "echo 'Static build' && exit 0",
   "outputDirectory": "dist",
-  "installCommand": "npm install",
+  "installCommand": "echo 'No install needed' && exit 0",
   "framework": "vite",
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-XSS-Protection",
-          "value": "1; mode=block"
-        },
-        {
-          "key": "X-DNS-Prefetch-Control",
-          "value": "on"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=()"
-        }
-      ]
-    },
-    {
-      "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/boot.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Content-Type",
-          "value": "application/javascript"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).css",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
   ],
   "redirects": [
-    {
-      "source": "/founder",
-      "destination": "/#/founder",
-      "permanent": false
-    },
-    {
-      "source": "/admin",
-      "destination": "/#/admin",
-      "permanent": false
-    }
-  ],
-  "trailingSlash": false
+    { "source": "/founder", "destination": "/#/founder", "permanent": false },
+    { "source": "/admin", "destination": "/#/admin", "permanent": false }
+  ]
 }
