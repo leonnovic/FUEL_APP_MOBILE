@@ -15,7 +15,6 @@ frontend/dist/
 
 # Vercel
 .vercel/
-api/handler.cjs
 
 # IDE
 .vscode/
