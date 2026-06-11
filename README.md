@@ -1,23 +1,32 @@
 # FuelPro - Fuel Station Management System
 
+> A professional fuel distribution and payment management system built with React, TypeScript, and tRPC.
+
+![FuelPro Dashboard](dashboard-preview.png)
+
 ## 🚀 Quick Start
 
 ### Installation Options
 
 #### Option 1: PWA (Recommended - All Devices)
-- **Android Chrome**: Visit `https://fuelpro.mocha.app` > Menu > "Add to Home Screen"
-- **iOS Safari**: Visit `https://fuelpro.mocha.app` > Share > "Add to Home Screen"
-- **Windows Chrome**: Visit `https://fuelpro.mocha.app` > Menu > "Install FuelPro"
-- Works offline after first visit
+- **Android Chrome**: Visit the deployed URL > Menu > "Add to Home Screen"
+- **iOS Safari**: Visit the deployed URL > Share > "Add to Home Screen"
+- **Windows Chrome**: Visit the deployed URL > Menu > "Install FuelPro"
+- Works offline after first visit (Service Worker caching)
 
 #### Option 2: Android APK
 1. Download `FuelPro-v1.0.0.apk` to your Android phone
 2. Enable "Unknown Sources" in Settings > Security
 3. Open the APK file to install
+4. Launch FuelPro from your app drawer
 
 #### Option 3: Windows Standalone
 1. Download `FuelPro-Windows.zip` and extract
-2. Double-click `FuelPro.bat` to launch
+2. Double-click `FuelPro.bat` to launch in Chrome app mode
+3. Or right-click `FuelPro.ps1` > "Run with PowerShell"
+
+#### Option 4: Use in Browser (Any Device)
+Visit the deployed URL in any modern browser.
 
 ---
 
@@ -63,6 +72,9 @@
    - Compliance tracking
    - Audit trails
    - AI chatbot assistant
+   - Live transaction monitoring
+   - Shift management
+   - Fuel quality testing
 
 7. **Security**
    - HTTPS enforced
@@ -129,12 +141,12 @@ FUEL_APP_MOBILE/
 │   │   ├── station-router.ts
 │   │   ├── sale-router.ts
 │   │   └── ...
-│   ├── db/                # Database schemas
+│   ├── db/                # Database schemas (Drizzle ORM)
 │   ├── contracts/         # Shared types
-│   └── public/            # Static assets
+│   └── public/            # Static assets, manifest, SW
 ├── api/                   # Server entry points
 ├── nginx/                 # Nginx configuration
-└── postgres/              # Database initialization
+└── postgres/              # Database initialization SQL
 ```
 
 ---
@@ -173,8 +185,8 @@ npm run check
 ### Database Migrations
 ```bash
 npm run db:generate  # Generate migration
-npm run db:migrate   # Apply migrations
-npm run db:push      # Push schema to DB
+npm run db:migrate    # Apply migrations
+npm run db:push       # Push schema to DB
 ```
 
 ---
@@ -232,15 +244,19 @@ npm run test:watch  # Watch mode
 
 | Feature | Description |
 |---------|-------------|
-| Dashboard | Real-time station overview |
-| Sales Tracking | Track all fuel sales |
-| Inventory | Manage fuel stock levels |
-| Credit Management | Handle credit accounts |
+| Dashboard | Real-time station overview with charts |
+| Sales Tracking | Track all fuel sales with receipts |
+| Inventory | Manage fuel stock levels & alerts |
+| Credit Management | Handle credit accounts & reminders |
 | Payroll | Staff salary management |
-| Document Center | Upload/store documents |
-| Compliance | Regulatory compliance |
-| Audit Trail | Track all changes |
+| Document Center | Upload/store documents with categories |
+| Compliance | Regional regulatory compliance |
+| Audit Trail | Track all system changes |
 | AI Chatbot | Get help with the system |
+| M-PESA Integration | Kenya mobile money payments |
+| Live Transactions | Real-time sale monitoring |
+| Shift Management | Staff shift scheduling |
+| Fuel Quality Testing | Quality control records |
 
 ---
 
@@ -286,13 +302,14 @@ npm run check
 
 ## 📞 Support
 
-For issues and feature requests, please contact:
-- Email: support@fuelpro.app
-- GitHub Issues: [Link to repo]
+For issues and feature requests:
+- GitHub Issues: [Link to repository]
 
 ---
 
 ## 📄 License
 
 Proprietary - All rights reserved
-The Publican Energy, Lodwar, Turkana County, Kenya
+
+**The Publican Energy**  
+Lodwar, Turkana County, Kenya
