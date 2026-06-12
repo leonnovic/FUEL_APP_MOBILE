@@ -6,6 +6,12 @@
   "main": "electron/main.cjs",
   "description": "FuelPro - Fuel Station Management System",
   "author": "FuelPro",
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not ie <= 11",
+    "not op_mini all"
+  ],
   "dependencies": {
     "@aws-sdk/client-s3": "^3.965.0",
     "@aws-sdk/s3-request-presigner": "^3.965.0",
@@ -24,6 +30,7 @@
     "@trpc/server": "^11.8.1",
     "chart.js": "^4.5.1",
     "cookie": "^1.1.1",
+    "core-js": "^3.49.0",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "file-saver": "^2.0.5",
@@ -44,7 +51,9 @@
     "react-dom": "19.0.0",
     "react-router": "^7.5.3",
     "react-router-dom": "^7.17.0",
+    "resize-observer-polyfill": "^1.5.1",
     "superjson": "^2.2.6",
+    "whatwg-fetch": "^3.6.20",
     "xlsx": "^0.18.5",
     "zod": "^4.3.5",
     "zustand": "^5.0.13"
