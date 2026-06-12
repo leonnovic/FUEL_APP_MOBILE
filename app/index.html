@@ -1,7 +1,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- Preload critical assets for faster rendering -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Force color scheme for older browsers -->
+    <meta name="color-scheme" content="light dark" />
     <meta property="og:title" content="FuelPro - Fuel Management System" />
     <meta
       property="og:description"
@@ -46,6 +51,33 @@
     <meta name="msapplication-TileImage" content="/logo-main.png" />
     <meta name="msapplication-TileColor" content="#f59e0b" />
     <title>FuelPro - Fuel Management System</title>
+    <!-- Prevent FOUC (Flash of Unstyled Content) - Apply theme BEFORE React loads -->
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('fuelpro_theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = theme === 'dark' || (theme === 'system' && prefersDark) || (!theme && prefersDark);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.body.style.colorScheme = 'dark';
+          } else {
+            document.documentElement.classList.add('light');
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.body.style.colorScheme = 'light';
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <style>
+      /* Critical CSS - Prevent flash of white background in dark mode */
+      html.dark { background-color: #1a1a1a; }
+      html.light { background-color: #ffffff; }
+      @media (prefers-color-scheme: dark) {
+        html:not(.light):not(.dark) { background-color: #1a1a1a; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -1509,12 +1509,30 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [user]); // Re-load when user changes (different user = different localStorage key)
 
-  // Apply theme to body
+  // Apply theme to body - robust for all browsers
   useEffect(() => {
-    if (state.theme === "dark") {
-      document.body.classList.add("dark-mode");
-    } else {
-      document.body.classList.remove("dark-mode");
+    try {
+      const isDark = state.theme === "dark";
+      const html = document.documentElement;
+      const body = document.body;
+      
+      if (isDark) {
+        html.classList.add("dark");
+        html.classList.remove("light");
+        html.setAttribute("data-theme", "dark");
+        body?.classList?.add("dark-mode");
+        body?.classList?.remove("light-mode");
+        body.style.colorScheme = "dark";
+      } else {
+        html.classList.remove("dark");
+        html.classList.add("light");
+        html.setAttribute("data-theme", "light");
+        body?.classList?.remove("dark-mode");
+        body?.classList?.add("light-mode");
+        body.style.colorScheme = "light";
+      }
+    } catch {
+      // DOM not ready
     }
   }, [state.theme]);
 
