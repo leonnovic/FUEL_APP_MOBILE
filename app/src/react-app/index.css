@@ -135,9 +135,22 @@ html.dark h6 {
 
 /* Utility classes */
 .container {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 15px;
+  padding: 8px;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1400px;
+    padding: 16px;
+  }
 }
 
 /* Button styles */
@@ -1055,6 +1068,40 @@ html.dark .summary-value {
   max-height: 100vh;
   overflow-y: auto;
   box-sizing: border-box;
+}
+
+/* Optimize space utilization - reduce margins for compact layout */
+.card {
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.container {
+  max-width: 100%;
+  margin: 0;
+  padding: 8px;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding: 12px;
+  }
+  .card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .card {
+    padding: 20px;
+    margin-bottom: 20px;
+  }
 }
 
 /* Responsive text scaling based on viewport height */

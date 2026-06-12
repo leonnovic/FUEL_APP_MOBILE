@@ -496,7 +496,7 @@ function HomeContent() {
         onShowCombined={() => setShowCombined(true)}
       />
 
-      <div className="container mx-auto px-2 md:px-4 py-2 md:py-6">
+      <div className="container mx-auto px-1 sm:px-2 lg:px-4 py-1 sm:py-2">
         {/* Desktop Tab Navigation */}
         <div className="hidden md:block">
           <TabNavigation
@@ -509,9 +509,9 @@ function HomeContent() {
         </div>
 
         {/* Mobile Active Tab Title */}
-        <div className="md:hidden mb-2">
-          <div className="bg-white dark:bg-gray-800 rounded-xl px-4 py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
+        <div className="md:hidden mb-1 sm:mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
               {filteredTabConfig[activeTab as keyof typeof filteredTabConfig]
                 ?.label || activeTab}
             </h2>
@@ -523,10 +523,10 @@ function HomeContent() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 md:rounded-b-2xl rounded-2xl shadow-lg min-h-[calc(100vh-200px)] md:min-h-[600px] overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 md:rounded-b-2xl rounded-b-lg shadow-lg min-h-[calc(100vh-180px)] md:min-h-[calc(100vh-180px)] overflow-hidden">
           <Suspense
             fallback={
-              <div className="flex items-center justify-center h-96">
+              <div className="flex items-center justify-center h-64 sm:h-96">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
               </div>
             }

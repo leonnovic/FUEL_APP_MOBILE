@@ -122,7 +122,7 @@ export default function Header({
   return (
     <header className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-white/10 text-white shadow-lg relative z-40">
       {/* Desktop Header */}
-      <div className="container mx-auto px-4 py-3">
+      <div className="container mx-auto px-2 sm:px-4 py-1.5 sm:py-2 lg:py-3">
         <div className="flex items-center justify-between gap-3">
           {/* Left: Logo & Company */}
           <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
