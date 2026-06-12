@@ -645,7 +645,7 @@ export default function PointOfSale() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
@@ -689,9 +689,9 @@ export default function PointOfSale() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Quick Sale Panel */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-2">
           {/* Fuel Quick Sale */}
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Quick Fuel Sale</h3>
@@ -843,7 +843,7 @@ export default function PointOfSale() {
         </div>
 
         {/* Payment Panel */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           {/* Customer Info (Optional) */}
           <div className="card">
             <div className="flex items-center justify-between mb-3">
@@ -1122,7 +1122,7 @@ export default function PointOfSale() {
                 <X size={20} />
               </button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-2">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
                 <p>
                   <strong>Note:</strong> To enable full KRA eTIMS compliance,

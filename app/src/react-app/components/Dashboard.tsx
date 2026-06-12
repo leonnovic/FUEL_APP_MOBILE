@@ -450,9 +450,9 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             {state.companyData.name || "Dashboard"}
@@ -484,9 +484,9 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
               Total Revenue
             </span>
@@ -510,8 +510,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
               Net Profit
             </span>
@@ -550,8 +550,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
               Fuel Sold
             </span>
@@ -574,8 +574,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-500 dark:text-gray-400">
               Balance Due
             </span>
@@ -610,12 +610,12 @@ export default function Dashboard() {
       </div>
 
       {/* Auto-Synced Fuel Prices + Tax Info + Regulatory Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-5 border shadow-sm ${fuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${fuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
               <Globe
                 size={14}
@@ -736,8 +736,8 @@ export default function Dashboard() {
         </div>
 
         {/* Tax Rates Summary */}
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/10 rounded-xl p-5 border border-purple-200 dark:border-purple-800 shadow-sm">
-          <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-3 flex items-center gap-2">
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/10 rounded-xl p-3 border border-purple-200 dark:border-purple-800 shadow-sm">
+          <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-2 flex items-center gap-2">
             <FileText size={14} className="text-purple-500" />
             Tax & Statutory Rates
           </h3>
@@ -817,21 +817,21 @@ export default function Dashboard() {
         </div>
 
         {/* Weather Widget */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <WeatherWidget />
         </div>
 
         {/* Regulatory Alerts */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <RegulatoryAlerts countryCode={location.currentCountry.id} />
         </div>
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Sales Trend */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <BarChart3 size={18} className="text-blue-500" />
               Sales Trend (Last 7 Days)
@@ -846,8 +846,8 @@ export default function Dashboard() {
         </div>
 
         {/* Fuel Distribution */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Droplets size={18} className="text-green-500" />
             Fuel Distribution
           </h3>
@@ -890,10 +890,10 @@ export default function Dashboard() {
       </div>
 
       {/* Second Charts Row + Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Expense Breakdown */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Activity size={18} className="text-rose-500" />
             Expense Breakdown
           </h3>
@@ -903,8 +903,8 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <ShoppingCart size={18} className="text-blue-500" />
             Quick Actions
           </h3>
@@ -925,12 +925,12 @@ export default function Dashboard() {
       </div>
 
       {/* Tank Levels */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Fuel size={18} className="text-blue-500" />
           Tank Levels
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* PMS Tank */}
           <div>
             <div className="flex justify-between items-center mb-2">
@@ -984,12 +984,12 @@ export default function Dashboard() {
       </div>
 
       {/* Active Pumps Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Activity size={18} className="text-purple-500" />
           Pump Status
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
             <p className="text-2xl font-bold text-green-700 dark:text-green-300">
               {state.pmsPumps.length}

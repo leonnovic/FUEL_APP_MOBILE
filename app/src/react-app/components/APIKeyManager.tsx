@@ -164,7 +164,7 @@ export default function APIKeyManager() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {notification && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl border shadow-lg flex items-center gap-2 ${notification.type === "success" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-400"}`}
@@ -255,7 +255,7 @@ export default function APIKeyManager() {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {apiKeys.map(apiKey => (
             <div
               key={apiKey.id}
@@ -373,7 +373,7 @@ export default function APIKeyManager() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Key Name

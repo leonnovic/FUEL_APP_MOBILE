@@ -50,6 +50,8 @@ textarea {
 
 html {
   scroll-behavior: smooth;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 /* ======================== */
@@ -1068,6 +1070,13 @@ html.dark .summary-value {
   max-height: 100vh;
   overflow-y: auto;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make main container fill available height */
+#root, body, html {
+  height: 100%;
 }
 
 /* Optimize space utilization - reduce margins for compact layout */

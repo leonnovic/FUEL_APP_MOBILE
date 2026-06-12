@@ -523,7 +523,7 @@ function HomeContent() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 md:rounded-b-2xl rounded-b-lg shadow-lg min-h-[calc(100vh-180px)] md:min-h-[calc(100vh-180px)] overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 md:rounded-b-2xl rounded-b-lg shadow-lg flex-1 overflow-hidden flex flex-col">
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-64 sm:h-96">

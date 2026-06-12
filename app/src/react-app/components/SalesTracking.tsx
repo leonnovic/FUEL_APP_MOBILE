@@ -587,7 +587,7 @@ export default function SalesTracking() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-3">
       {/* Image Cropper Modal */}
       {showCropper && pendingFile && (
         <ImageCropper
@@ -825,7 +825,7 @@ export default function SalesTracking() {
 
             {/* Review state - Editable preview */}
             {scanStep === "review" && editableResult && (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 size={20} className="text-green-600" />

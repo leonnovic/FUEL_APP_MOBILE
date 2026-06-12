@@ -336,7 +336,7 @@ export default function Invoice() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-3">
       {/* Professional Invoice Preview */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8 max-w-4xl mx-auto">
         {/* Logo and Company Header */}
@@ -588,7 +588,7 @@ export default function Invoice() {
       </div>
 
       {/* Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Save Invoice */}
         <div className="card">
           <div className="flex justify-between items-center mb-4">
@@ -631,7 +631,7 @@ export default function Invoice() {
           </div>
 
           {showAIAssistant && (
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg min-h-[120px]">
                 {aiResponse ? (
                   <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
