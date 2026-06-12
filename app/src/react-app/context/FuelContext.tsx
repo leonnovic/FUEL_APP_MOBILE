@@ -123,6 +123,7 @@ export interface TabVisibility {
   livetransaction: boolean;
   fuelsalesreport: boolean;
   pos: boolean;
+  customers: boolean; // Customer loyalty tab
 }
 
 export interface TabConfiguration {
@@ -486,6 +487,7 @@ const initialState: FuelState = {
     livetransaction: true,
     fuelsalesreport: true,
     pos: true,
+    customers: true, // CRITICAL: Enable loyalty/customers tab
   },
   tabConfigurations: [
     {
