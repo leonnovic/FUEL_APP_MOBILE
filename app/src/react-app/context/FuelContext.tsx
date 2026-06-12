@@ -469,7 +469,7 @@ const initialState: FuelState = {
   dieselPrice: 170,
   deliveredTo: "",
   totalOrder: "",
-  deliveryYear: 2025,
+  deliveryYear: new Date().getFullYear(), // Auto-set to current year
   offloadingRecords: [],
   tabVisibility: {
     dashboard: true,
@@ -1025,7 +1025,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.dieselPrice = state.dieselPrice;
       if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
       if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== 2025)
+      if (state.deliveryYear !== initialState.deliveryYear)
         compactData.deliveryYear = state.deliveryYear;
       if (state.offloadingRecords?.length > 0)
         compactData.offloadingRecords = state.offloadingRecords;
@@ -1141,7 +1141,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.dieselPrice = state.dieselPrice;
       if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
       if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== 2025)
+      if (state.deliveryYear !== initialState.deliveryYear)
         compactData.deliveryYear = state.deliveryYear;
       if (state.offloadingRecords?.length > 0)
         compactData.offloadingRecords = state.offloadingRecords;
